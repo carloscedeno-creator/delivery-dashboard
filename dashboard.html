@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Dashboard - TEST</title>
+    <title>Delivery Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -14,15 +15,114 @@
             color: #e2e8f0;
         }
 
+        .card {
+            background-color: #1e293b;
+            border-radius: 0.75rem;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
         .glass-header {
             background: rgba(30, 41, 59, 0.8);
             backdrop-filter: blur(12px);
             border-bottom: 1px solid #334155;
         }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-ontrack {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-delayed {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-warning {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .status-neutral {
+            background-color: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .metric-value {
+            font-size: 1.875rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .metric-label {
+            color: #94a3b8;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        th {
+            color: #94a3b8;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            color: #e2e8f0;
+            font-size: 0.875rem;
+        }
+
+        tr:hover td {
+            background-color: #334155;
+        }
+
+        .filter-btn {
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
     </style>
 </head>
 
 <body class="antialiased min-h-screen flex flex-col">
+
     <header class="glass-header sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -37,24 +137,553 @@
                     Delivery Dashboard</h1>
             </div>
             <div class="flex items-center gap-4">
-                <div class="text-xs text-gray-400">DEPLOYMENT TEST - v1.1</div>
+                <div class="text-xs text-gray-400 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    Live Data
+                </div>
                 <a href="product-roadmap.html"
-                    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-purple-500/50 animate-pulse">
-                    🚀 Product Roadmap
+                    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-purple-500/30">
+                    Product Roadmap
                 </a>
+                <button onclick="fetchData()"
+                    class="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
             </div>
         </div>
     </header>
 
-    <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full text-center">
-        <div class="py-20">
-            <h2
-                class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-                Deployment Test Page</h2>
-            <p class="text-2xl text-gray-400 mb-8">If you can see this, the NEW version deployed successfully!</p>
-            <p class="text-lg text-green-400 font-bold">✅ VERSION 1.1 - WITH PRODUCT ROADMAP BUTTON</p>
+    <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
+
+        <div id="loading" class="flex flex-col items-center justify-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+            <p class="text-gray-400 animate-pulse">Syncing with data sources...</p>
+        </div>
+
+        <div id="dashboard-content" class="hidden space-y-8">
+
+            <div class="flex flex-wrap gap-2" id="team-filters">
+                <button
+                    class="filter-btn active px-4 py-2 rounded-lg border border-gray-700 text-sm font-medium text-gray-400 hover:text-white hover:border-gray-500"
+                    data-filter="all">All Teams</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="card p-6 relative overflow-hidden group hover:border-blue-500/50 transition-colors">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </div>
+                    <p class="metric-label">Total Initiatives</p>
+                    <p class="metric-value mt-2" id="total-initiatives">0</p>
+                    <div class="mt-4 flex items-center text-xs text-gray-400">
+                        <span class="text-blue-400 font-medium mr-1">Active</span> projects
+                    </div>
+                </div>
+
+                <div class="card p-6 relative overflow-hidden group hover:border-green-500/50 transition-colors">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <svg class="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <p class="metric-label">Avg. Completion</p>
+                    <p class="metric-value mt-2" id="avg-completion">0%</p>
+                    <div class="mt-4 flex items-center text-xs text-gray-400">
+                        Delivery Phase
+                    </div>
+                </div>
+
+                <div class="card p-6 relative overflow-hidden group hover:border-purple-500/50 transition-colors">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <svg class="w-16 h-16 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <p class="metric-label">Avg. Queue Time</p>
+                    <p class="metric-value mt-2" id="avg-queue-time">0d</p>
+                    <div class="mt-4 flex items-center text-xs text-gray-400">
+                        Ready to Start Lag
+                    </div>
+                </div>
+
+                <div class="card p-6 relative overflow-hidden group hover:border-orange-500/50 transition-colors">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <svg class="w-16 h-16 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                    </div>
+                    <p class="metric-label">Active Developers</p>
+                    <p class="metric-value mt-2" id="active-devs">0</p>
+                    <div class="mt-4 flex items-center text-xs text-gray-400">
+                        Assigned to projects
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-1 h-6 bg-blue-500 rounded-full"></span>
+                        Delivery Progress
+                    </h3>
+                    <div class="h-80">
+                        <canvas id="progressChart"></canvas>
+                    </div>
+                </div>
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-1 h-6 bg-purple-500 rounded-full"></span>
+                        Resource Allocation
+                    </h3>
+                    <div class="h-80">
+                        <canvas id="resourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-1 h-6 bg-red-500 rounded-full"></span>
+                        Bugs Trend
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="bugsChart"></canvas>
+                    </div>
+                </div>
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-1 h-6 bg-green-500 rounded-full"></span>
+                        Upcoming Releases
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-gray-700">
+                                    <th class="py-3 px-4">Release</th>
+                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="releases-table-body" class="divide-y divide-gray-800">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card overflow-hidden">
+                <div
+                    class="p-6 border-b border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <span class="w-1 h-6 bg-emerald-500 rounded-full"></span>
+                        Master Roadmap (End-to-End)
+                    </h3>
+                    <div class="relative">
+                        <input type="text" id="search-input" placeholder="Search initiatives..."
+                            class="bg-gray-800 text-sm rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64 border border-gray-700 placeholder-gray-500">
+                        <svg class="w-4 h-4 text-gray-500 absolute left-3 top-3" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-800/50">
+                            <tr>
+                                <th class="py-4 px-6 border-r border-gray-700">Initiative</th>
+                                <th class="py-4 px-6 text-center border-r border-gray-700" colspan="2">Product Phase
+                                    (Definition)</th>
+                                <th class="py-4 px-6 text-center" colspan="3">Delivery Phase (Construction)</th>
+                            </tr>
+                            <tr class="text-xs border-b border-gray-700 bg-gray-800/30">
+                                <th class="py-2 px-6 border-r border-gray-700">Name & Team</th>
+                                <th class="py-2 px-4">Gate 1</th>
+                                <th class="py-2 px-4 border-r border-gray-700">BA / Designer</th>
+                                <th class="py-2 px-4">Progress</th>
+                                <th class="py-2 px-4">Est. Delivery</th>
+                                <th class="py-2 px-4">Devs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roadmap-table-body" class="divide-y divide-gray-800">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </main>
+
+    <script>
+        const URLS = {
+            PRODUCT: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSA1rr8EtTrBVQK_s1U4JJ-08AEmBiVRcfi6SepeBOPtlj4WPs6b7lUtyhg8lJixp-sg3R50cHkZ5NN/pub?gid=933125518&single=true&output=csv',
+            BUGS: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSA1rr8EtTrBVQK_s1U4JJ-08AEmBiVRcfi6SepeBOPtlj4WPs6b7lUtyhg8lJixp-sg3R50cHkZ5NN/pub?gid=1707343419&single=true&output=csv',
+            PROJECT: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9DFccJbSxnK2hN65w-hQDKB0KrN-5MO7g8_G3l96wo8V3LtbEkQcZIoWn68zshwO_CSdGJi8ObQX-/pub?gid=1503252593&single=true&output=csv',
+            DEV: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9DFccJbSxnK2hN65w-hQDKB0KrN-5MO7g8_G3l96wo8V3LtbEkQcZIoWn68zshwO_CSdGJi8ObQX-/pub?gid=1194298779&single=true&output=csv'
+        };
+
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            return lines.slice(1).map(line => {
+                const values = [];
+                let inQuote = false;
+                let currentValue = '';
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuote = !inQuote;
+                    } else if (char === ',' && !inQuote) {
+                        values.push(currentValue.trim());
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                values.push(currentValue.trim());
+
+                return headers.reduce((obj, header, index) => {
+                    obj[header] = values[index] ? values[index].replace(/^"|"$/g, '') : '';
+                    return obj;
+                }, {});
+            });
+        }
+
+        function normalizeName(name) {
+            if (!name) return '';
+            return name.toLowerCase()
+                .replace(/strata public api/g, 'strata api')
+                .replace(/datalake\/datawarehouse/g, 'datalake')
+                .replace(/ai acknowledge/g, 'ai acknowledgement')
+                .replace(/back office governance refactor/g, 'back office governance')
+                .trim();
+        }
+
+        let charts = {};
+        let globalData = [];
+
+        async function fetchData() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('dashboard-content').classList.add('hidden');
+
+            try {
+                const [productRes, bugsRes, projectRes, devRes] = await Promise.all([
+                    fetch(URLS.PRODUCT),
+                    fetch(URLS.BUGS),
+                    fetch(URLS.PROJECT),
+                    fetch(URLS.DEV)
+                ]);
+
+                const productData = parseCSV(await productRes.text());
+                const bugsData = parseCSV(await bugsRes.text());
+                const projectData = parseCSV(await projectRes.text());
+                const devData = parseCSV(await devRes.text());
+
+                processAndRender(productData, bugsData, projectData, devData);
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                alert('Failed to load data. Please check console for details.');
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+            }
+        }
+
+        function processAndRender(productData, bugsData, projectData, devData) {
+            const masterMap = new Map();
+
+            productData.forEach(row => {
+                const name = row['Initiative'];
+                if (!name) return;
+                const key = normalizeName(name);
+                masterMap.set(key, {
+                    name: name,
+                    statusGate1: row['GWOW Gate 1 Status'],
+                    team: row['Team '],
+                    ba: row['BA'],
+                    designer: row['Designer'],
+                    productEndDate: row['End Date'],
+                    deliveryQ: row['Delivery Q'],
+                    progress: 0,
+                    devs: new Set(),
+                    releaseDate: null,
+                    devStartDate: null,
+                    queueTime: null
+                });
+            });
+
+            projectData.forEach(row => {
+                const key = normalizeName(row['Initiatives']);
+                if (masterMap.has(key)) {
+                    const item = masterMap.get(key);
+                    item.progress = parseFloat(row['Current Status']) || 0;
+                    item.releaseDate = row['Estimated Delivery'];
+                    item.devStartDate = row['Start'];
+
+                    if (item.productEndDate && item.devStartDate) {
+                        const pEnd = new Date(item.productEndDate);
+                        const dStart = new Date(item.devStartDate);
+                        if (!isNaN(pEnd) && !isNaN(dStart)) {
+                            const diffTime = dStart - pEnd;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            item.queueTime = diffDays;
+                        }
+                    }
+                }
+            });
+
+            devData.forEach(row => {
+                const key = normalizeName(row['Initiatives']);
+                if (masterMap.has(key) && row['Dev'] && row['Dev'] !== 'None') {
+                    masterMap.get(key).devs.add(row['Dev']);
+                }
+            });
+
+            globalData = Array.from(masterMap.values());
+
+            setupFilters(globalData);
+            updateDashboard(globalData, bugsData);
+        }
+
+        function setupFilters(data) {
+            const teams = new Set(data.map(d => d.team).filter(Boolean));
+            const filterContainer = document.getElementById('team-filters');
+
+            filterContainer.innerHTML = '<button class="filter-btn active px-4 py-2 rounded-lg border border-gray-700 text-sm font-medium text-gray-400 hover:text-white hover:border-gray-500" data-filter="all">All Teams</button>';
+
+            teams.forEach(team => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn px-4 py-2 rounded-lg border border-gray-700 text-sm font-medium text-gray-400 hover:text-white hover:border-gray-500';
+                btn.textContent = team;
+                btn.dataset.filter = team;
+                btn.onclick = (e) => handleFilterClick(e, team);
+                filterContainer.appendChild(btn);
+            });
+
+            filterContainer.querySelector('[data-filter="all"]').onclick = (e) => handleFilterClick(e, 'all');
+        }
+
+        function handleFilterClick(e, team) {
+            document.querySelectorAll('.filter-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            e.target.classList.add('active');
+
+            const filteredData = (team === 'all') ? globalData : globalData.filter(d => d.team === team);
+            updateDashboard(filteredData, null, true);
+        }
+
+        function updateDashboard(data, bugsData = null, isFilterUpdate = false) {
+            document.getElementById('total-initiatives').textContent = data.length;
+
+            const avgProgress = data.length ? data.reduce((acc, curr) => acc + curr.progress, 0) / data.length : 0;
+            document.getElementById('avg-completion').textContent = Math.round(avgProgress) + '%';
+
+            const queueItems = data.filter(d => d.queueTime !== null);
+            const avgQueue = queueItems.length ? queueItems.reduce((acc, curr) => acc + curr.queueTime, 0) / queueItems.length : 0;
+            document.getElementById('avg-queue-time').textContent = Math.round(avgQueue) + 'd';
+
+            const allDevs = new Set();
+            data.forEach(item => item.devs.forEach(dev => allDevs.add(dev)));
+            document.getElementById('active-devs').textContent = allDevs.size;
+
+            renderProgressChart(data);
+            renderResourceChart(data);
+            if (bugsData && !isFilterUpdate) renderBugsChart(bugsData);
+            if (bugsData && !isFilterUpdate) renderReleasesTable(bugsData);
+            renderRoadmapTable(data);
+        }
+
+        function renderProgressChart(data) {
+            const ctx = document.getElementById('progressChart').getContext('2d');
+            if (charts.progress) charts.progress.destroy();
+
+            const sortedData = [...data].sort((a, b) => b.progress - a.progress).slice(0, 10);
+
+            charts.progress = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedData.map(d => d.name),
+                    datasets: [{
+                        label: '% Completion',
+                        data: sortedData.map(d => d.progress),
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function renderResourceChart(data) {
+            const ctx = document.getElementById('resourceChart').getContext('2d');
+            if (charts.resource) charts.resource.destroy();
+
+            const teamCounts = {};
+            data.forEach(d => {
+                const team = d.team || 'Unassigned';
+                teamCounts[team] = (teamCounts[team] || 0) + 1;
+            });
+
+            charts.resource = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(teamCounts),
+                    datasets: [{
+                        data: Object.values(teamCounts),
+                        backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#94a3b8' } }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        function renderBugsChart(data) {
+            const ctx = document.getElementById('bugsChart').getContext('2d');
+            if (charts.bugs) charts.bugs.destroy();
+
+            const bugRows = data.filter(r => r.Month && r['Bugs Reported']);
+
+            charts.bugs = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: bugRows.map(r => r.Month),
+                    datasets: [
+                        {
+                            label: 'Reported',
+                            data: bugRows.map(r => parseInt(r['Bugs Reported'])),
+                            borderColor: '#ef4444',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Attended',
+                            data: bugRows.map(r => parseInt(r['Bugs Attended'])),
+                            borderColor: '#10b981',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8' } } },
+                    scales: {
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function renderReleasesTable(data) {
+            const tbody = document.getElementById('releases-table-body');
+            tbody.innerHTML = '';
+            const releases = data.filter(r => r.Release);
+            releases.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-800/50 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-white">${r.Release}</td>
+                    <td class="py-3 px-4 text-gray-400">${r['Deployment Date'] || 'TBD'}</td>
+                    <td class="py-3 px-4">
+                        <span class="status-badge ${r['Deployment Date'] ? 'status-ontrack' : 'status-warning'}">
+                            ${r['Deployment Date'] ? 'Scheduled' : 'Planning'}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderRoadmapTable(data) {
+            const tbody = document.getElementById('roadmap-table-body');
+            tbody.innerHTML = '';
+
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-800 hover:bg-gray-800/50 transition-colors';
+
+                let statusClass = 'status-warning';
+                if (item.statusGate1 === 'Complete') statusClass = 'status-ontrack';
+                if (item.statusGate1 === 'Incomplete') statusClass = 'status-delayed';
+
+                const devsList = Array.from(item.devs).join(', ') || '<span class="text-gray-600 italic">None</span>';
+
+                let queueDisplay = '-';
+                if (item.queueTime !== null) {
+                    const absQueue = Math.abs(item.queueTime);
+                    const color = item.queueTime > 14 ? 'text-red-400' : item.queueTime < 0 ? 'text-yellow-400' : 'text-green-400';
+                    const label = item.queueTime < 0 ? `${absQueue}d early` : `${absQueue}d lag`;
+                    queueDisplay = `<span class="${color}">${label}</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="py-4 px-6 border-r border-gray-700">
+                        <div class="font-medium text-white">${item.name}</div>
+                        <div class="text-xs text-gray-500 mt-1">${item.team || 'No Team'}</div>
+                    </td>
+                    <td class="py-4 px-4 text-center">
+                        <span class="status-badge ${statusClass}">${item.statusGate1 || 'Unknown'}</span>
+                    </td>
+                    <td class="py-4 px-4 border-r border-gray-700 text-sm text-gray-400">
+                        <div>BA: ${item.ba || '-'}</div>
+                        <div class="mt-1">Des: ${item.designer || '-'}</div>
+                    </td>
+                    <td class="py-4 px-4">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 bg-gray-700 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full" style="width: ${item.progress}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-400">${item.progress}%</span>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 text-right">${queueDisplay}</div>
+                    </td>
+                    <td class="py-4 px-4 text-gray-400 text-sm">${item.releaseDate || 'TBD'}</td>
+                    <td class="py-4 px-4 text-sm text-gray-400 max-w-xs truncate" title="${Array.from(item.devs).join(', ')}">${devsList}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#roadmap-table-body tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(term) ? '' : 'none';
+            });
+        });
+
+        fetchData();
+
+    </script>
 </body>
 
 </html>
