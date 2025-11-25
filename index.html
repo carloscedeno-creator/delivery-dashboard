@@ -56,12 +56,12 @@
         }
 
         body {
-            background-color: #0a0e17;
+            background-color: #020617;
             color: #f8fafc;
             background-image:
-                radial-gradient(at 0% 0%, hsla(215, 28%, 12%, 1) 0, transparent 50%),
-                radial-gradient(at 50% 0%, hsla(215, 20%, 15%, 1) 0, transparent 50%),
-                radial-gradient(at 100% 0%, hsla(215, 25%, 13%, 1) 0, transparent 50%);
+                radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+                radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
+                radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
             min-height: 100vh;
         }
 
@@ -160,65 +160,31 @@
                 allocation: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1194298779'
             };
 
-            // Multiple CORS Proxies with fallback
-            const CORS_PROXIES = [
-                'https://corsproxy.io/?',
-                'https://api.allorigins.win/raw?url=',
-                'https://api.codetabs.com/v1/proxy?quest=',
-                '' // Try direct access as last resort
-            ];
-
-            // Mock Data for Fallback
-            const MOCK_PROJECT_DATA = [
-                { squad: 'Core Infrastructure', initiative: 'Cloud Migration', start: '2024-01-01', status: 85, delivery: '2024-06-30', spi: 1.1, allocation: 4.5, comments: 'Ahead of schedule', scope: 'Migrate legacy systems to AWS', dev: 'Luis Mays', percentage: 100 },
-                { squad: 'Core Infrastructure', initiative: 'Database Optimization', start: '2024-02-15', status: 45, delivery: '2024-08-15', spi: 0.9, allocation: 3.0, comments: 'Slight delays due to complexity', scope: 'Optimize SQL queries', dev: 'Mauricio Leal', percentage: 80 },
-                { squad: 'Integration', initiative: 'API Gateway V2', start: '2024-03-01', status: 30, delivery: '2024-09-30', spi: 0.95, allocation: 4.0, comments: 'On track', scope: 'New API Gateway implementation', dev: 'Arslan Arif', percentage: 100 },
-                { squad: 'Product Growth', initiative: 'User Onboarding Flow', start: '2024-04-01', status: 15, delivery: '2024-07-31', spi: 0.7, allocation: 2.5, comments: 'Resource constraints', scope: 'Revamp onboarding experience', dev: 'Abdel Beltran', percentage: 50 },
-                { squad: 'Mobile', initiative: 'iOS App Redesign', start: '2024-01-15', status: 95, delivery: '2024-05-15', spi: 1.2, allocation: 5.0, comments: 'Ready for release', scope: 'Complete UI overhaul', dev: 'Himani', percentage: 100 }
-            ];
-
-            const MOCK_ALLOCATION_DATA = [
-                { squad: 'Core Infrastructure', initiative: 'Cloud Migration', dev: 'Luis Mays', percentage: 100 },
-                { squad: 'Core Infrastructure', initiative: 'Database Optimization', dev: 'Mauricio Leal', percentage: 80 },
-                { squad: 'Integration', initiative: 'API Gateway V2', dev: 'Arslan Arif', percentage: 100 },
-                { squad: 'Product Growth', initiative: 'User Onboarding Flow', dev: 'Abdel Beltran', percentage: 50 },
-                { squad: 'Mobile', initiative: 'iOS App Redesign', dev: 'Himani', percentage: 100 }
-            ];
+            // CORS Proxy to bypass browser restrictions
+            const PROXY_URL = 'https://api.allorigins.win/raw?url=';
 
             const parseCSV = (text, type) => {
-                const rows = [];
-                let currentRow = [];
-                let currentVal = '';
-                let inQuotes = false;
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                const headers = lines[0].split(',').map(h => h.trim());
 
-                for (let i = 0; i < text.length; i++) {
-                    const char = text[i];
-                    const nextChar = text[i + 1];
+                return lines.slice(1).map(line => {
+                    const values = [];
+                    let current = '';
+                    let inQuotes = false;
 
-                    if (char === '"') {
-                        inQuotes = !inQuotes;
-                    } else if (char === ',' && !inQuotes) {
-                        currentRow.push(currentVal.trim());
-                        currentVal = '';
-                    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-                        if (char === '\r' && nextChar === '\n') i++;
-                        if (currentRow.length > 0 || currentVal) {
-                            currentRow.push(currentVal.trim());
-                            rows.push(currentRow);
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            values.push(current.trim());
+                            current = '';
+                        } else {
+                            current += char;
                         }
-                        currentRow = [];
-                        currentVal = '';
-                    } else {
-                        currentVal += char;
                     }
-                }
-                if (currentRow.length > 0 || currentVal) {
-                    currentRow.push(currentVal.trim());
-                    rows.push(currentRow);
-                }
+                    values.push(current.trim());
 
-                const headers = rows[0];
-                return rows.slice(1).map(values => {
                     const entry = {};
                     headers.forEach((h, i) => {
                         let val = values[i]?.replace(/^"|"$/g, '').trim();
@@ -227,8 +193,11 @@
                             if (h === 'SPI') val = parseFloat(val) || 0;
                             if (h === 'Team Allocation') val = parseFloat(val) || 0;
                         } else if (type === 'allocation') {
+                            // Remove % sign before parsing
                             if (h === 'Percentage') val = parseFloat(val.replace('%', '')) || 0;
                         }
+
+                        // Map CSV headers to internal keys
                         if (h === 'Squad') entry.squad = val;
                         if (h === 'Initiatives') entry.initiative = val;
                         if (h === 'Start') entry.start = val;
@@ -242,18 +211,25 @@
                         if (h === 'Percentage') entry.percentage = val;
                     });
                     return entry;
-                }).filter(entry => entry.squad && entry.initiative);
+                });
             };
 
-            const KPICard = ({ title, value, label, trend, color, icon: Icon, tooltip, explanation }) => {
+            const KPICard = ({ title, value, label, trend, color, icon: Icon }) => {
+                const theme = {
+                    blue: 'from-blue-500/10 to-blue-600/5 border-blue-500/20',
+                    purple: 'from-purple-500/10 to-purple-600/5 border-purple-500/20',
+                    emerald: 'from-emerald-500/10 to-emerald-600/5 border-emerald-500/20',
+                    rose: 'from-rose-500/10 to-rose-600/5 border-rose-500/20',
+                }[color] || 'from-slate-800 to-slate-900 border-slate-800';
+
                 return (
-                    <div className="glass rounded-2xl p-6 relative group hover:bg-white/5 transition-colors">
-                        <div className="flex justify-between items-start mb-4">
+                    <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${theme} p-6 glass hover:-translate-y-1 transition-transform duration-300`}>
+                        <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="text-slate-400 text-sm font-medium">{title}</h3>
-                                <div className="text-3xl font-bold text-white mt-2">{value}</div>
+                                <p className="text-sm font-medium text-slate-400">{title}</p>
+                                <h3 className="text-3xl font-bold mt-2 text-white">{value}</h3>
                             </div>
-                            <div className={`p-3 rounded-xl bg-${color}-500/10 text-${color}-400`}>
+                            <div className={`p-3 rounded-xl bg-white/5`}>
                                 {Icon && <Icon size={24} />}
                             </div>
                         </div>
@@ -263,37 +239,8 @@
                                 {trend === 'negative' ? 'Needs Attention' : 'On Track'}
                             </span>
                             <span className="text-xs text-slate-500">{label}</span>
-                        </div >
-
-                        {/* Tooltip */}
-                        {
-                            (tooltip || explanation) && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl min-w-[250px] max-w-[400px]">
-                                        {explanation && (
-                                            <div className="text-xs text-slate-300 mb-2 leading-relaxed border-b border-slate-700 pb-2">
-                                                {explanation}
-                                            </div>
-                                        )}
-                                        {tooltip && (
-                                            <>
-                                                <div className="text-xs font-semibold text-slate-300 mb-2">At Risk Initiatives:</div>
-                                                <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar">
-                                                    {tooltip.map((item, i) => (
-                                                        <div key={i} className="text-xs text-slate-400 flex items-start gap-2">
-                                                            <span className="text-rose-400 mt-0.5">•</span>
-                                                            <span className="flex-1">{item}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        )}
-                                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-slate-700 rotate-45"></div>
-                                    </div>
-                                </div>
-                            )
-                        }
-                    </div >
+                        </div>
+                    </div>
                 );
             };
 
@@ -304,8 +251,8 @@
                 ];
                 const cx = 150;
                 const cy = 150;
-                const iR = 90;
-                const oR = 130;
+                const iR = 80;
+                const oR = 120;
 
                 // Needle
                 const needleValue = value;
@@ -321,7 +268,7 @@
                 const yp = y0 + length * sin;
 
                 return (
-                    <div className="relative h-[220px] flex flex-col items-center justify-center">
+                    <div className="relative h-[200px] flex flex-col items-center justify-center">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -336,7 +283,7 @@
                                     fill="#8884d8"
                                     stroke="none"
                                 >
-                                    <Cell fill={value >= 0.9 ? '#00D9FF' : '#f43f5e'} />
+                                    <Cell fill={value >= 0.9 ? '#10b981' : '#f43f5e'} />
                                     <Cell fill="#1e293b" />
                                 </Pie>
                             </PieChart>
@@ -367,8 +314,8 @@
                 ];
 
                 const getColor = (v) => {
-                    if (v >= 90) return '#00D9FF'; // Cyan
-                    if (v >= 50) return '#0EA5E9'; // Sky blue
+                    if (v >= 90) return '#10b981'; // Emerald
+                    if (v >= 50) return '#3b82f6'; // Blue
                     if (v > 0) return '#f59e0b';   // Amber
                     return '#64748b';              // Slate
                 };
@@ -419,7 +366,7 @@
                                     dataKey="value"
                                     stroke="none"
                                 >
-                                    <Cell fill="#00D9FF" />
+                                    <Cell fill="#3b82f6" />
                                     <Cell fill="#1e293b" />
                                 </Pie>
                             </PieChart>
@@ -427,7 +374,7 @@
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <div className="text-xs text-slate-400">Team Allocation</div>
                             <div className="text-3xl font-bold text-white">{allocation.toFixed(1)}</div>
-                            <div className="text-[10px] text-cyan-400 mt-1">{squad}</div>
+                            <div className="text-[10px] text-blue-400 mt-1">{squad}</div>
                         </div>
                     </div>
                 );
@@ -452,7 +399,7 @@
                                     </div>
                                     <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                         <div
-                                            className="h-full bg-cyan-500 rounded-full"
+                                            className="h-full bg-blue-500 rounded-full"
                                             style={{ width: `${member.percentage}%` }}
                                         />
                                     </div>
@@ -467,9 +414,9 @@
                 const parseDate = (str) => new Date(str);
                 const diffDays = (d1, d2) => Math.ceil((d1 - d2) / (1000 * 60 * 60 * 24));
 
-                // Sort data by start date (standard Gantt view)
+                // Sort data by delivery date (oldest to newest)
                 const sortedData = useMemo(() => {
-                    return [...data].sort((a, b) => parseDate(a.start) - parseDate(b.start));
+                    return [...data].sort((a, b) => parseDate(a.delivery) - parseDate(b.delivery));
                 }, [data]);
 
                 const { startDate, totalDays, months } = useMemo(() => {
@@ -498,7 +445,7 @@
                     return { left: `${Math.max(0, left)}%`, width: `${Math.max(1, width)}%` };
                 };
 
-                const getStatusColor = (s) => s >= 90 ? 'bg-cyan-500' : s >= 50 ? 'bg-sky-500' : s > 0 ? 'bg-amber-500' : 'bg-slate-600';
+                const getStatusColor = (s) => s >= 90 ? 'bg-emerald-500' : s >= 50 ? 'bg-blue-500' : s > 0 ? 'bg-amber-500' : 'bg-slate-600';
 
                 return (
                     <div className="w-full overflow-x-auto custom-scrollbar">
@@ -533,13 +480,15 @@
                                                 })}
 
                                                 <div
-                                                    className="absolute h-5 bg-slate-700/80 rounded-full overflow-hidden border border-slate-600/30"
+                                                    className="absolute h-5 bg-slate-800/50 rounded-full overflow-hidden"
                                                     style={{ left, width }}
                                                 >
                                                     <div
-                                                        className={`h-full ${getStatusColor(item.status)} opacity-90`}
+                                                        className={`h-full ${getStatusColor(item.status)} opacity-90 relative`}
                                                         style={{ width: `${item.status}%` }}
-                                                    />
+                                                    >
+                                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full -translate-x-full animate-shimmer" />
+                                                    </div>
                                                 </div>
 
                                                 <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 bg-slate-900 text-xs px-2 py-1 rounded border border-slate-700 transition-opacity pointer-events-none z-10">
@@ -647,7 +596,7 @@
                     }, []);
                 }, [data]);
 
-                const COLORS = ['#00D9FF', '#0EA5E9', '#22D3EE'];
+                const COLORS = ['#60a5fa', '#a78bfa', '#34d399'];
 
                 return (
                     <div className="h-[300px] w-full">
@@ -685,7 +634,7 @@
                 return (
                     <div className="glass rounded-2xl p-6 mt-8">
                         <h2 className="text-xl font-semibold mb-6 text-white flex items-center gap-2">
-                            <Icons.Users className="text-cyan-400 w-5 h-5" /> Developer Workload & Allocation
+                            <Icons.Users className="text-emerald-400 w-5 h-5" /> Developer Workload & Allocation
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {workload.map((dev, i) => (
@@ -697,7 +646,7 @@
                                             </div>
                                             <div>
                                                 <div className="font-medium text-slate-200">{dev.name}</div>
-                                                <div className={`text-xs font-medium ${dev.total > 100 ? 'text-rose-400' : dev.total >= 80 ? 'text-cyan-400' : 'text-sky-400'}`}>
+                                                <div className={`text-xs font-medium ${dev.total > 100 ? 'text-rose-400' : dev.total >= 80 ? 'text-emerald-400' : 'text-blue-400'}`}>
                                                     {dev.total}% Allocation
                                                 </div>
                                             </div>
@@ -718,7 +667,7 @@
                                                 </div>
                                                 <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
                                                     <div
-                                                        className={`h-full rounded-full ${task.squad === 'Core Infrastructure' ? 'bg-cyan-500' : task.squad === 'Integration' ? 'bg-sky-500' : 'bg-teal-500'}`}
+                                                        className={`h-full rounded-full ${task.squad === 'Core Infrastructure' ? 'bg-blue-500' : task.squad === 'Integration' ? 'bg-purple-500' : 'bg-emerald-500'}`}
                                                         style={{ width: `${task.pct}%` }}
                                                     />
                                                 </div>
@@ -742,55 +691,27 @@
                 const [selectedInitiative, setSelectedInitiative] = useState('All');
 
                 useEffect(() => {
-                    const fetchWithFallback = async (url) => {
-                        let lastError;
-
-                        for (const proxy of CORS_PROXIES) {
-                            try {
-                                const fullUrl = proxy + (proxy ? encodeURIComponent(url) : url);
-                                const response = await fetch(fullUrl);
-
-                                if (response.ok) {
-                                    return await response.text();
-                                }
-                            } catch (err) {
-                                lastError = err;
-                                console.warn(`Proxy ${proxy || 'direct'} failed, trying next...`);
-                            }
-                        }
-
-                        throw lastError || new Error('All proxies failed');
-                    };
-
                     const loadData = async () => {
                         try {
                             setLoading(true);
-
-                            const [projText, allocText] = await Promise.all([
-                                fetchWithFallback(SHEET_URLS.project),
-                                fetchWithFallback(SHEET_URLS.allocation)
+                            // Use proxy to bypass CORS
+                            const [projRes, allocRes] = await Promise.all([
+                                fetch(PROXY_URL + encodeURIComponent(SHEET_URLS.project)),
+                                fetch(PROXY_URL + encodeURIComponent(SHEET_URLS.allocation))
                             ]);
+
+                            if (!projRes.ok || !allocRes.ok) throw new Error("Failed to fetch data from Google Sheets");
+
+                            const projText = await projRes.text();
+                            const allocText = await allocRes.text();
 
                             setProjectData(parseCSV(projText, 'project'));
                             setDevAllocationData(parseCSV(allocText, 'allocation'));
                             setLoading(false);
                         } catch (err) {
-                            console.error("Fetch failed, using mock data:", err);
-                            // Fallback to mock data
-                            setProjectData(MOCK_PROJECT_DATA);
-                            setDevAllocationData(MOCK_ALLOCATION_DATA);
-                            setError(null); // Clear error to show dashboard
+                            console.error(err);
+                            setError(err.message + ". This is likely a CORS issue. Try using a local server or checking your internet connection.");
                             setLoading(false);
-
-                            // Show toast for offline mode
-                            const overlay = document.getElementById('error-overlay');
-                            if (overlay) {
-                                overlay.style.display = 'block';
-                                overlay.style.background = 'rgba(245, 158, 11, 0.9)'; // Amber warning
-                                overlay.style.color = '#fff';
-                                overlay.innerHTML = `<strong>Offline Mode:</strong> Unable to fetch live data. Showing cached/mock data.<br><small>${err.message}</small>`;
-                                setTimeout(() => { overlay.style.display = 'none'; }, 5000);
-                            }
                         }
                     };
 
@@ -814,22 +735,20 @@
                 }, [selectedInitiative, projectData]);
 
                 const metrics = useMemo(() => {
-                    if (projectData.length === 0) return { total: 0, avgSPI: 0, totalAlloc: 0, critical: 0, criticalItems: [] };
+                    if (projectData.length === 0) return { total: 0, avgSPI: 0, totalAlloc: 0, critical: 0 };
                     const data = selectedSquad === 'All' ? projectData : projectData.filter(d => d.squad === selectedSquad);
                     const total = data.length;
                     const avgSPI = total > 0 ? data.reduce((a, c) => a + c.spi, 0) / total : 0;
                     const totalAlloc = data.reduce((a, c) => a + c.allocation, 0);
-                    const criticalItems = data.filter(i => i.spi < 0.8 || i.status < 20);
-                    const critical = criticalItems.length;
-                    const criticalNames = criticalItems.map(i => i.initiative);
-                    return { total, avgSPI, totalAlloc, critical, criticalNames };
+                    const critical = data.filter(i => i.spi < 0.8 || i.status < 20).length;
+                    return { total, avgSPI, totalAlloc, critical };
                 }, [selectedSquad, projectData]);
 
                 if (loading) {
                     return (
                         <div className="min-h-screen flex items-center justify-center">
                             <div className="text-center">
-                                <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                                 <h2 className="text-xl text-slate-300">Loading Project Data...</h2>
                             </div>
                         </div>
@@ -843,7 +762,7 @@
                                 <Icons.AlertCircle className="w-16 h-16 text-rose-500 mx-auto mb-4" />
                                 <h2 className="text-xl text-white font-bold mb-2">Unable to Load Data</h2>
                                 <p className="text-slate-400 mb-4">{error}</p>
-                                <button onClick={() => window.location.reload()} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors">
+                                <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                                     Retry
                                 </button>
                             </div>
@@ -852,22 +771,20 @@
                 }
 
                 return (
-                    <div className="min-h-screen p-4 md:p-8 space-y-8 max-w-[1600px] mx-auto">
-                        {/* Header */}
+                    <div className="max-w-7xl mx-auto p-6 space-y-8">
                         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
-                                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                                    <img src="logo.svg" alt="Logo" className="h-8 brightness-0 invert" />
-                                    Delivery Dashboard
+                                <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
+                                    Project Delivery Hub
                                 </h1>
-                                <p className="text-slate-400 mt-1">Real-time project tracking & resource allocation</p>
+                                <p className="text-slate-400 mt-2">Real-time insights across all squads</p>
                             </div>
 
                             {/* Filters */}
                             <div className="flex gap-4">
                                 <div className="relative">
                                     <select
-                                        className="appearance-none bg-slate-800 border border-slate-700 text-white py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                        className="appearance-none bg-slate-800 border border-slate-700 text-white py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         value={selectedSquad}
                                         onChange={(e) => { setSelectedSquad(e.target.value); setSelectedInitiative('All'); }}
                                     >
@@ -877,7 +794,7 @@
                                 </div>
                                 <div className="relative">
                                     <select
-                                        className="appearance-none bg-slate-800 border border-slate-700 text-white py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                        className="appearance-none bg-slate-800 border border-slate-700 text-white py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         value={selectedInitiative}
                                         onChange={(e) => setSelectedInitiative(e.target.value)}
                                     >
@@ -895,62 +812,29 @@
                             // OVERVIEW
                             <>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <KPICard
-                                        title="Active Initiatives"
-                                        value={metrics.total}
-                                        label="Total projects"
-                                        trend="positive"
-                                        color="cyan"
-                                        icon={Icons.Activity}
-                                        explanation="Total number of active projects currently being tracked in the dashboard."
-                                    />
-                                    <KPICard
-                                        title="Avg SPI"
-                                        value={metrics.avgSPI.toFixed(2)}
-                                        label="Schedule Performance"
-                                        trend={metrics.avgSPI >= 0.9 ? "positive" : "negative"}
-                                        color="cyan"
-                                        icon={Icons.Calendar}
-                                        explanation="Schedule Performance Index (SPI). A value < 1.0 indicates the project is behind schedule, while > 1.0 indicates ahead of schedule."
-                                    />
-                                    <KPICard
-                                        title="Team Allocation"
-                                        value={metrics.totalAlloc.toFixed(1)}
-                                        label="FTE across squads"
-                                        trend="positive"
-                                        color="emerald"
-                                        icon={Icons.Users}
-                                        explanation="Total Full-Time Equivalent (FTE) developers currently assigned across all squads."
-                                    />
-                                    <KPICard
-                                        title="At Risk"
-                                        value={metrics.critical}
-                                        label="Need attention"
-                                        trend={metrics.critical > 0 ? "negative" : "positive"}
-                                        color="rose"
-                                        icon={Icons.AlertCircle}
-                                        tooltip={metrics.critical > 0 ? metrics.criticalNames : null}
-                                        explanation="Initiatives with SPI < 0.8 or Progress < 20% that require immediate attention."
-                                    />
+                                    <KPICard title="Active Initiatives" value={metrics.total} label="Total projects" trend="positive" color="blue" icon={Icons.Activity} />
+                                    <KPICard title="Avg SPI" value={metrics.avgSPI.toFixed(2)} label="Schedule Performance" trend={metrics.avgSPI >= 0.9 ? "positive" : "negative"} color="purple" icon={Icons.Calendar} />
+                                    <KPICard title="Team Allocation" value={metrics.totalAlloc.toFixed(1)} label="FTE across squads" trend="positive" color="emerald" icon={Icons.Users} />
+                                    <KPICard title="At Risk" value={metrics.critical} label="Need attention" trend={metrics.critical > 0 ? "negative" : "positive"} color="rose" icon={Icons.AlertCircle} />
                                 </div>
 
-                                {/* Full-width Timeline */}
-                                <div className="glass rounded-2xl p-6">
-                                    <h2 className="text-xl font-semibold mb-6 text-white flex items-center gap-2">
-                                        <Icons.Calendar className="text-cyan-400 w-5 h-5" /> Delivery Timeline
-                                    </h2>
-                                    <GanttChart data={selectedSquad === 'All' ? projectData : filteredInitiatives} />
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="glass rounded-2xl p-6">
+                                        <h2 className="text-xl font-semibold mb-6 text-white flex items-center gap-2">
+                                            <Icons.Activity className="text-blue-400 w-5 h-5" /> Squad Allocation
+                                        </h2>
+                                        <AllocationChart data={selectedSquad === 'All' ? projectData : filteredInitiatives} />
+                                    </div>
+
+                                    <div className="glass rounded-2xl p-6">
+                                        <h2 className="text-xl font-semibold mb-6 text-white flex items-center gap-2">
+                                            <Icons.Calendar className="text-purple-400 w-5 h-5" /> Delivery Timeline
+                                        </h2>
+                                        <GanttChart data={selectedSquad === 'All' ? projectData : filteredInitiatives} />
+                                    </div>
                                 </div>
 
-                                {/* Squad Allocation - Horizontal */}
-                                <div className="glass rounded-2xl p-6">
-                                    <h2 className="text-xl font-semibold mb-6 text-white flex items-center gap-2">
-                                        <Icons.Activity className="text-cyan-400 w-5 h-5" /> Squad Allocation
-                                    </h2>
-                                    <AllocationChart data={selectedSquad === 'All' ? projectData : filteredInitiatives} />
-                                </div>
-
-                                <DeveloperWorkload devData={selectedSquad === 'All' ? devAllocationData : devAllocationData.filter(d => d.squad === selectedSquad)} />
+                                <DeveloperWorkload devData={devAllocationData} />
                             </>
                         )}
                     </div>
