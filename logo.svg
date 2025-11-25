@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 200" style="background:transparent">
+  <!-- Sparkles -->
+  <g fill="white">
+    <!-- Left sparkle -->
+    <path d="M 60 40 L 50 60 L 40 40 L 50 20 Z" />
+    <path d="M 60 60 L 50 80 L 40 60 L 50 40 Z" transform="scale(0.5) translate(40 60)" />
+    
+    <!-- Right sparkle -->
+    <path d="M 100 25 L 90 40 L 80 25 L 90 10 Z" transform="scale(0.7)" />
+  </g>
+  
+  <!-- AD Letters -->
+  <g fill="white">
+    <!-- A -->
+    <path d="M 80 180 L 80 70 L 170 70 L 170 100 L 110 100 L 110 110 L 160 110 L 160 140 L 110 140 L 110 180 Z" />
+    <path d="M 110 90 L 110 70 L 140 70 L 110 140 Z" fill="transparent" stroke="none" />
+    <polygon points="110,100 140,100 125,70" fill="black" />
+    
+    <!-- D (simplified as rounded rectangle) -->
+    <rect x="180" y="70" width="130" height="110" rx="50" ry="50" fill="white"/>
+    <rect x="200" y="90" width="90" height="70" rx="35" ry="35" fill="black"/>
+    
+    <!-- Better A shape -->
+    <path d="M 70 180 L 120 60 L 170 180 L 140 180 L 130 150 L 110 150 L 100 180 Z M 115 120 L 120 100 L 125 120 Z" fill="white" />
+  </g>
+  
+  <!-- Simplified version - just the initials AD in modern style -->
+  <defs>
+    <style>
+      .logo-text { 
+        font-family: 'Arial Black', sans-serif; 
+        font-weight: 900;
+        font-size: 140px;
+        fill: white;
+      }
+    </style>
+  </defs>
+  
+  <!-- Clear everything and do simple text -->
+  <rect width="350" height="200" fill="transparent"/>
+  
+  <!-- AD text -->
+  <text x="20" y="150" class="logo-text">AD</text>
+  
+  <!-- Sparkles repositioned -->
+  <g fill="white">
+    <path d="M 120 30 L 105 50 L 90 30 L 105 10 Z" />
+    <path d="M 145 40 L 135 52 L 125 40 L 135 28 Z" transform="scale(0.65)" />
+  </g>
+</svg>
