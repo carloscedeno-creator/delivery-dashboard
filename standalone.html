@@ -450,19 +450,18 @@
                 );
             };
 
-            const DeveloperWorkload = ({ devData, selectedSquad }) => {
+            const DeveloperWorkload = ({ devData }) => {
                 const workload = useMemo(() => {
                     if (!devData) return [];
-                    const filteredData = selectedSquad === 'All' ? devData : devData.filter(item => item.squad === selectedSquad);
                     const map = {};
-                    filteredData.forEach(item => {
+                    devData.forEach(item => {
                         if (item.dev === 'None') return;
                         if (!map[item.dev]) map[item.dev] = { name: item.dev, total: 0, tasks: [] };
                         map[item.dev].total += item.percentage;
                         map[item.dev].tasks.push({ initiative: item.initiative, pct: item.percentage, squad: item.squad });
                     });
                     return Object.values(map).sort((a, b) => b.total - a.total);
-                }, [devData, selectedSquad]);
+                }, [devData]);
 
                 return (
                     <div className="glass rounded-2xl p-6 mt-8">
@@ -620,7 +619,7 @@
                         )}
 
                         {/* Developer Workload Section */}
-                        <DeveloperWorkload devData={devAllocationData} selectedSquad={selectedSquad} />
+                        <DeveloperWorkload devData={devAllocationData} />
                     </div>
                 );
             };
