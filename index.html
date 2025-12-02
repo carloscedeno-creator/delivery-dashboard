@@ -272,6 +272,12 @@
                         if (h === 'Scope') entry.scope = val;
                         if (h === 'Dev') entry.dev = val;
                         if (h === 'Percentage') entry.percentage = val;
+                        // Attachments field (can contain URLs separated by commas or newlines)
+                        if (h.toLowerCase().includes('attachment') || h.toLowerCase().includes('image') || h.toLowerCase().includes('file')) {
+                            // Parse attachments: split by comma, newline, or space, and filter empty
+                            const attachmentUrls = val ? val.split(/[,\n\r]+/).map(url => url.trim()).filter(url => url.length > 0) : [];
+                            entry.attachments = attachmentUrls;
+                        }
                         });
                         return entry;
                     }).filter(entry => entry.squad && entry.initiative);
@@ -500,6 +506,11 @@
                                     entry.endDate = val;
                                 } else if (normH === 'expecteddate') {
                                     entry.expectedDate = val;
+                                } else if (normH.includes('attachment') || normH.includes('image') || normH.includes('file')) {
+                                    // Parse attachments: split by comma, newline, or space, and filter empty
+                                    const attachmentUrls = val ? val.split(/[,\n\r]+/).map(url => url.trim()).filter(url => url.length > 0) : [];
+                                    entry.attachments = attachmentUrls;
+                                    console.log(`[PRODUCT] Found attachment field for ${entry.initiative}:`, attachmentUrls);
                                 }
                             }
                             
@@ -1097,6 +1108,83 @@
 
         // --- VIEWS ---
 
+            // Simple Image Carousel Component
+            const ImageCarousel = ({ images }) => {
+                const [currentIndex, setCurrentIndex] = useState(0);
+                
+                if (!images || images.length === 0) return null;
+                
+                const nextImage = () => {
+                    setCurrentIndex((prev) => (prev + 1) % images.length);
+                };
+                
+                const prevImage = () => {
+                    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+                };
+                
+                return (
+                    <div className="glass rounded-2xl p-6">
+                        <h3 className="text-slate-400 text-sm font-medium mb-4 flex items-center gap-2">
+                            <Icons.Box size={18} />
+                            Attachments ({images.length})
+                        </h3>
+                        <div className="relative">
+                            <div className="relative h-64 bg-slate-800/50 rounded-lg overflow-hidden border border-white/10">
+                                <img 
+                                    src={images[currentIndex]} 
+                                    alt={`Attachment ${currentIndex + 1}`}
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                                <div className="hidden absolute inset-0 items-center justify-center text-slate-500">
+                                    <div className="text-center">
+                                        <Icons.AlertCircle size={32} className="mx-auto mb-2" />
+                                        <p className="text-sm">Image not available</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {images.length > 1 && (
+                                <>
+                                    <button
+                                        onClick={prevImage}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-slate-900/80 hover:bg-slate-800 p-2 rounded-full border border-white/10 transition-colors"
+                                        aria-label="Previous image"
+                                    >
+                                        <Icons.ChevronDown size={20} className="text-slate-300 rotate-90" />
+                                    </button>
+                                    <button
+                                        onClick={nextImage}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-900/80 hover:bg-slate-800 p-2 rounded-full border border-white/10 transition-colors"
+                                        aria-label="Next image"
+                                    >
+                                        <Icons.ChevronDown size={20} className="text-slate-300 -rotate-90" />
+                                    </button>
+                                    
+                                    <div className="flex justify-center gap-2 mt-4">
+                                        {images.map((_, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => setCurrentIndex(index)}
+                                                className={`h-2 rounded-full transition-all ${
+                                                    index === currentIndex 
+                                                        ? 'w-8 bg-cyan-400' 
+                                                        : 'w-2 bg-slate-600 hover:bg-slate-500'
+                                                }`}
+                                                aria-label={`Go to image ${index + 1}`}
+                                            />
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
             const UnifiedRoadmap = ({ productInitiatives, deliveryProjects }) => {
                 // Helper to normalize initiative names for matching
                 const normalizeName = (name) => {
@@ -1394,19 +1482,23 @@
                                                 {/* Product Line (Overlay on top) */}
                                                 {item.product && productPos && (
                                                     <div 
-                                                        className="absolute h-1 bg-gradient-to-r from-fuchsia-400 to-pink-400 rounded-full shadow-lg shadow-fuchsia-500/50 z-10"
+                                                        className="absolute h-1 bg-slate-600/50 rounded-full z-10 overflow-hidden"
                                                         style={{ 
                                                             left: productPos.left, 
                                                             width: productPos.width,
                                                             top: '50%',
-                                                            transform: 'translateY(-50%)',
-                                                            boxShadow: '0 0 8px rgba(217, 70, 239, 0.6), 0 0 4px rgba(217, 70, 239, 0.4)'
+                                                            transform: 'translateY(-50%)'
                                                         }}
                                                     >
+                                                        {/* Completed portion - bright fuchsia/pink */}
                                                         <div 
-                                                            className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-pink-500 rounded-full"
-                                                            style={{ width: `${Math.min(100, item.product.completion)}%` }}
+                                                            className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-pink-500 rounded-full shadow-lg shadow-fuchsia-500/50"
+                                                            style={{ 
+                                                                width: `${Math.min(100, item.product.completion || 0)}%`,
+                                                                boxShadow: '0 0 8px rgba(217, 70, 239, 0.6), 0 0 4px rgba(217, 70, 239, 0.4)'
+                                                            }}
                                                         />
+                                                        {/* Pending portion - darker/transparent (already shown by parent bg) */}
                     </div>
                                                 )}
 
@@ -1495,6 +1587,44 @@
                     const productItem = filteredProductInitiatives.find(p => p.initiative === selectedInitiative);
                     const deliveryItem = filteredDeliveryProjects.find(d => d.initiative === selectedInitiative);
                     
+                    // Collect all attachments from both Product and Delivery
+                    const allAttachments = [];
+                    if (productItem?.attachments && Array.isArray(productItem.attachments)) {
+                        allAttachments.push(...productItem.attachments);
+                    }
+                    if (deliveryItem?.attachments && Array.isArray(deliveryItem.attachments)) {
+                        allAttachments.push(...deliveryItem.attachments);
+                    }
+                    // Also check if attachments is a string (not yet parsed)
+                    if (productItem?.attachments && typeof productItem.attachments === 'string') {
+                        const parsed = productItem.attachments.split(/[,\n\r]+/).map(url => url.trim()).filter(url => url.length > 0);
+                        allAttachments.push(...parsed);
+                    }
+                    if (deliveryItem?.attachments && typeof deliveryItem.attachments === 'string') {
+                        const parsed = deliveryItem.attachments.split(/[,\n\r]+/).map(url => url.trim()).filter(url => url.length > 0);
+                        allAttachments.push(...parsed);
+                    }
+                    
+                    // Also include local attachments from Attachments folder
+                    // For now, show all attachments when an initiative is selected
+                    const localAttachments = [
+                        'Attachments/AWS CREST Certificate.png',
+                        'Attachments/Backoffice CREST Certificate.png',
+                        'Attachments/SaaS CREST Certificate.png',
+                        'Attachments/Stagging CREST Certificate.png'
+                    ];
+                    
+                    // Add local attachments
+                    allAttachments.push(...localAttachments);
+                    
+                    console.log('[OVERALL] Selected initiative attachments:', {
+                        initiative: selectedInitiative,
+                        productAttachments: productItem?.attachments,
+                        deliveryAttachments: deliveryItem?.attachments,
+                        localAttachments: localAttachments,
+                        allAttachments: allAttachments
+                    });
+                    
                     return {
                         name: selectedInitiative,
                         product: productItem ? {
@@ -1502,15 +1632,18 @@
                             comments: productItem.comments,
                             team: productItem.team,
                             status: productItem.status,
-                            completion: productItem.completion
+                            completion: productItem.completion,
+                            attachments: productItem.attachments || []
                         } : null,
                         delivery: deliveryItem ? {
                             scope: deliveryItem.scope,
                             comments: deliveryItem.comments,
                             squad: deliveryItem.squad,
                             status: deliveryItem.status,
-                            spi: deliveryItem.spi
-                        } : null
+                            spi: deliveryItem.spi,
+                            attachments: deliveryItem.attachments || []
+                        } : null,
+                        attachments: allAttachments
                     };
                 }, [selectedInitiative, filteredProductInitiatives, filteredDeliveryProjects]);
 
@@ -1641,6 +1774,14 @@
                     </div>
 
                             <UnifiedRoadmap productInitiatives={filteredProductInitiatives} deliveryProjects={filteredDeliveryProjects} />
+                            
+                            {/* Attachments Carousel - Always show local attachments */}
+                            <ImageCarousel images={[
+                                'Attachments/AWS CREST Certificate.png',
+                                'Attachments/Backoffice CREST Certificate.png',
+                                'Attachments/SaaS CREST Certificate.png',
+                                'Attachments/Stagging CREST Certificate.png'
+                            ]} />
                             </div>
                         </div>
                 );
