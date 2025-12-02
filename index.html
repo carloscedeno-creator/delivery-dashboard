@@ -1156,7 +1156,7 @@
                                     <img 
                                         src={encodeURI(images[currentIndex])} 
                                         alt={`Attachment ${currentIndex + 1}`}
-                                        className="w-full h-full object-contain"
+                                        className="w-full h-full object-contain pointer-events-none"
                                         onError={(e) => {
                                             console.error('[ImageCarousel] Failed to load image:', images[currentIndex]);
                                             e.target.style.display = 'none';
