@@ -1023,19 +1023,355 @@
 
             // --- VIEWS ---
 
-            const OverallView = () => {
+            const UnifiedRoadmap = ({ productInitiatives, deliveryProjects }) => {
+                // Helper to normalize initiative names for matching
+                const normalizeName = (name) => {
+                    if (!name) return '';
+                    return name.toLowerCase().trim().replace(/[^\w\s]/g, '');
+                };
+
+                // Helper to parse dates
+                const parseDate = (str) => {
+                    if (!str || !str.trim()) return null;
+                    const date = new Date(str);
+                    if (isNaN(date.getTime())) {
+                        const parts = str.split('/');
+                        if (parts.length === 3) {
+                            return new Date(parts[2], parts[1] - 1, parts[0]);
+                        }
+                        return null;
+                    }
+                    return date;
+                };
+
+                // Helper to parse quarter
+                const parseQuarter = (quarterStr) => {
+                    if (!quarterStr || !quarterStr.trim()) return null;
+                    const match = quarterStr.match(/Q(\d)\s*-\s*(\d{4})/i);
+                    if (match) {
+                        const quarter = parseInt(match[1]);
+                        const year = parseInt(match[2]);
+                        const startMonth = (quarter - 1) * 3;
+                        return { start: new Date(year, startMonth, 1), end: new Date(year, startMonth + 3, 0) };
+                    }
+                    return null;
+                };
+
+                // Match Product and Delivery initiatives by name
+                const matchedInitiatives = useMemo(() => {
+                    const matched = [];
+                    const processedDelivery = new Set();
+
+                    // Process Product initiatives
+                    productInitiatives.forEach(product => {
+                        const productName = normalizeName(product.initiative);
+                        if (!productName) return;
+
+                        // Find matching Delivery initiative
+                        const delivery = deliveryProjects.find(d => {
+                            const deliveryName = normalizeName(d.initiative);
+                            return deliveryName === productName || 
+                                   deliveryName.includes(productName) || 
+                                   productName.includes(deliveryName);
+                        });
+
+                        // Get Product dates
+                        let productStart = null;
+                        let productEnd = null;
+                        if (product.startDate) productStart = parseDate(product.startDate);
+                        if (product.endDate) productEnd = parseDate(product.endDate);
+                        else if (product.expectedDate) productEnd = parseDate(product.expectedDate);
+                        if (!productStart || !productEnd) {
+                            const quarterDates = parseQuarter(product.quarter);
+                            if (quarterDates) {
+                                if (!productStart) productStart = quarterDates.start;
+                                if (!productEnd) productEnd = quarterDates.end;
+                            }
+                        }
+
+                        // Get Delivery dates
+                        let deliveryStart = null;
+                        let deliveryEnd = null;
+                        if (delivery) {
+                            deliveryStart = parseDate(delivery.start);
+                            deliveryEnd = parseDate(delivery.delivery);
+                            processedDelivery.add(delivery.initiative);
+                        }
+
+                        // Fallback dates if missing
+                        if (!productStart) productStart = new Date();
+                        if (!productEnd) productEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+                        if (delivery && !deliveryStart) deliveryStart = new Date();
+                        if (delivery && !deliveryEnd) deliveryEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+
+                        matched.push({
+                            name: product.initiative,
+                            product: {
+                                start: productStart,
+                                end: productEnd,
+                                status: product.status,
+                                completion: product.completion || 0,
+                                team: product.team
+                            },
+                            delivery: delivery ? {
+                                start: deliveryStart,
+                                end: deliveryEnd,
+                                status: delivery.status || 0,
+                                squad: delivery.squad,
+                                spi: delivery.spi
+                            } : null,
+                            isMatched: !!delivery
+                        });
+                    });
+
+                    // Add unmatched Delivery initiatives
+                    deliveryProjects.forEach(delivery => {
+                        if (!processedDelivery.has(delivery.initiative)) {
+                            const deliveryStart = parseDate(delivery.start) || new Date();
+                            const deliveryEnd = parseDate(delivery.delivery) || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+                            
+                            matched.push({
+                                name: delivery.initiative,
+                                product: null,
+                                delivery: {
+                                    start: deliveryStart,
+                                    end: deliveryEnd,
+                                    status: delivery.status || 0,
+                                    squad: delivery.squad,
+                                    spi: delivery.spi
+                                },
+                                isMatched: false
+                            });
+                        }
+                    });
+
+                    return matched.sort((a, b) => {
+                        const aStart = a.product?.start || a.delivery?.start || new Date();
+                        const bStart = b.product?.start || b.delivery?.start || new Date();
+                        return aStart - bStart;
+                    });
+                }, [productInitiatives, deliveryProjects]);
+
+                const diffDays = (d1, d2) => Math.ceil((d1 - d2) / (1000 * 60 * 60 * 24));
+
+                // Calculate timeline bounds
+                const { startDate, totalDays, months } = useMemo(() => {
+                    if (matchedInitiatives.length === 0) {
+                        const now = new Date();
+                        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const end = new Date(now.getFullYear() + 1, now.getMonth(), 0);
+                        const total = diffDays(end, start);
+                        const ms = [];
+                        let curr = new Date(start);
+                        while (curr < end) { ms.push(new Date(curr)); curr.setMonth(curr.getMonth() + 1); }
+                        return { startDate: start, totalDays: total, months: ms };
+                    }
+
+                    const allDates = matchedInitiatives.flatMap(item => {
+                        const dates = [];
+                        if (item.product?.start) dates.push(item.product.start);
+                        if (item.product?.end) dates.push(item.product.end);
+                        if (item.delivery?.start) dates.push(item.delivery.start);
+                        if (item.delivery?.end) dates.push(item.delivery.end);
+                        return dates;
+                    });
+
+                    const min = new Date(Math.min(...allDates));
+                    const max = new Date(Math.max(...allDates));
+                    const start = new Date(min.getFullYear(), min.getMonth(), 1);
+                    const end = new Date(max.getFullYear(), max.getMonth() + 2, 0);
+                    const total = diffDays(end, start);
+                    const ms = [];
+                    let curr = new Date(start);
+                    while (curr < end) { ms.push(new Date(curr)); curr.setMonth(curr.getMonth() + 1); }
+                    return { startDate: start, totalDays: total, months: ms };
+                }, [matchedInitiatives]);
+
+                const getPos = (start, end) => {
+                    const left = (diffDays(start, startDate) / totalDays) * 100;
+                    const width = (diffDays(end, start) / totalDays) * 100;
+                    return { left: `${Math.max(0, left)}%`, width: `${Math.max(1, width)}%` };
+                };
+
+                // Product uses magenta/pink to contrast with Delivery colors
+                const getProductColor = (status, completion) => {
+                    // Always use magenta/pink for Product to avoid confusion
+                    return 'bg-fuchsia-500';
+                };
+
+                // Delivery colors based on SPI
+                const getDeliveryColor = (spi) => {
+                    if (!spi || spi === 0) return 'bg-slate-600';
+                    if (spi === 1) return 'bg-blue-500'; // SPI = 1 (on track)
+                    if (spi > 1) return 'bg-emerald-500'; // SPI > 1 (ahead of schedule)
+                    return 'bg-orange-500'; // SPI < 1 (behind schedule)
+                };
+
                 return (
-                    <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
-                        <div className="p-6 rounded-full bg-slate-800/50 border border-white/5">
-                            <Icons.Layout size={48} className="text-slate-500" />
+                    <div className="w-full overflow-x-auto custom-scrollbar">
+                        <div className="min-w-[1000px]">
+                            <div className="flex border-b border-white/10 mb-4 pb-2 text-xs text-slate-500 relative h-8">
+                                <div className="w-1/3 pl-4 shrink-0">Initiative</div>
+                                <div className="w-2/3 relative">
+                                    {months.map((m, i) => {
+                                        const left = (diffDays(m, startDate) / totalDays) * 100;
+                                        return (
+                                            <div key={i} className="absolute top-0 border-l border-white/5 pl-1" style={{ left: `${left}%` }}>
+                                                {m.toLocaleString('default', { month: 'short', year: '2-digit' })}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="space-y-3">
+                                {matchedInitiatives.map((item, i) => {
+                                    const productPos = item.product ? getPos(item.product.start, item.product.end) : null;
+                                    const deliveryPos = item.delivery ? getPos(item.delivery.start, item.delivery.end) : null;
+
+                                    // Calculate the overall timeline bounds for this initiative
+                                    const overallStart = item.product?.start || item.delivery?.start;
+                                    const overallEnd = item.product?.end || item.delivery?.end;
+                                    const overallPos = overallStart && overallEnd ? getPos(overallStart, overallEnd) : null;
+
+                                    // Calculate relative positions within the overall bar
+                                    const getRelativePos = (start, end, overallStart, overallEnd) => {
+                                        if (!start || !end || !overallStart || !overallEnd) return null;
+                                        const overallWidth = diffDays(overallEnd, overallStart);
+                                        const segmentStart = diffDays(start, overallStart);
+                                        const segmentWidth = diffDays(end, start);
+                                        return {
+                                            left: `${(segmentStart / overallWidth) * 100}%`,
+                                            width: `${(segmentWidth / overallWidth) * 100}%`
+                                        };
+                                    };
+
+                                    const productRelativePos = item.product ? getRelativePos(item.product.start, item.product.end, overallStart, overallEnd) : null;
+                                    const deliveryRelativePos = item.delivery ? getRelativePos(item.delivery.start, item.delivery.end, overallStart, overallEnd) : null;
+
+                                    return (
+                                        <div key={i} className="flex items-center group hover:bg-white/5 rounded-lg py-2 transition-colors">
+                                            <div className="w-1/3 shrink-0 px-4">
+                                                <div className="font-medium text-sm text-slate-200 truncate" title={item.name}>
+                                                    {item.name}
+                                                </div>
+                                            </div>
+                                            <div className="w-2/3 relative h-8 flex items-center px-2">
+                                                {months.map((m, idx) => {
+                                                    const l = (diffDays(m, startDate) / totalDays) * 100;
+                                                    return <div key={idx} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${l}%` }} />;
+                                                })}
+                                                
+                                                {/* Unified Tooltip */}
+                                                {(item.product || item.delivery) && (
+                                                    <div className="absolute -top-20 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-slate-900 text-xs px-3 py-2 rounded border border-slate-700 transition-opacity pointer-events-none z-30 shadow-lg whitespace-nowrap">
+                                                        <div className="flex flex-col gap-1.5">
+                                                            {item.product && (
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-fuchsia-400 font-medium">Product:</span>
+                                                                    <span className="text-slate-300">{item.product.completion}%</span>
+                                                                    {item.product.end && (
+                                                                        <span className="text-slate-500">• Due: {item.product.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {item.delivery && (
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-blue-400 font-medium">Delivery:</span>
+                                                                    <span className="text-slate-300">{item.delivery.status}%</span>
+                                                                    {item.delivery.end && (
+                                                                        <span className="text-slate-500">• Due: {item.delivery.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Delivery Bar (Main Background) */}
+                                                {item.delivery && deliveryPos && (
+                                                    <div 
+                                                        className="absolute h-6 rounded-full overflow-hidden border border-slate-600/30 bg-slate-700/50" 
+                                                        style={{ left: deliveryPos.left, width: deliveryPos.width }}
+                                                    >
+                                                        <div 
+                                                            className={`h-full ${getDeliveryColor(item.delivery.spi)} rounded-full`}
+                                                            style={{ width: `${Math.min(100, item.delivery.status)}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Product Line (Overlay on top) */}
+                                                {item.product && productPos && (
+                                                    <div 
+                                                        className="absolute h-1 bg-gradient-to-r from-fuchsia-400 to-pink-400 rounded-full shadow-lg shadow-fuchsia-500/50 z-10"
+                                                        style={{ 
+                                                            left: productPos.left, 
+                                                            width: productPos.width,
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            boxShadow: '0 0 8px rgba(217, 70, 239, 0.6), 0 0 4px rgba(217, 70, 239, 0.4)'
+                                                        }}
+                                                    >
+                                                        <div 
+                                                            className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-pink-500 rounded-full"
+                                                            style={{ width: `${Math.min(100, item.product.completion)}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Show message if no data */}
+                                                {!item.product && !item.delivery && (
+                                                    <div className="text-xs text-slate-500">No timeline data available</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-3xl font-bold text-white mb-2">Overall Dashboard</h2>
-                            <p className="text-slate-400 max-w-md mx-auto">
-                                This view will combine Product and Delivery insights into a unified timeline.
-                                <br />
-                                <span className="text-cyan-400 text-sm font-medium mt-2 block">Coming Soon</span>
-                            </p>
+                    </div>
+                );
+            };
+
+            const OverallView = ({ productInitiatives, deliveryProjects }) => {
+                return (
+                    <div className="space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
+                                <Icons.Layout size={18} />
+                                Overall Timeline
+                            </h3>
+                            
+                            {/* Legend */}
+                            <div className="flex flex-col gap-4 mb-6 pb-4 border-b border-white/10">
+                                <div className="flex items-center gap-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-12 h-3 rounded-full bg-gradient-to-r from-blue-500 to-sky-400"></div>
+                                        <span className="text-xs text-slate-400">Bar = Delivery</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-12 h-1 rounded-full bg-gradient-to-r from-fuchsia-400 to-pink-400 shadow-lg shadow-fuchsia-500/50"></div>
+                                        <span className="text-xs text-slate-400">Line = Product</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs text-slate-500">
+                                    <span className="font-medium">Delivery colors:</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded bg-blue-500"></div>
+                                        <span>On Time</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded bg-emerald-500"></div>
+                                        <span>Ahead</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded bg-orange-500"></div>
+                                        <span>Behind</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <UnifiedRoadmap productInitiatives={productInitiatives || []} deliveryProjects={deliveryProjects || []} />
                         </div>
                     </div>
                 );
@@ -1385,8 +1721,8 @@
 
                 return (
                     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-8 py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
-                        <div className="flex items-center gap-3">
-                            <img src="logo.svg" alt="Logo" className="h-10 w-auto" />
+                        <div className="flex items-center">
+                            <img src="logo.svg" alt="Logo" className="h-14 w-auto object-contain" />
                         </div>
 
                         <div className="hidden md:flex items-center gap-8">
@@ -1499,7 +1835,7 @@
                             </header>
 
                             <main className="max-w-7xl mx-auto">
-                                {activeView === 'overall' && <OverallView />}
+                                {activeView === 'overall' && <OverallView productInitiatives={productInitiatives} deliveryProjects={projectData} />}
                                 {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                                 {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
                             </main>
