@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename)
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/delivery-dashboard/',
   plugins: [react()],
   resolve: {
     alias: {
