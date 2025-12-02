@@ -30,8 +30,19 @@ export const parseCSV = (text, type) => {
         rows.push(currentRow);
     }
 
-    const headers = rows[0];
-    return rows.slice(1).map(values => {
+    // Filter out empty rows
+    const nonEmptyRows = rows.filter(row => row.some(cell => cell.trim() !== ''));
+
+    if (nonEmptyRows.length === 0) {
+        console.warn(`[${type.toUpperCase()}] No data found in CSV`);
+        return [];
+    }
+
+    // Find the header row (first row with non-empty cells)
+    const headers = nonEmptyRows[0].map(h => h.trim()); // Trim whitespace from headers
+    console.log(`[${type.toUpperCase()}] Headers found:`, headers);
+
+    return nonEmptyRows.slice(1).map(values => {
         const entry = {};
         headers.forEach((h, i) => {
             let val = values[i]?.replace(/^"|"$/g, '').trim();
@@ -70,6 +81,8 @@ export const parseCSV = (text, type) => {
             if (h === 'Status') entry.status = val;
             if (h === 'Effort (days)') entry.effort = val;
             if (h === 'Completion (%)') entry.completion = val;
+            if (h === 'Start Date') entry.startDate = val;
+            if (h === 'Expected Date') entry.expectedDate = val;
 
             // Bug/Release fields
             if (h === 'Type') entry.type = val;
