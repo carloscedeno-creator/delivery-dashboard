@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeliveryRoadmapData Module Tests</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #0f172a;
+            border-radius: 8px;
+            border-left: 4px solid #00D9FF;
+        }
+        .pass { color: #22c55e; }
+        .fail { color: #ef4444; }
+        .info { color: #60a5fa; }
+        h1 { color: #00D9FF; }
+        h2 { color: #94a3b8; }
+        pre {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 DeliveryRoadmapData Module Tests</h1>
+    <div id="test-results"></div>
+    
+    <!-- Load the actual module from index.html -->
+    <script src="../index.html"></script>
+    
+    <script>
+        // Extract DeliveryRoadmapData module for testing
+        // We'll need to expose it or test inline
+        
+        const tests = [];
+        const results = document.getElementById('test-results');
+        
+        function test(name, fn) {
+            try {
+                const result = fn();
+                tests.push({ name, passed: result, error: null });
+                return result;
+            } catch (error) {
+                tests.push({ name, passed: false, error: error.message });
+                return false;
+            }
+        }
+        
+        function runTests() {
+            // Test if module is accessible
+            test('Module exists', () => {
+                return typeof DeliveryRoadmapData !== 'undefined';
+            });
+            
+            // Test structure
+            if (typeof DeliveryRoadmapData !== 'undefined') {
+                test('Has SHEET_URLS', () => {
+                    return DeliveryRoadmapData.SHEET_URLS !== undefined;
+                });
+                
+                test('Has MOCK_DATA', () => {
+                    return DeliveryRoadmapData.MOCK_DATA !== undefined;
+                });
+                
+                test('Has parseCSV function', () => {
+                    return typeof DeliveryRoadmapData.parseCSV === 'function';
+                });
+                
+                test('Has load function', () => {
+                    return typeof DeliveryRoadmapData.load === 'function';
+                });
+                
+                // Test Sheet URLs
+                test('Project URL contains correct gid', () => {
+                    return DeliveryRoadmapData.SHEET_URLS.project.includes('1503252593');
+                });
+                
+                test('Allocation URL contains correct gid', () => {
+                    return DeliveryRoadmapData.SHEET_URLS.allocation.includes('1194298779');
+                });
+                
+                // Test Mock Data
+                test('Mock projects is array', () => {
+                    return Array.isArray(DeliveryRoadmapData.MOCK_DATA.projects);
+                });
+                
+                test('Mock allocation is array', () => {
+                    return Array.isArray(DeliveryRoadmapData.MOCK_DATA.allocation);
+                });
+                
+                test('Mock projects have required fields', () => {
+                    return DeliveryRoadmapData.MOCK_DATA.projects.every(p => 
+                        p.squad && p.initiative && p.status !== undefined
+                    );
+                });
+                
+                // Test CSV parsing
+                test('parseCSV handles project type', () => {
+                    const csv = 'Squad,Initiatives,Start,Current Status\nCore,Test,2024-01-01,50';
+                    const result = DeliveryRoadmapData.parseCSV(csv, 'project');
+                    return result.length > 0 && result[0].squad === 'Core';
+                });
+                
+                test('parseCSV handles allocation type', () => {
+                    const csv = 'Squad,Initiatives,Dev,Percentage\nCore,Test,John,100%';
+                    const result = DeliveryRoadmapData.parseCSV(csv, 'allocation');
+                    return result.length > 0 && result[0].percentage === 100;
+                });
+            }
+            
+            // Display results
+            const passed = tests.filter(t => t.passed).length;
+            const total = tests.length;
+            
+            results.innerHTML = `
+                <div class="test-section">
+                    <h2>Test Results: ${passed}/${total} passed</h2>
+                    ${tests.map((t, i) => `
+                        <div class="${t.passed ? 'pass' : 'fail'}">
+                            ${t.passed ? '✓' : '✗'} ${t.name}
+                            ${t.error ? `<pre>${t.error}</pre>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        // Wait for module to load
+        setTimeout(runTests, 1000);
+    </script>
+</body>
+</html>
+

@@ -161,92 +161,427 @@
                 ),
                 Truck: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                ),
+                CheckCircle: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                ),
+                TrendingUp: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                ),
+                List: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                 )
-            };
-
-            const SHEET_URLS = {
-                project: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1503252593',
-                allocation: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1194298779'
             };
 
             const CORS_PROXY = 'https://sheets-proxy.carlos-cedeno.workers.dev/?url=';
 
-            // Mock Data
-            const MOCK_PROJECT_DATA = [
-                { squad: 'Core Infrastructure', initiative: 'Cloud Migration', start: '2024-01-01', status: 85, delivery: '2024-06-30', spi: 1.1, allocation: 4.5, comments: 'Ahead of schedule', scope: 'Migrate legacy systems to AWS', dev: 'Luis Mays', percentage: 100 },
-                { squad: 'Core Infrastructure', initiative: 'Database Optimization', start: '2024-02-15', status: 45, delivery: '2024-08-15', spi: 0.9, allocation: 3.0, comments: 'Slight delays due to complexity', scope: 'Optimize SQL queries', dev: 'Mauricio Leal', percentage: 80 },
-                { squad: 'Integration', initiative: 'API Gateway V2', start: '2024-03-01', status: 30, delivery: '2024-09-30', spi: 0.95, allocation: 4.0, comments: 'On track', scope: 'New API Gateway implementation', dev: 'Arslan Arif', percentage: 100 },
-                { squad: 'Product Growth', initiative: 'User Onboarding Flow', start: '2024-04-01', status: 15, delivery: '2024-07-31', spi: 0.7, allocation: 2.5, comments: 'Resource constraints', scope: 'Revamp onboarding experience', dev: 'Abdel Beltran', percentage: 50 },
-                { squad: 'Mobile', initiative: 'iOS App Redesign', start: '2024-01-15', status: 95, delivery: '2024-05-15', spi: 1.2, allocation: 5.0, comments: 'Ready for release', scope: 'Complete UI overhaul', dev: 'Himani', percentage: 100 }
-            ];
+            // ============================================
+            // DELIVERY ROADMAP DATA MODULE
+            // Completely isolated module for Delivery Roadmap
+            // DO NOT MIX with Product Roadmap data
+            // ============================================
+            const DeliveryRoadmapData = {
+                // Configuration - Delivery Google Sheet URLs
+                SHEET_URLS: {
+                    project: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1503252593',
+                    allocation: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1194298779'
+                },
 
-            const MOCK_ALLOCATION_DATA = [
-                { squad: 'Core Infrastructure', initiative: 'Cloud Migration', dev: 'Luis Mays', percentage: 100 },
-                { squad: 'Core Infrastructure', initiative: 'Database Optimization', dev: 'Mauricio Leal', percentage: 80 },
-                { squad: 'Integration', initiative: 'API Gateway V2', dev: 'Arslan Arif', percentage: 100 },
-                { squad: 'Product Growth', initiative: 'User Onboarding Flow', dev: 'Abdel Beltran', percentage: 50 },
-                { squad: 'Mobile', initiative: 'iOS App Redesign', dev: 'Himani', percentage: 100 }
-            ];
+                // Mock Data - Delivery Roadmap only
+                MOCK_DATA: {
+                    projects: [
+                        { squad: 'Core Infrastructure', initiative: 'Cloud Migration', start: '2024-01-01', status: 85, delivery: '2024-06-30', spi: 1.1, allocation: 4.5, comments: 'Ahead of schedule', scope: 'Migrate legacy systems to AWS' },
+                        { squad: 'Core Infrastructure', initiative: 'Database Optimization', start: '2024-02-15', status: 45, delivery: '2024-08-15', spi: 0.9, allocation: 3.0, comments: 'Slight delays due to complexity', scope: 'Optimize SQL queries' },
+                        { squad: 'Integration', initiative: 'API Gateway V2', start: '2024-03-01', status: 30, delivery: '2024-09-30', spi: 0.95, allocation: 4.0, comments: 'On track', scope: 'New API Gateway implementation' },
+                        { squad: 'Product Growth', initiative: 'User Onboarding Flow', start: '2024-04-01', status: 15, delivery: '2024-07-31', spi: 0.7, allocation: 2.5, comments: 'Resource constraints', scope: 'Revamp onboarding experience' },
+                        { squad: 'Mobile', initiative: 'iOS App Redesign', start: '2024-01-15', status: 95, delivery: '2024-05-15', spi: 1.2, allocation: 5.0, comments: 'Ready for release', scope: 'Complete UI overhaul' }
+                    ],
+                    allocation: [
+                        { squad: 'Core Infrastructure', initiative: 'Cloud Migration', dev: 'Luis Mays', percentage: 100 },
+                        { squad: 'Core Infrastructure', initiative: 'Database Optimization', dev: 'Mauricio Leal', percentage: 80 },
+                        { squad: 'Integration', initiative: 'API Gateway V2', dev: 'Arslan Arif', percentage: 100 },
+                        { squad: 'Product Growth', initiative: 'User Onboarding Flow', dev: 'Abdel Beltran', percentage: 50 },
+                        { squad: 'Mobile', initiative: 'iOS App Redesign', dev: 'Himani', percentage: 100 }
+                    ]
+                },
 
-            const parseCSV = (text, type) => {
-                const rows = [];
-                let currentRow = [];
-                let currentVal = '';
-                let inQuotes = false;
+                // Parse CSV specifically for Delivery Roadmap data types
+                parseCSV: (text, type) => {
+                    const rows = [];
+                    let currentRow = [];
+                    let currentVal = '';
+                    let inQuotes = false;
 
-                for (let i = 0; i < text.length; i++) {
-                    const char = text[i];
-                    const nextChar = text[i + 1];
+                    for (let i = 0; i < text.length; i++) {
+                        const char = text[i];
+                        const nextChar = text[i + 1];
 
-                    if (char === '"') {
-                        inQuotes = !inQuotes;
-                    } else if (char === ',' && !inQuotes) {
-                        currentRow.push(currentVal.trim());
-                        currentVal = '';
-                    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-                        if (char === '\r' && nextChar === '\n') i++;
-                        if (currentRow.length > 0 || currentVal) {
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
                             currentRow.push(currentVal.trim());
-                            rows.push(currentRow);
+                            currentVal = '';
+                        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                            if (char === '\r' && nextChar === '\n') i++;
+                            if (currentRow.length > 0 || currentVal) {
+                                currentRow.push(currentVal.trim());
+                                rows.push(currentRow);
+                            }
+                            currentRow = [];
+                            currentVal = '';
+                        } else {
+                            currentVal += char;
                         }
-                        currentRow = [];
-                        currentVal = '';
-                    } else {
-                        currentVal += char;
+                    }
+                    if (currentRow.length > 0 || currentVal) {
+                        currentRow.push(currentVal.trim());
+                        rows.push(currentRow);
+                    }
+
+                    const headers = rows[0];
+                    return rows.slice(1).map(values => {
+                        const entry = {};
+                        headers.forEach((h, i) => {
+                            let val = values[i]?.replace(/^"|"$/g, '').trim();
+                            
+                            // Delivery-specific parsing
+                            if (type === 'project') {
+                                if (h === 'Current Status') val = parseFloat(val) || 0;
+                                if (h === 'SPI') val = parseFloat(val) || 0;
+                                if (h === 'Team Allocation') val = parseFloat(val) || 0;
+                            } else if (type === 'allocation') {
+                                if (h === 'Percentage') val = parseFloat(val.replace('%', '')) || 0;
+                            }
+                            
+                            // Delivery-specific field mapping
+                            if (h === 'Squad') entry.squad = val;
+                            if (h === 'Initiatives') entry.initiative = val;
+                            if (h === 'Start') entry.start = val;
+                            if (h === 'Current Status') entry.status = val;
+                            if (h === 'Estimated Delivery') entry.delivery = val;
+                            if (h === 'SPI') entry.spi = val;
+                            if (h === 'Team Allocation') entry.allocation = val;
+                            if (h === 'Comments') entry.comments = val;
+                            if (h === 'Scope') entry.scope = val;
+                            if (h === 'Dev') entry.dev = val;
+                            if (h === 'Percentage') entry.percentage = val;
+                        });
+                        return entry;
+                    }).filter(entry => entry.squad && entry.initiative);
+                },
+
+                // Load Delivery Roadmap data - isolated function
+                load: async function(corsProxy) {
+                    const self = this; // Capture 'this' for use in nested functions
+                    const fetchWithFallback = async (url, urlName) => {
+                        const controller = new AbortController();
+                        let timeoutId = null;
+                        try {
+                            const fullUrl = corsProxy + encodeURIComponent(url);
+                            console.log(`[DELIVERY] Fetching ${urlName} from:`, fullUrl.substring(0, 80) + '...');
+                            
+                            // Add timeout to prevent hanging
+                            timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                            
+                            const response = await fetch(fullUrl, {
+                                signal: controller.signal,
+                                mode: 'cors'
+                            });
+                            if (timeoutId) clearTimeout(timeoutId);
+                            
+                            if (response.ok) {
+                                const text = await response.text();
+                                console.log(`[DELIVERY] Successfully fetched ${urlName}, length:`, text.length);
+                                return text;
+                            }
+                            throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
+                        } catch (err) {
+                            if (timeoutId) clearTimeout(timeoutId);
+                            if (err.name === 'AbortError') {
+                                console.error(`[DELIVERY] Fetch timeout for ${urlName} (connection refused or too slow)`);
+                            } else {
+                                console.error(`[DELIVERY] Fetch failed for ${urlName}:`, err.message);
+                            }
+                            throw err;
+                        }
+                    };
+
+                    try {
+                        console.log('[DELIVERY] Loading data from Google Sheets...');
+                        const [projText, allocText] = await Promise.all([
+                            fetchWithFallback(self.SHEET_URLS.project, 'project'),
+                            fetchWithFallback(self.SHEET_URLS.allocation, 'allocation')
+                        ]);
+                        
+                        const projectData = self.parseCSV(projText, 'project');
+                        const allocData = self.parseCSV(allocText, 'allocation');
+                        
+                        console.log('[DELIVERY] Data loaded:', { projects: projectData.length, allocation: allocData.length });
+                        return {
+                            projects: projectData.length > 0 ? projectData : self.MOCK_DATA.projects,
+                            allocation: allocData.length > 0 ? allocData : self.MOCK_DATA.allocation
+                        };
+                    } catch (err) {
+                        console.warn('[DELIVERY] Connection error, using mock data:', err.message);
+                        return {
+                            projects: self.MOCK_DATA.projects,
+                            allocation: self.MOCK_DATA.allocation
+                        };
                     }
                 }
-                if (currentRow.length > 0 || currentVal) {
-                    currentRow.push(currentVal.trim());
-                    rows.push(currentRow);
-                }
-
-                const headers = rows[0];
-                return rows.slice(1).map(values => {
-                    const entry = {};
-                    headers.forEach((h, i) => {
-                        let val = values[i]?.replace(/^"|"$/g, '').trim();
-                        if (type === 'project') {
-                            if (h === 'Current Status') val = parseFloat(val) || 0;
-                            if (h === 'SPI') val = parseFloat(val) || 0;
-                            if (h === 'Team Allocation') val = parseFloat(val) || 0;
-                        } else if (type === 'allocation') {
-                            if (h === 'Percentage') val = parseFloat(val.replace('%', '')) || 0;
-                        }
-                        if (h === 'Squad') entry.squad = val;
-                        if (h === 'Initiatives') entry.initiative = val;
-                        if (h === 'Start') entry.start = val;
-                        if (h === 'Current Status') entry.status = val;
-                        if (h === 'Estimated Delivery') entry.delivery = val;
-                        if (h === 'SPI') entry.spi = val;
-                        if (h === 'Team Allocation') entry.allocation = val;
-                        if (h === 'Comments') entry.comments = val;
-                        if (h === 'Scope') entry.scope = val;
-                        if (h === 'Dev') entry.dev = val;
-                        if (h === 'Percentage') entry.percentage = val;
-                    });
-                    return entry;
-                }).filter(entry => entry.squad && entry.initiative);
             };
+
+            const ProductRoadmapData = {
+                SHEET_URLS: {
+                    initiatives: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSA1rr8EtTrBVQK_s1U4JJ-08AEmBiVRcfi6SepeBOPtlj4WPs6b7lUtyhg8lJixp-sg3R50cHkZ5NN/pub?gid=933125518&single=true&output=csv',
+                    bugRelease:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSA1rr8EtTrBVQK_s1U4JJ-08AEmBiVRcfi6SepeBOPtlj4WPs6b7lUtyhg8lJixp-sg3R50cHkZ5NN/pub?gid=1707343419&single=true&output=csv'
+                },
+                MOCK_DATA: {
+                    initiatives: [
+                        { initiative: 'Mobile App Redesign', ba: 'Sarah Johnson', designer: 'Mike Chen', team: 'Mobile', quarter: 'Q1 2024', status: 'Done', effort: 45, completion: 100 },
+                        { initiative: 'Portal SEO', ba: 'Martín Lobo', designer: 'Ana Torres', team: 'Growth', quarter: 'Q3 2023', status: 'In Progress', effort: 15, completion: 60 }
+                    ],
+                    bugRelease: [
+                        { type: 'Bug', priority: 'High', release: 'v2.1.0', initiative: 'Mobile App Redesign', status: 'Open' },
+                        { type: 'Feature', priority: 'Medium', release: 'v2.2.0', initiative: 'QR Integration', status: 'Completed' }
+                    ]
+                },
+                parseCSV: function(text, type) {
+                    // Log first 1000 characters to debug
+                    console.log(`[PRODUCT] Raw CSV (first 1000 chars) for ${type}:`, text.substring(0, 1000));
+                    
+                    // Remove BOM if present
+                    if (text.charCodeAt(0) === 0xFEFF) {
+                        text = text.slice(1);
+                    }
+                    
+                    const rows = [];
+                    let currentRow = [];
+                    let currentVal = '';
+                    let inQuotes = false;
+                    for (let i = 0; i < text.length; i++) {
+                        const char = text[i];
+                        const nextChar = text[i + 1];
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            currentRow.push(currentVal.trim());
+                            currentVal = '';
+                        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                            if (char === '\r' && nextChar === '\n') i++;
+                            if (currentRow.length > 0 || currentVal) {
+                                currentRow.push(currentVal.trim());
+                                rows.push(currentRow);
+                            }
+                            currentRow = [];
+                            currentVal = '';
+                        } else {
+                            currentVal += char;
+                        }
+                    }
+                    if (currentRow.length > 0 || currentVal) {
+                        currentRow.push(currentVal.trim());
+                        rows.push(currentRow);
+                    }
+                    // Debug: Show first few rows
+                    console.log(`[PRODUCT] Total rows parsed:`, rows.length);
+                    console.log(`[PRODUCT] First 5 rows parsed:`, rows.slice(0, 5).map((r, i) => `Row ${i}: [${r.length} cols] ${r.slice(0, 5).join(', ')}`));
+                    
+                    // Find header row - look for row with meaningful header-like content
+                    let headerRowIndex = -1;
+                    for (let i = 0; i < Math.min(5, rows.length); i++) {
+                        const row = rows[i];
+                        if (!row || row.length === 0) continue;
+                        
+                        const nonEmptyCells = row.filter(cell => cell && cell.trim().length > 0);
+                        const cellStrings = nonEmptyCells.join(' ').toLowerCase();
+                        
+                        // Look for header keywords
+                        if (cellStrings.includes('initiative') || 
+                            cellStrings.includes('ba') || 
+                            cellStrings.includes('designer') || 
+                            cellStrings.includes('team') ||
+                            cellStrings.includes('quarter') ||
+                            cellStrings.includes('status')) {
+                            headerRowIndex = i;
+                            console.log(`[PRODUCT] Found header row at index ${i}:`, row);
+                            break;
+                        }
+                    }
+                    
+                    if (headerRowIndex === -1) {
+                        console.error('[PRODUCT] Could not find header row! Using first row.');
+                        headerRowIndex = 0;
+                    }
+                    
+                    const headers = rows[headerRowIndex]?.map(h => h?.trim()) || [];
+                    console.log(`[PRODUCT] Using row ${headerRowIndex} as headers (${headers.length} columns):`, headers);
+                    
+                    // Normalize header names (case-insensitive, handle variations)
+                    const normalizeHeader = (header) => {
+                        const h = header?.toLowerCase().trim();
+                        if (h.includes('initiative')) return 'initiative';
+                        if (h === 'ba' || h.includes('business analyst')) return 'ba';
+                        if (h.includes('designer')) return 'designer';
+                        if (h.includes('team')) return 'team';
+                        // Match quarter in various forms: "Quarter", "Qtr", "Delivery Q", "Q", etc.
+                        if (h.includes('quarter') || h.includes('qtr') || (h.includes('delivery') && h.includes('q'))) {
+                            return 'quarter';
+                        }
+                        // Match standalone "Q" when combined with delivery context
+                        if (h === 'q' || (h.length <= 3 && h.toLowerCase().startsWith('q'))) {
+                            // Check if previous headers suggest this is a quarter column
+                            return 'quarter';
+                        }
+                        if (h.includes('status')) return 'status';
+                        if (h.includes('effort') && h.includes('day')) return 'effort';
+                        if (h.includes('completion') || h.includes('complet')) return 'completion';
+                        if (h === 'type') return 'type';
+                        if (h.includes('priority')) return 'priority';
+                        if (h.includes('release')) return 'release';
+                        return h;
+                    };
+                    
+                    const normalizedHeaders = headers.map(normalizeHeader);
+                    console.log('[PRODUCT] CSV Headers found:', headers);
+                    console.log('[PRODUCT] Normalized headers:', normalizedHeaders);
+                    // Debug: Find which header corresponds to quarter
+                    const quarterHeaderIndex = normalizedHeaders.findIndex(h => h === 'quarter');
+                    if (quarterHeaderIndex >= 0) {
+                        console.log(`[PRODUCT] Found quarter column at index ${quarterHeaderIndex}: "${headers[quarterHeaderIndex]}"`);
+                    } else {
+                        console.warn('[PRODUCT] No quarter column found! Headers:', headers);
+                    }
+                    console.log('[PRODUCT] Total rows to parse:', rows.length - headerRowIndex - 1);
+                    
+                    // Use data rows after header row
+                    const parsed = rows.slice(headerRowIndex + 1).map((values, rowIndex) => {
+                        const entry = {};
+                        normalizedHeaders.forEach((normH, i) => {
+                            let val = values[i]?.replace(/^"|"$/g, '').trim();
+                            
+                            if (type === 'initiatives') {
+                                if (normH === 'effort') {
+                                    val = parseFloat(val) || 0;
+                                    entry.effort = val;
+                                } else if (normH === 'completion') {
+                                    val = parseFloat(val) || 0;
+                                    entry.completion = val;
+                                } else if (normH === 'initiative') {
+                                    entry.initiative = val;
+                                } else if (normH === 'ba') {
+                                    entry.ba = val;
+                                } else if (normH === 'designer') {
+                                    entry.designer = val;
+                                } else if (normH === 'team') {
+                                    entry.team = val;
+                                } else if (normH === 'quarter') {
+                                    entry.quarter = val;
+                                    // Debug quarter values
+                                    if (val && val.trim()) {
+                                        console.log(`[PRODUCT] Found quarter value: "${val}" for row ${rowIndex}`);
+                                    }
+                                } else if (normH === 'status') {
+                                    entry.status = val;
+                                }
+                            }
+                            
+                            if (type === 'bugRelease') {
+                                if (normH === 'type') entry.type = val;
+                                if (normH === 'priority') entry.priority = val;
+                                if (normH === 'release') entry.release = val;
+                                if (normH === 'initiative') entry.initiative = val;
+                                if (normH === 'status') entry.status = val;
+                            }
+                        });
+                        
+                        if (type === 'initiatives') {
+                            // Return entry if it has at least an initiative name
+                            return entry.initiative ? entry : null;
+                        }
+                        if (type === 'bugRelease') {
+                            // Return entry if it has type or initiative
+                            return (entry.type || entry.initiative) ? entry : null;
+                        }
+                        return entry;
+                    }).filter(x => x);
+                    
+                    console.log(`[PRODUCT] Successfully parsed ${parsed.length} entries from CSV`);
+                    if (parsed.length > 0 && parsed.length <= 5) {
+                        console.log('[PRODUCT] Sample parsed entries:', parsed);
+                    }
+                    
+                    return parsed;
+                },
+                load: async function(corsProxy) {
+                    const self = this;
+                    const fetchWithFallback = async (url, urlName) => {
+                        const controller = new AbortController();
+                        let timeoutId = null;
+                        try {
+                            const fullUrl = corsProxy + encodeURIComponent(url);
+                            console.log(`[PRODUCT] Fetching ${urlName} from:`, fullUrl.substring(0, 80) + '...');
+                            
+                            // Add timeout to prevent hanging
+                            timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                            
+                            const response = await fetch(fullUrl, {
+                                signal: controller.signal,
+                                mode: 'cors'
+                            });
+                            if (timeoutId) clearTimeout(timeoutId);
+                            
+                            if (response.ok) {
+                                const text = await response.text();
+                                console.log(`[PRODUCT] Successfully fetched ${urlName}, length:`, text.length);
+                                return text;
+                            }
+                            throw new Error(`[PRODUCT] Network response for ${urlName} was not ok: ${response.status} ${response.statusText}`);
+                        } catch (err) {
+                            if (timeoutId) clearTimeout(timeoutId);
+                            if (err.name === 'AbortError') {
+                                console.error(`[PRODUCT] Fetch timeout for ${urlName} (connection refused or too slow)`);
+                            } else {
+                                console.error(`[PRODUCT] Fetch failed for ${urlName}:`, err.message);
+                            }
+                            throw err;
+                        }
+                    };
+                    try {
+                        console.log('[PRODUCT] Loading data from Google Sheets...');
+                        const [initText, bugText] = await Promise.all([
+                            fetchWithFallback(self.SHEET_URLS.initiatives, 'initiatives'),
+                            fetchWithFallback(self.SHEET_URLS.bugRelease, 'bugRelease')
+                        ]);
+                        const initiatives = self.parseCSV(initText, 'initiatives');
+                        const bugRelease = self.parseCSV(bugText, 'bugRelease');
+                        
+                        console.log(`[PRODUCT] Parsed results: ${initiatives.length} initiatives, ${bugRelease.length} bug/release entries`);
+                        
+                        // Only use mock data if parsing returned empty arrays
+                        const result = {
+                            initiatives: initiatives.length > 0 ? initiatives : self.MOCK_DATA.initiatives,
+                            bugRelease: bugRelease.length > 0 ? bugRelease : self.MOCK_DATA.bugRelease
+                        };
+                        
+                        if (initiatives.length === 0) {
+                            console.warn('[PRODUCT] No initiatives parsed, using mock data');
+                        }
+                        if (bugRelease.length === 0) {
+                            console.warn('[PRODUCT] No bug/release entries parsed, using mock data');
+                        }
+                        
+                        return result;
+                    } catch (err) {
+                        console.warn('[PRODUCT] Connection error, using mock data:', err.message);
+                        return {
+                            initiatives: self.MOCK_DATA.initiatives,
+                            bugRelease: self.MOCK_DATA.bugRelease
+                        };
+                    }
+                }
+            };
+
 
             // --- UI Components ---
 
@@ -512,19 +847,232 @@
                 );
             };
 
-            const ProductRoadmapView = () => {
+            const ProductRoadmapView = ({ productInitiatives, productBugRelease }) => {
+                const [selectedTeam, setSelectedTeam] = useState('All');
+                const [selectedQuarter, setSelectedQuarter] = useState('All');
+                const [selectedStatus, setSelectedStatus] = useState('All');
+
+                const teams = useMemo(() => {
+                    const teamSet = new Set(productInitiatives.map(d => d.team).filter(Boolean));
+                    const result = ['All', ...Array.from(teamSet).sort()];
+                    console.log('[PRODUCT] Available teams:', result);
+                    return result;
+                }, [productInitiatives]);
+                
+                const quarters = useMemo(() => {
+                    // Debug: Check what quarter values we have
+                    const quarterValues = productInitiatives.map(d => d.quarter);
+                    console.log('[PRODUCT] All quarter values (including empty):', quarterValues);
+                    console.log('[PRODUCT] Sample initiatives to check quarter field:', productInitiatives.slice(0, 3));
+                    
+                    const filteredQuarters = quarterValues.filter(Boolean);
+                    console.log('[PRODUCT] Quarter values found (non-empty):', filteredQuarters);
+                    
+                    const quarterSet = new Set(filteredQuarters);
+                    const result = ['All', ...Array.from(quarterSet).sort()];
+                    console.log('[PRODUCT] Available quarters for dropdown:', result);
+                    return result;
+                }, [productInitiatives]);
+                
+                const statuses = useMemo(() => {
+                    const statusSet = new Set(productInitiatives.map(d => d.status).filter(Boolean));
+                    const result = ['All', ...Array.from(statusSet).sort()];
+                    console.log('[PRODUCT] Available statuses:', result);
+                    return result;
+                }, [productInitiatives]);
+
+                const filteredInitiatives = useMemo(() => {
+                    let data = productInitiatives || [];
+                    if (selectedTeam !== 'All') data = data.filter(d => d.team === selectedTeam);
+                    if (selectedQuarter !== 'All') data = data.filter(d => d.quarter === selectedQuarter);
+                    if (selectedStatus !== 'All') data = data.filter(d => d.status === selectedStatus);
+                    return data;
+                }, [productInitiatives, selectedTeam, selectedQuarter, selectedStatus]);
+
+                const stats = useMemo(() => {
+                    const total = filteredInitiatives.length;
+                    const totalEffort = filteredInitiatives.reduce((acc, curr) => acc + (curr.effort || 0), 0);
+                    const avgCompletion = total ? Math.round(filteredInitiatives.reduce((acc, curr) => acc + (curr.completion || 0), 0) / total) : 0;
+                    const doneCount = filteredInitiatives.filter(d => d.status === 'Done' || d.completion === 100).length;
+                    const inProgress = filteredInitiatives.filter(d => d.status === 'In Progress' || (d.completion > 0 && d.completion < 100)).length;
+                    return { total, totalEffort, avgCompletion, doneCount, inProgress };
+                }, [filteredInitiatives]);
+
+                const getStatusColor = (status) => {
+                    const s = status?.toLowerCase() || '';
+                    if (s.includes('done') || s.includes('complete')) return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+                    if (s.includes('progress')) return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+                    if (s.includes('planned') || s.includes('todo')) return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+                    return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+                };
+
+                const getPriorityColor = (priority) => {
+                    const p = priority?.toLowerCase() || '';
+                    if (p === 'high') return 'bg-rose-500/20 text-rose-400';
+                    if (p === 'medium') return 'bg-amber-500/20 text-amber-400';
+                    if (p === 'low') return 'bg-blue-500/20 text-blue-400';
+                    return 'bg-slate-500/20 text-slate-400';
+                };
+
                 return (
-                    <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
-                        <div className="p-6 rounded-full bg-slate-800/50 border border-white/5">
-                            <Icons.Box size={48} className="text-slate-500" />
+                    <div className="space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+                        {/* Filters */}
+                        <div className="flex gap-4 mb-8 flex-wrap items-center">
+                            <div className="relative group">
+                                <select
+                                    className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2.5 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[150px] hover:bg-slate-800/70"
+                                    value={selectedTeam}
+                                    onChange={(e) => setSelectedTeam(e.target.value)}
+                                >
+                                    {teams.map(t => <option key={t} value={t} className="bg-slate-800 text-slate-300">{t}</option>)}
+                                </select>
+                                <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={16} />
+                            </div>
+
+                            <div className="relative group">
+                                <select
+                                    className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2.5 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[150px] hover:bg-slate-800/70"
+                                    value={selectedQuarter}
+                                    onChange={(e) => setSelectedQuarter(e.target.value)}
+                                >
+                                    {quarters.length > 0 ? (
+                                        quarters.map(q => <option key={q} value={q} className="bg-slate-800 text-slate-300">{q}</option>)
+                                    ) : (
+                                        <option value="All" className="bg-slate-800 text-slate-300">All</option>
+                                    )}
+                                </select>
+                                <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={16} />
+                            </div>
+
+                            <div className="relative group">
+                                <select
+                                    className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2.5 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[150px] hover:bg-slate-800/70"
+                                    value={selectedStatus}
+                                    onChange={(e) => setSelectedStatus(e.target.value)}
+                                >
+                                    {statuses.map(s => <option key={s} value={s} className="bg-slate-800 text-slate-300">{s}</option>)}
+                                </select>
+                                <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={16} />
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-3xl font-bold text-white mb-2">Product Roadmap</h2>
-                            <p className="text-slate-400 max-w-md mx-auto">
-                                Strategic product initiatives and milestones will appear here.
-                                <br />
-                                <span className="text-cyan-400 text-sm font-medium mt-2 block">Coming Soon</span>
-                            </p>
+
+                        {/* KPI Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                            <KPICard title="Total Initiatives" value={stats.total} label="Active projects" trend="positive" color="blue" icon={Icons.Activity} />
+                            <KPICard title="Total Effort" value={`${stats.totalEffort}d`} label="Days estimated" trend="positive" color="purple" icon={Icons.Calendar} />
+                            <KPICard title="Avg. Completion" value={`${stats.avgCompletion}%`} label="Overall progress" trend="positive" color="emerald" icon={Icons.Layout} />
+                            <KPICard title="Completed" value={stats.doneCount} label="Done initiatives" trend="positive" color="emerald" icon={Icons.CheckCircle} />
+                            <KPICard title="In Progress" value={stats.inProgress} label="Active work" trend="positive" color="cyan" icon={Icons.TrendingUp} />
+                        </div>
+
+                        {/* Initiatives Table */}
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
+                                <Icons.List size={18} />
+                                Product Initiatives ({filteredInitiatives.length})
+                            </h3>
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-white/10 text-left text-xs text-slate-500 uppercase tracking-wider">
+                                            <th className="pb-3 px-2">Initiative</th>
+                                            <th className="pb-3 px-2">Team</th>
+                                            <th className="pb-3 px-2">BA</th>
+                                            <th className="pb-3 px-2">Designer</th>
+                                            <th className="pb-3 px-2">Quarter</th>
+                                            <th className="pb-3 px-2">Status</th>
+                                            <th className="pb-3 px-2 text-right">Effort</th>
+                                            <th className="pb-3 px-2 text-right">Completion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredInitiatives.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="8" className="text-center py-8 text-slate-500">No initiatives found</td>
+                                            </tr>
+                                        ) : (
+                                            filteredInitiatives.map((init, idx) => (
+                                                <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                    <td className="py-4 px-2">
+                                                        <div className="font-medium text-white">{init.initiative || 'N/A'}</div>
+                                                    </td>
+                                                    <td className="py-4 px-2 text-slate-300">{init.team || 'N/A'}</td>
+                                                    <td className="py-4 px-2 text-slate-300">{init.ba || 'N/A'}</td>
+                                                    <td className="py-4 px-2 text-slate-300">{init.designer || 'N/A'}</td>
+                                                    <td className="py-4 px-2 text-slate-300">{init.quarter || 'N/A'}</td>
+                                                    <td className="py-4 px-2">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(init.status)}`}>
+                                                            {init.status || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 px-2 text-right text-slate-300">{init.effort || 0} days</td>
+                                                    <td className="py-4 px-2">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <div className="w-20 bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all"
+                                                                    style={{ width: `${init.completion || 0}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-slate-300 text-sm w-10 text-right">{init.completion || 0}%</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Bugs & Releases */}
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
+                                <Icons.AlertCircle size={18} />
+                                Bugs & Releases ({productBugRelease?.length || 0})
+                            </h3>
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-white/10 text-left text-xs text-slate-500 uppercase tracking-wider">
+                                            <th className="pb-3 px-2">Type</th>
+                                            <th className="pb-3 px-2">Priority</th>
+                                            <th className="pb-3 px-2">Release</th>
+                                            <th className="pb-3 px-2">Initiative</th>
+                                            <th className="pb-3 px-2">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(!productBugRelease || productBugRelease.length === 0) ? (
+                                            <tr>
+                                                <td colSpan="5" className="text-center py-8 text-slate-500">No bugs or releases found</td>
+                                            </tr>
+                                        ) : (
+                                            productBugRelease.map((item, idx) => (
+                                                <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                    <td className="py-4 px-2">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.type === 'Bug' ? 'bg-rose-500/20 text-rose-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                                                            {item.type || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 px-2">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(item.priority)}`}>
+                                                            {item.priority || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 px-2 text-slate-300 font-mono text-sm">{item.release || 'N/A'}</td>
+                                                    <td className="py-4 px-2 text-slate-300">{item.initiative || 'N/A'}</td>
+                                                    <td className="py-4 px-2">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(item.status)}`}>
+                                                            {item.status || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 );
@@ -666,45 +1214,58 @@
                 const [activeView, setActiveView] = useState('overall'); // Default to Overall (Landing Page)
                 const [projectData, setProjectData] = useState([]);
                 const [devAllocationData, setDevAllocationData] = useState([]);
+                const [productInitiatives, setProductInitiatives] = useState([]);
+                const [productBugRelease, setProductBugRelease] = useState([]);
                 const [loading, setLoading] = useState(true);
                 const [error, setError] = useState(null);
 
                 useEffect(() => {
-                    const fetchWithFallback = async (url) => {
-                        try {
-                            const fullUrl = CORS_PROXY + encodeURIComponent(url);
-                            const response = await fetch(fullUrl);
-                            if (response.ok) return await response.text();
-                            throw new Error('Network response was not ok');
-                        } catch (err) {
-                            console.error("Fetch failed:", err);
-                            throw err;
-                        }
-                    };
-
                     const loadData = async () => {
+                        setLoading(true);
+                        let hasErrors = false;
+                        let errorMessages = [];
+                        
                         try {
-                            setLoading(true);
-                            const [projText, allocText] = await Promise.all([
-                                fetchWithFallback(SHEET_URLS.project),
-                                fetchWithFallback(SHEET_URLS.allocation)
-                            ]);
-                            setProjectData(parseCSV(projText, 'project'));
-                            setDevAllocationData(parseCSV(allocText, 'allocation'));
-                            setLoading(false);
+                            // Load Delivery Roadmap data (isolated module)
+                            console.log('[APP] Loading Delivery Roadmap data...');
+                            const deliveryData = await DeliveryRoadmapData.load(CORS_PROXY);
+                            setProjectData(deliveryData.projects);
+                            setDevAllocationData(deliveryData.allocation);
+                            console.log('[APP] Delivery data loaded:', { projects: deliveryData.projects.length, allocation: deliveryData.allocation.length });
                         } catch (err) {
-                            console.error("Fetch failed, using mock data:", err);
-                            setProjectData(MOCK_PROJECT_DATA);
-                            setDevAllocationData(MOCK_ALLOCATION_DATA);
-                            setError(null);
-                            setLoading(false);
+                            console.error("[APP] Delivery data failed, using mock:", err.message);
+                            setProjectData(DeliveryRoadmapData.MOCK_DATA.projects);
+                            setDevAllocationData(DeliveryRoadmapData.MOCK_DATA.allocation);
+                            hasErrors = true;
+                            errorMessages.push(`Delivery: ${err.message}`);
+                        }
+                        
+                        try {
+                            // Load Product Roadmap data (isolated module)
+                            console.log('[APP] Loading Product Roadmap data...');
+                            const productData = await ProductRoadmapData.load(CORS_PROXY);
+                            setProductInitiatives(productData.initiatives);
+                            setProductBugRelease(productData.bugRelease);
+                            console.log('[APP] Product data loaded:', { initiatives: productData.initiatives.length, bugRelease: productData.bugRelease.length });
+                        } catch (err) {
+                            console.error("[APP] Product data failed, using mock:", err.message);
+                            setProductInitiatives(ProductRoadmapData.MOCK_DATA.initiatives);
+                            setProductBugRelease(ProductRoadmapData.MOCK_DATA.bugRelease);
+                            hasErrors = true;
+                            errorMessages.push(`Product: ${err.message}`);
+                        }
+                        
+                        setLoading(false);
+                        
+                        // Show warning overlay if there were connection errors
+                        if (hasErrors) {
                             const overlay = document.getElementById('error-overlay');
                             if (overlay) {
                                 overlay.style.display = 'block';
                                 overlay.style.background = 'rgba(245, 158, 11, 0.9)';
                                 overlay.style.color = '#fff';
-                                overlay.innerHTML = `<strong>Offline Mode:</strong> Unable to fetch live data. Showing cached/mock data.<br><small>${err.message}</small>`;
-                                setTimeout(() => { overlay.style.display = 'none'; }, 5000);
+                                overlay.innerHTML = `<strong>⚠️ Offline Mode:</strong> Unable to fetch live data from Google Sheets. Showing mock/cached data.<br><small>Errors: ${errorMessages.join('; ')}</small><br><small style="opacity:0.8;">The dashboard is fully functional with mock data.</small>`;
+                                setTimeout(() => { overlay.style.display = 'none'; }, 8000);
                             }
                         }
                     };
@@ -737,7 +1298,7 @@
 
                             <main className="max-w-7xl mx-auto">
                                 {activeView === 'overall' && <OverallView />}
-                                {activeView === 'product' && <ProductRoadmapView />}
+                                {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                                 {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
                             </main>
                         </div>
