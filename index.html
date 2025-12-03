@@ -30,6 +30,14 @@
                         shimmer: {
                             '0%': { transform: 'translateX(-100%)' },
                             '100%': { transform: 'translateX(100%)' }
+                        },
+                        spin: {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' }
+                        },
+                        pulse: {
+                            '0%, 100%': { opacity: 1 },
+                            '50%': { opacity: 0.7 }
                         }
                     }
                 }
@@ -173,6 +181,9 @@
                 ),
                 X: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                ),
+                Map: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
                 )
             };
 
@@ -187,7 +198,8 @@
                 // Configuration - Delivery Google Sheet URLs
                 SHEET_URLS: {
                     project: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1503252593',
-                    allocation: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1194298779'
+                    allocation: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1194298779',
+                    strataMapping: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9DFccJbSxnK2hN65w-hQDKB0KrN-5MO7g8_G3l96wo8V3LtbEkQcZIoWn68zshwO_CSdGJi8ObQX-/pub?gid=753917662&single=true&output=csv'
                 },
 
                 // Mock Data - Delivery Roadmap only
@@ -275,6 +287,15 @@
                         if (h === 'Scope') entry.scope = val;
                         if (h === 'Dev') entry.dev = val;
                         if (h === 'Percentage') entry.percentage = val;
+                        // Strata Mapping field mapping
+                        if (type === 'strataMapping') {
+                            // Normalize header names for strata mapping
+                            const hLower = h.toLowerCase();
+                            if (hLower.includes('strata') || hLower === 'layer') entry.strata = val;
+                            if (hLower.includes('initiative') || hLower === 'initiative name') entry.initiative = val;
+                            if (hLower.includes('squad') || hLower === 'team') entry.squad = val;
+                            if (hLower.includes('type') || hLower === 'source') entry.type = val; // 'Delivery' or 'Product'
+                        }
                         // Attachments field (can contain URLs separated by commas or newlines)
                         if (h.toLowerCase().includes('attachment') || h.toLowerCase().includes('image') || h.toLowerCase().includes('file')) {
                             // Parse attachments: split by comma, newline, or space, and filter empty
@@ -283,7 +304,12 @@
                         }
                         });
                         return entry;
-                    }).filter(entry => entry.squad && entry.initiative);
+                    }).filter(entry => {
+                        if (type === 'strataMapping') {
+                            return entry.strata && entry.initiative; // Filter for strata mapping
+                        }
+                        return entry.squad && entry.initiative; // Filter for projects
+                    });
                 },
 
                 // Load Delivery Roadmap data - isolated function
@@ -324,24 +350,28 @@
 
                     try {
                         console.log('[DELIVERY] Loading data from Google Sheets...');
-                        const [projText, allocText] = await Promise.all([
+                        const [projText, allocText, strataText] = await Promise.all([
                             fetchWithFallback(self.SHEET_URLS.project, 'project'),
-                            fetchWithFallback(self.SHEET_URLS.allocation, 'allocation')
+                            fetchWithFallback(self.SHEET_URLS.allocation, 'allocation'),
+                            fetchWithFallback(self.SHEET_URLS.strataMapping, 'strataMapping')
                         ]);
                         
                         const projectData = self.parseCSV(projText, 'project');
                         const allocData = self.parseCSV(allocText, 'allocation');
+                        const strataMappingData = self.parseCSV(strataText, 'strataMapping');
                         
-                        console.log('[DELIVERY] Data loaded:', { projects: projectData.length, allocation: allocData.length });
+                        console.log('[DELIVERY] Data loaded:', { projects: projectData.length, allocation: allocData.length, strataMapping: strataMappingData.length });
                         return {
                             projects: projectData.length > 0 ? projectData : self.MOCK_DATA.projects,
-                            allocation: allocData.length > 0 ? allocData : self.MOCK_DATA.allocation
+                            allocation: allocData.length > 0 ? allocData : self.MOCK_DATA.allocation,
+                            strataMapping: strataMappingData.length > 0 ? strataMappingData : []
                         };
                     } catch (err) {
                         console.warn('[DELIVERY] Connection error, using mock data:', err.message);
                         return {
                             projects: self.MOCK_DATA.projects,
-                            allocation: self.MOCK_DATA.allocation
+                            allocation: self.MOCK_DATA.allocation,
+                            strataMapping: []
                         };
                     }
                 }
@@ -1144,7 +1174,7 @@
                     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
                 };
                 
-                return (
+            return (
                     <>
                         <div className="glass rounded-2xl p-6">
                             <h3 className="text-slate-400 text-sm font-medium mb-4 flex items-center gap-2">
@@ -1167,9 +1197,9 @@
                                         <div className="text-center">
                                             <Icons.AlertCircle size={32} className="mx-auto mb-2" />
                                             <p className="text-sm">Image not available</p>
-                                        </div>
-                                    </div>
-                                </div>
+                    </div>
+                    </div>
+                </div>
                             
                                 {images.length > 1 && (
                                     <>
@@ -1602,6 +1632,884 @@
                 </div>
             );
         };
+
+            const StrataMappingView = ({ productInitiatives = [], deliveryProjects = [], devAllocationData = [], strataMappingData = [] }) => {
+                const [isOpen, setIsOpen] = useState(false);
+                const [selectedStrata, setSelectedStrata] = useState(null);
+                const [selectedInitiative, setSelectedInitiative] = useState(null);
+                const [viewMode, setViewMode] = useState('planet'); // 'planet', 'summary', 'detail'
+                const [imageError, setImageError] = useState(false);
+                const [hoveredExperience, setHoveredExperience] = useState(null);
+                const [selectedExperience, setSelectedExperience] = useState(null);
+                const [hoveredStrataFromList, setHoveredStrataFromList] = useState(null);
+
+                // Experience definitions with their positions on the planet image
+                // Positions are relative to the planet image container (percentage-based for responsiveness)
+                // Positions match exactly where buildings appear in Gemini_Generated_Image_aikiykaikiykaiki.png
+                const experiences = [
+                    { 
+                        id: 'fm-x', 
+                        name: 'FM-X', 
+                        subtitle: 'Facility Manager Experience',
+                        image: 'FM-X.png',
+                        color: 'from-blue-500 to-cyan-500',
+                        // Top center of planet - above the planet center (PERFECT position)
+                        position: { top: '10%', left: '50%', transform: 'translateX(-50%)' },
+                        description: 'Facility Manager Experience provides specialized interfaces and workflows for facility management operations.'
+                    },
+                    { 
+                        id: 'ix-flow', 
+                        name: 'IX-Flow', 
+                        subtitle: 'Installer Experience',
+                        image: 'IX-FLOW.png',
+                        color: 'from-indigo-500 to-blue-500',
+                        // Top-left of planet - adjusted to match exact position
+                        position: { top: '22%', left: '15%' },
+                        description: 'Installer Experience portal provides specialized interfaces and workflows tailored for installers.'
+                    },
+                    { 
+                        id: 'dx-suite', 
+                        name: 'DX-Suite', 
+                        subtitle: 'Dealer Experience',
+                        image: 'DX-Suite.png',
+                        color: 'from-purple-500 to-pink-500',
+                        // Top-right of planet - adjusted to match exact position
+                        position: { top: '22%', right: '15%' },
+                        description: 'Dealer Experience provides specialized interfaces and workflows tailored for dealers.'
+                    },
+                    { 
+                        id: 'mx-ops', 
+                        name: 'MX-Ops', 
+                        subtitle: 'Manufacturer Experience',
+                        image: 'MX-Ops.png',
+                        color: 'from-orange-500 to-amber-500',
+                        // Bottom-left of planet - adjusted to match exact position (orange building)
+                        position: { bottom: '22%', left: '15%' },
+                        description: 'Manufacturer Experience provides specialized interfaces and workflows tailored for manufacturers.'
+                    },
+                    { 
+                        id: 'rg-connect', 
+                        name: 'RG-Connect', 
+                        subtitle: 'Rep Group Experience',
+                        image: 'RG-Connect.png',
+                        color: 'from-green-500 to-emerald-500',
+                        // Bottom-right of planet - adjusted to match exact position
+                        position: { bottom: '22%', right: '15%' },
+                        description: 'Rep Group Experience provides specialized interfaces and workflows tailored for rep groups.'
+                    }
+                ];
+
+                const strata = [
+                    { 
+                        id: 'data', 
+                        name: 'Data Strata', 
+                        color: 'from-yellow-500 to-amber-600',
+                        description: 'Unifies SIF files, PDFs, product catalogs, and ERP data into a single, standardized schema that eliminates data silos.',
+                        depth: 0
+                    },
+                    { 
+                        id: 'logic', 
+                        name: 'Logic Strata', 
+                        color: 'from-orange-500 to-red-600',
+                        description: 'Encodes freight calculations, discount tiers, pricing rules, compliance requirements, and margin protection logic.',
+                        depth: 1
+                    },
+                    { 
+                        id: 'workflow', 
+                        name: 'Workflow Strata', 
+                        color: 'from-red-500 to-pink-600',
+                        description: 'Powers multi-agent orchestration and event-driven pipelines that coordinate complex, cross-functional processes.',
+                        depth: 2
+                    },
+                    { 
+                        id: 'agent', 
+                        name: 'Agent Strata', 
+                        color: 'from-pink-500 to-purple-600',
+                        description: 'Deploys specialized AI agents for quoting, order processing, accounts payable, inventory management, and service operations.',
+                        depth: 3
+                    },
+                    { 
+                        id: 'experience', 
+                        name: 'Experience Strata', 
+                        color: 'from-blue-500 to-cyan-600',
+                        description: 'Delivers persona-specific UIs and portals optimized for each stakeholder\'s unique workflows and decision-making needs.',
+                        depth: 4
+                    }
+                ];
+
+                // Normalize strata name for matching (case-insensitive, handle variations)
+                const normalizeStrataName = (strataName) => {
+                    if (!strataName) return '';
+                    const normalized = strataName.toLowerCase().trim();
+                    // Map variations to standard IDs
+                    if (normalized.includes('data')) return 'data';
+                    if (normalized.includes('logic')) return 'logic';
+                    if (normalized.includes('workflow')) return 'workflow';
+                    if (normalized.includes('agent')) return 'agent';
+                    if (normalized.includes('experience')) return 'experience';
+                    return normalized;
+                };
+
+                // Search function to find initiatives related to a Strata using the mapping datasource
+                const searchInitiativesForStrata = (strataId) => {
+                    const strataConfig = strata.find(s => s.id === strataId);
+                    if (!strataConfig) return { delivery: [], product: [] };
+
+                    const deliveryInitiatives = [];
+                    const productInitiativesList = [];
+
+                    // Get initiatives mapped to this strata from the mapping datasource
+                    const mappedInitiatives = strataMappingData.filter(mapping => {
+                        const mappingStrataId = normalizeStrataName(mapping.strata);
+                        return mappingStrataId === strataId;
+                    });
+
+                    console.log(`[STRATA] Found ${mappedInitiatives.length} mapped initiatives for ${strataId}:`, mappedInitiatives);
+
+                    // For each mapped initiative, find it in Delivery or Product data
+                    mappedInitiatives.forEach(mapping => {
+                        const initiativeName = (mapping.initiative || '').trim();
+                        const mappingType = (mapping.type || '').toLowerCase();
+
+                        if (!initiativeName) return;
+
+                        // Search in Delivery data
+                        if (mappingType.includes('delivery') || !mappingType) {
+                            const deliveryMatch = deliveryProjects.find(project => {
+                                const projectInitiative = (project.initiative || '').trim();
+                                return projectInitiative.toLowerCase() === initiativeName.toLowerCase() ||
+                                       projectInitiative.toLowerCase().includes(initiativeName.toLowerCase()) ||
+                                       initiativeName.toLowerCase().includes(projectInitiative.toLowerCase());
+                            });
+                            if (deliveryMatch && !deliveryInitiatives.find(p => p.initiative === deliveryMatch.initiative)) {
+                                deliveryInitiatives.push(deliveryMatch);
+                            }
+                        }
+
+                        // Search in Product data
+                        if (mappingType.includes('product') || !mappingType) {
+                            const productMatch = productInitiatives.find(initiative => {
+                                const productInitiative = (initiative.initiative || '').trim();
+                                return productInitiative.toLowerCase() === initiativeName.toLowerCase() ||
+                                       productInitiative.toLowerCase().includes(initiativeName.toLowerCase()) ||
+                                       initiativeName.toLowerCase().includes(productInitiative.toLowerCase());
+                            });
+                            if (productMatch && !productInitiativesList.find(i => i.initiative === productMatch.initiative)) {
+                                productInitiativesList.push(productMatch);
+                            }
+                        }
+                    });
+
+                    return { delivery: deliveryInitiatives, product: productInitiativesList };
+                };
+
+                // Get initiatives for selected Strata
+                const strataInitiatives = useMemo(() => {
+                    if (!selectedStrata) return { delivery: [], product: [] };
+                    return searchInitiativesForStrata(selectedStrata);
+                }, [selectedStrata, deliveryProjects, productInitiatives]);
+
+                // Combine and format initiatives for display
+                const allInitiatives = useMemo(() => {
+                    const combined = [];
+                    
+                    // Add Delivery initiatives
+                    strataInitiatives.delivery.forEach((item, index) => {
+                        combined.push({
+                            id: `delivery-${index}`,
+                            type: 'delivery',
+                            initiative: item.initiative,
+                            squad: item.squad,
+                            status: item.status || 0,
+                            completion: item.status || 0,
+                            spi: item.spi || 0,
+                            scope: item.scope || '',
+                            comments: item.comments || '',
+                            start: item.start || '',
+                            delivery: item.delivery || '',
+                            allocation: item.allocation || 0,
+                            devs: devAllocationData.filter(d => 
+                                d.squad === item.squad && d.initiative === item.initiative
+                            )
+                        });
+                    });
+
+                    // Add Product initiatives
+                    strataInitiatives.product.forEach((item, index) => {
+                        combined.push({
+                            id: `product-${index}`,
+                            type: 'product',
+                            initiative: item.initiative,
+                            squad: item.team || item.squad || 'Product',
+                            status: item.status || '',
+                            completion: item.completion || 0,
+                            spi: null,
+                            scope: item.scope || '',
+                            comments: item.comments || '',
+                            start: item.startDate || item.start || '',
+                            delivery: item.quarter || '',
+                            allocation: null,
+                            devs: []
+                        });
+                    });
+
+                    return combined;
+                }, [strataInitiatives, devAllocationData]);
+
+                const handlePlanetClick = () => {
+                    setIsOpen(!isOpen);
+                    if (isOpen) {
+                        setSelectedStrata(null);
+                    }
+                };
+
+                const handleStrataClick = (strataId) => {
+                    if (selectedStrata === strataId) {
+                        setSelectedStrata(null);
+                        setViewMode('planet');
+                        setSelectedInitiative(null);
+                    } else {
+                        setSelectedStrata(strataId);
+                        setViewMode('summary');
+                        setSelectedInitiative(null);
+                    }
+                };
+
+                const handleInitiativeClick = (initiativeId) => {
+                    setSelectedInitiative(initiativeId);
+                    setViewMode('detail');
+                };
+
+                const handleBackToSummary = () => {
+                    setSelectedInitiative(null);
+                    setViewMode('summary');
+                };
+
+                const handleBackToPlanet = () => {
+                    setSelectedStrata(null);
+                    setSelectedInitiative(null);
+                    setSelectedExperience(null);
+                    setViewMode('planet');
+                };
+
+                const handleExperienceHover = (expId) => {
+                    setHoveredExperience(expId);
+                };
+
+                const handleExperienceLeave = () => {
+                    setHoveredExperience(null);
+                };
+
+                const handleExperienceClick = (expId, e) => {
+                    e.stopPropagation(); // Prevent planet click
+                    setSelectedExperience(expId);
+                };
+
+
+                return (
+                    <div className="space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
+                                <Icons.Map size={18} />
+                                Strata Mapping
+                            </h3>
+                            
+                            {/* Planet View */}
+                            {viewMode === 'planet' && (
+                            <div className="relative min-h-[700px] flex items-center justify-center" style={{ 
+                                overflow: 'visible',
+                                position: 'relative'
+                            }}>
+                                {/* Planet Image - Clickable when closed */}
+                                {!isOpen && (
+                                    <div 
+                                        className="relative w-full flex items-center justify-center"
+                                        style={{ 
+                                            minHeight: '600px',
+                                            padding: '40px 20px',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        {!imageError ? (
+                                            <>
+                                                <div 
+                                                    className="relative"
+                                                    style={{
+                                                        position: 'relative',
+                                                        display: 'inline-block',
+                                                        width: '100%'
+                                                    }}
+                                                >
+                                                    {/* Planet Image - Fades when hovering over buildings */}
+                                                    <div
+                                                        className="relative cursor-pointer"
+                                                        onClick={handlePlanetClick}
+                                                        style={{
+                                                            transition: 'opacity 0.4s ease-out',
+                                                            opacity: hoveredExperience ? 0.2 : 1
+                                                        }}
+                                                    >
+                                                        <img 
+                                                            src="Gemini_Generated_Image_aikiykaikiykaiki.png" 
+                                                            alt="Strata Mapping Planet"
+                                                            className="w-full h-auto"
+                                                            style={{
+                                                                maxWidth: '100%',
+                                                                maxHeight: '80vh',
+                                                                height: 'auto',
+                                                                objectFit: 'contain',
+                                                                display: 'block',
+                                                                margin: '0 auto'
+                                                            }}
+                                                            onError={() => {
+                                                                console.error('Failed to load planet image');
+                                                                setImageError(true);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    
+                                                    {/* Hover Experience Display - Shows when hovering */}
+                                                    {hoveredExperience && (() => {
+                                                        const exp = experiences.find(e => e.id === hoveredExperience);
+                                                        return exp ? (
+                                                            <div
+                                                                className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-40"
+                                                                style={{
+                                                                    animation: 'fadeIn 0.4s ease-out'
+                                                                }}
+                                                            >
+                                                                {/* Building Image - Centered and large */}
+                                                                <div className="mb-6">
+                                                                    <img
+                                                                        src={exp.image}
+                                                                        alt={exp.name}
+                                                                        style={{
+                                                                            width: '400px',
+                                                                            height: 'auto',
+                                                                            maxHeight: '500px',
+                                                                            objectFit: 'contain',
+                                                                            display: 'block',
+                                                                            filter: 'drop-shadow(0 0 50px rgba(59, 130, 246, 0.8))'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                
+                                                                {/* Info Box - Wrapped in a styled container */}
+                                                                <div
+                                                                    className="glass rounded-2xl p-6 border-2 border-cyan-400/40 bg-slate-900/95 backdrop-blur-md shadow-2xl max-w-md"
+                                                                    style={{
+                                                                        animation: 'fadeIn 0.5s ease-out 0.2s both'
+                                                                    }}
+                                                                >
+                                                                    <div className="text-center">
+                                                                        <h3 className={`text-2xl font-bold bg-gradient-to-r ${exp.color} bg-clip-text text-transparent mb-2`}>
+                                                                            {exp.name}
+                                                                        </h3>
+                                                                        <p className="text-lg text-slate-300 mb-4">
+                                                                            {exp.subtitle}
+                                                                        </p>
+                                                                        <p className="text-sm text-slate-400 leading-relaxed">
+                                                                            {exp.description}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                    
+                                                    {/* Interactive Experience Areas - Positioned over planet */}
+                                                    {experiences.map((exp) => (
+                                                        <div
+                                                            key={exp.id}
+                                                            className="absolute cursor-pointer group"
+                                                            style={{
+                                                                ...exp.position,
+                                                                width: '150px',
+                                                                height: '150px',
+                                                                zIndex: 20,
+                                                                transition: 'all 0.3s ease-out'
+                                                            }}
+                                                            onMouseEnter={() => handleExperienceHover(exp.id)}
+                                                            onMouseLeave={handleExperienceLeave}
+                                                            onClick={(e) => handleExperienceClick(exp.id, e)}
+                                                        >
+                                                            {/* Clickable area indicator (subtle glow on hover) */}
+                                                            <div
+                                                                className="absolute inset-0 rounded-full transition-all"
+                                                                style={{
+                                                                    background: hoveredExperience === exp.id 
+                                                                        ? 'radial-gradient(circle, rgba(59, 130, 246, 0.25) 0%, transparent 70%)' 
+                                                                        : 'transparent',
+                                                                    transform: hoveredExperience === exp.id ? 'scale(1.4)' : 'scale(1)',
+                                                                    transition: 'all 0.3s ease-out',
+                                                                    pointerEvents: 'none'
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {/* Experience Details Panel (when selected) */}
+                                                {selectedExperience && (
+                                                    <div 
+                                                        className="absolute left-8 top-1/2 -translate-y-1/2 glass rounded-xl p-6 border-2 border-cyan-400/30 bg-slate-800/95 backdrop-blur-md max-w-sm z-50 shadow-2xl"
+                                                        style={{ animation: 'fadeIn 0.4s ease-out' }}
+                                                    >
+                                                        {(() => {
+                                                            const exp = experiences.find(e => e.id === selectedExperience);
+                                                            return exp ? (
+                                                                <>
+                                                                    <div className="flex items-center justify-between mb-4">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="relative">
+                                                                                <img
+                                                                                    src={exp.image}
+                                                                                    alt={exp.name}
+                                                                                    className="w-20 h-20 object-contain"
+                                                                                    style={{
+                                                                                        filter: 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.6))'
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <h4 className="text-xl font-bold text-white">{exp.name}</h4>
+                                                                                <p className="text-sm text-slate-400">{exp.subtitle}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => setSelectedExperience(null)}
+                                                                            className="p-2 rounded-full hover:bg-slate-700 transition-colors"
+                                                                        >
+                                                                            <Icons.X size={20} className="text-slate-400 hover:text-white" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="text-sm text-slate-300 leading-relaxed mb-4">
+                                                                        <p>{exp.description}</p>
+                                                                    </div>
+                                                                    <div className="pt-4 border-t border-white/10">
+                                                                        <p className="text-xs text-slate-400">
+                                                                            This experience portal provides specialized interfaces and workflows tailored for this stakeholder group.
+                                                                        </p>
+                                                                    </div>
+                                                                </>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="text-slate-400 text-center p-8">
+                                                <p className="text-lg mb-2">Image not found</p>
+                                                <p className="text-sm">Please ensure <code className="bg-slate-800 px-2 py-1 rounded text-slate-300">Gemini_Generated_Image_aikiykaikiykaiki.png</code> is in the root directory</p>
+                                                <p className="text-xs mt-4 text-slate-500">Click here to open planet layers</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Open State - Planet with layers */}
+                                {isOpen && (
+                                    <>
+                                        <div 
+                                            className={`relative transition-all duration-1000 ease-in-out translate-x-[-25%]`}
+                                            style={{ 
+                                                perspective: '2000px',
+                                                perspectiveOrigin: 'center center',
+                                                zIndex: 10,
+                                                pointerEvents: 'auto'
+                                            }}
+                                        >
+                                            <div 
+                                                className="relative"
+                                                style={{ 
+                                                    transformStyle: 'preserve-3d',
+                                                    transform: 'rotateY(-60deg) scale(0.9)',
+                                                    transition: 'transform 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    width: '400px',
+                                                    height: '400px',
+                                                    margin: '0 auto',
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                {/* Planet Core - Glowing center (Data Strata) */}
+                                                <div 
+                                                    className="absolute rounded-full"
+                                                    style={{
+                                                        left: '180px',
+                                                        top: '180px',
+                                                        width: '40px',
+                                                        height: '40px',
+                                                        background: 'radial-gradient(circle, rgba(234, 179, 8, 1) 0%, rgba(234, 179, 8, 0.9) 30%, rgba(217, 119, 6, 0.7) 60%, transparent 100%)',
+                                                        boxShadow: '0 0 30px rgba(234, 179, 8, 0.8), 0 0 60px rgba(217, 119, 6, 0.4)',
+                                                        zIndex: 10,
+                                                        animation: 'pulse 2s ease-in-out infinite'
+                                                    }}
+                                                />
+
+                                                {/* Strata Layers - Order matches list: Data (center) to Experience (outer) */}
+                                                {strata.map((layer, index) => {
+                                                    // Data (index 0) = smallest radius (center), Experience (index 4) = largest (outer)
+                                                    // This matches the list order: Data at bottom (center), Experience at top (outer)
+                                                    const radius = 40 + (index * 32);
+                                                    const isOuter = index === strata.length - 1; // Experience Strata
+                                                    const isInner = index === 0; // Data Strata
+                                                    const isHovered = hoveredStrataFromList === layer.id;
+                                                    
+                                                    // Get glow color based on layer
+                                                    const getGlowColor = () => {
+                                                        if (layer.color === 'from-yellow-500 to-amber-600') return 'rgba(234, 179, 8, 0.8)';
+                                                        if (layer.color === 'from-orange-500 to-red-600') return 'rgba(249, 115, 22, 0.8)';
+                                                        if (layer.color === 'from-red-500 to-pink-600') return 'rgba(239, 68, 68, 0.8)';
+                                                        if (layer.color === 'from-pink-500 to-purple-600') return 'rgba(236, 72, 153, 0.8)';
+                                                        if (layer.color === 'from-blue-500 to-cyan-600') return 'rgba(59, 130, 246, 0.8)';
+                                                        return 'rgba(100, 100, 100, 0.8)';
+                                                    };
+                                                    
+                                                    return (
+                                                        <div key={layer.id} className="absolute" style={{
+                                                            left: `${200 - radius}px`,
+                                                            top: `${200 - radius}px`,
+                                                            width: `${radius * 2}px`,
+                                                            height: `${radius * 2}px`,
+                                                            transition: 'all 0.3s ease-out'
+                                                        }}>
+                                                            {/* Left half (intact sphere) */}
+                                                            <div 
+                                                                className={`absolute rounded-full border-2 ${isOuter ? 'border-white/30' : 'border-white/10'} shadow-xl`}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    clipPath: 'polygon(0% 0%, 50% 0%, 50% 100%, 0% 100%)',
+                                                                    opacity: isHovered ? 1 : (isOuter ? 0.95 : 0.85 - (index * 0.05)),
+                                                                    zIndex: index + 1,
+                                                                    background: layer.color === 'from-yellow-500 to-amber-600' 
+                                                                        ? 'linear-gradient(to bottom right, rgb(234, 179, 8), rgb(217, 119, 6))'
+                                                                        : layer.color === 'from-orange-500 to-red-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(249, 115, 22), rgb(220, 38, 38))'
+                                                                        : layer.color === 'from-red-500 to-pink-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(239, 68, 68), rgb(219, 39, 119))'
+                                                                        : layer.color === 'from-pink-500 to-purple-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(236, 72, 153), rgb(147, 51, 234))'
+                                                                        : layer.color === 'from-blue-500 to-cyan-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(59, 130, 246), rgb(8, 145, 178))'
+                                                                        : 'linear-gradient(to bottom right, rgb(100, 100, 100), rgb(50, 50, 50))',
+                                                                    backgroundImage: `radial-gradient(circle at 20% 30%, rgba(255,255,255,${isHovered ? '0.4' : isOuter ? '0.25' : '0.15'}), transparent 50%)`,
+                                                                    boxShadow: isHovered 
+                                                                        ? `0 0 60px ${getGlowColor()}, 0 0 100px ${getGlowColor()}, 0 0 140px ${getGlowColor()}, inset 0 0 40px ${getGlowColor()}`
+                                                                        : isOuter ? '0 0 40px rgba(59, 130, 246, 0.3)' : 'none',
+                                                                    transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                                                                    transition: 'all 0.3s ease-out'
+                                                                }}
+                                                            />
+                                                            {/* Right half (cutaway showing layers) */}
+                                                            <div 
+                                                                className={`absolute rounded-full border-2 ${isOuter ? 'border-white/30' : 'border-white/10'}`}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    clipPath: 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)',
+                                                                    opacity: isHovered ? 1 : (isOuter ? 0.95 : 0.85 - (index * 0.05)),
+                                                                    zIndex: index + 1,
+                                                                    background: layer.color === 'from-yellow-500 to-amber-600' 
+                                                                        ? 'linear-gradient(to bottom right, rgb(234, 179, 8), rgb(217, 119, 6))'
+                                                                        : layer.color === 'from-orange-500 to-red-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(249, 115, 22), rgb(220, 38, 38))'
+                                                                        : layer.color === 'from-red-500 to-pink-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(239, 68, 68), rgb(219, 39, 119))'
+                                                                        : layer.color === 'from-pink-500 to-purple-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(236, 72, 153), rgb(147, 51, 234))'
+                                                                        : layer.color === 'from-blue-500 to-cyan-600'
+                                                                        ? 'linear-gradient(to bottom right, rgb(59, 130, 246), rgb(8, 145, 178))'
+                                                                        : 'linear-gradient(to bottom right, rgb(100, 100, 100), rgb(50, 50, 50))',
+                                                                    backgroundImage: `radial-gradient(circle at 80% 30%, rgba(255,255,255,${isHovered ? '0.35' : isOuter ? '0.2' : '0.1'}), transparent 50%)`,
+                                                                    boxShadow: isHovered 
+                                                                        ? `0 0 50px ${getGlowColor()}, 0 0 80px ${getGlowColor()}, inset 0 0 30px ${getGlowColor()}`
+                                                                        : 'none',
+                                                                    transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                                                                    transition: 'all 0.3s ease-out'
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Strata Labels (when open) - Inverted order: Experience (outer) to Data (core) */}
+                                        <div className="absolute right-8 top-1/2 -translate-y-1/2 space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                                            {[...strata].reverse().map((layer, index) => {
+                                                const isHovered = hoveredStrataFromList === layer.id;
+                                                return (
+                                                    <button
+                                                        key={layer.id}
+                                                        onClick={() => handleStrataClick(selectedStrata === layer.id ? null : layer.id)}
+                                                        onMouseEnter={() => setHoveredStrataFromList(layer.id)}
+                                                        onMouseLeave={() => setHoveredStrataFromList(null)}
+                                                        className={`block text-left p-4 rounded-xl border-2 transition-all backdrop-blur-sm ${
+                                                            selectedStrata === layer.id 
+                                                                ? 'border-cyan-400 bg-cyan-400/20 shadow-lg shadow-cyan-400/20' 
+                                                                : isHovered
+                                                                ? 'border-white/40 bg-slate-700/60 shadow-lg'
+                                                                : 'border-white/10 bg-slate-800/50 hover:border-white/30 hover:bg-slate-700/50'
+                                                        }`}
+                                                        style={{ 
+                                                            animation: `fadeIn 0.6s ease-out ${index * 0.15}s both`,
+                                                            minWidth: '280px',
+                                                            transform: isHovered ? 'scale(1.02)' : 'scale(1)',
+                                                            transition: 'all 0.3s ease-out'
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div 
+                                                                className={`w-4 h-4 rounded-full bg-gradient-to-br ${layer.color} border border-white/20 transition-all`}
+                                                                style={{
+                                                                    boxShadow: isHovered ? `0 0 15px ${layer.color.includes('yellow') ? 'rgba(234, 179, 8, 0.8)' : layer.color.includes('orange') ? 'rgba(249, 115, 22, 0.8)' : layer.color.includes('red') ? 'rgba(239, 68, 68, 0.8)' : layer.color.includes('pink') ? 'rgba(236, 72, 153, 0.8)' : 'rgba(59, 130, 246, 0.8)'}` : 'none',
+                                                                    transform: isHovered ? 'scale(1.3)' : 'scale(1)'
+                                                                }}
+                                                            ></div>
+                                                            <div className={`text-base font-semibold bg-gradient-to-r ${layer.color} bg-clip-text text-transparent`}>
+                                                                {layer.name}
+                                                            </div>
+                                                        </div>
+                                                        {selectedStrata === layer.id && (
+                                                            <div className="text-sm text-slate-300 mt-3 leading-relaxed border-t border-white/10 pt-3">
+                                                                {layer.description}
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Close button (when open) */}
+                                        <button
+                                            onClick={handlePlanetClick}
+                                            className="absolute top-4 left-4 p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 border border-white/10 transition-colors z-50"
+                                        >
+                                            <Icons.X size={20} className="text-slate-300" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                            )}
+
+                            {/* Summary View (when Strata is selected) */}
+                            {viewMode === 'summary' && selectedStrata && (
+                                <div className="mt-8 space-y-6" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <button
+                                                onClick={handleBackToPlanet}
+                                                className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-4"
+                                            >
+                                                <Icons.ChevronDown size={20} className="rotate-90" />
+                                                Back to Planet
+                                            </button>
+                                            {(() => {
+                                                const currentStrata = strata.find(s => s.id === selectedStrata);
+                                                return currentStrata ? (
+                                                    <div>
+                                                        <h2 className={`text-2xl font-bold bg-gradient-to-r ${currentStrata.color} bg-clip-text text-transparent`}>
+                                                            {currentStrata.name} - Initiatives Summary
+                                                        </h2>
+                                                        <p className="text-slate-400 mt-2">{currentStrata.description}</p>
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+                                        <div className="text-sm text-slate-400">
+                                            {allInitiatives.length} initiative{allInitiatives.length !== 1 ? 's' : ''} found
+                                        </div>
+                                    </div>
+
+                                    {allInitiatives.length === 0 ? (
+                                        <div className="glass rounded-xl p-8 text-center">
+                                            <Icons.AlertCircle size={48} className="mx-auto mb-4 text-slate-500" />
+                                            <p className="text-slate-400">No initiatives found for this Strata</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-4">
+                                            {allInitiatives.map((item, index) => {
+                                                const currentStrata = strata.find(s => s.id === selectedStrata);
+                                                return (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => handleInitiativeClick(item.id)}
+                                                        className="glass rounded-xl p-6 text-left hover:bg-slate-700/30 transition-all border-2 border-white/10 hover:border-white/20"
+                                                        style={{ animation: `fadeIn 0.4s ease-out ${index * 0.1}s both` }}
+                                                    >
+                                                        <div className="flex items-start justify-between">
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-3 mb-2">
+                                                                    <span className={`text-sm font-bold px-2 py-1 rounded bg-gradient-to-r ${currentStrata?.color || 'from-slate-500 to-slate-600'} text-white`}>
+                                                                        #{index + 1}
+                                                                    </span>
+                                                                    <span className="text-xs px-2 py-1 rounded bg-slate-700/50 text-slate-300 border border-white/10">
+                                                                        {item.type === 'delivery' ? 'Delivery' : 'Product'}
+                                                                    </span>
+                                                                    <h3 className="text-lg font-semibold text-white">{item.initiative}</h3>
+                                                                </div>
+                                                                <p className="text-sm text-slate-400 mb-3">{item.squad}</p>
+                                                                
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                                                            <span>Completion</span>
+                                                                            <span className="font-semibold text-white">{item.completion}%</span>
+                                                                        </div>
+                                                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                                                            <div 
+                                                                                className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'}`}
+                                                                                style={{ width: `${item.completion}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    {item.type === 'delivery' && item.spi !== null && (
+                                                                        <div className="text-right">
+                                                                            <div className="text-xs text-slate-400">SPI</div>
+                                                                            <div className={`text-sm font-bold ${item.spi >= 1 ? 'text-green-400' : item.spi >= 0.9 ? 'text-blue-400' : 'text-orange-400'}`}>
+                                                                                {item.spi.toFixed(2)}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <Icons.ChevronDown size={20} className="text-slate-400 ml-4 -rotate-90" />
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Detail View (when Initiative is selected) */}
+                            {viewMode === 'detail' && selectedInitiative && (() => {
+                                const initiative = allInitiatives.find(i => i.id === selectedInitiative);
+                                if (!initiative) return null;
+                                const currentStrata = strata.find(s => s.id === selectedStrata);
+                                
+                                return (
+                                    <div className="mt-8 space-y-6" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+                                        <button
+                                            onClick={handleBackToSummary}
+                                            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                                        >
+                                            <Icons.ChevronDown size={20} className="rotate-90" />
+                                            Back to Summary
+                                        </button>
+
+                                        <div className="glass rounded-xl p-6 border-2 border-white/10">
+                                            <div className="flex items-start justify-between mb-6">
+                                                <div>
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <span className={`text-sm font-bold px-2 py-1 rounded bg-gradient-to-r ${currentStrata?.color || 'from-slate-500 to-slate-600'} text-white`}>
+                                                            {initiative.type === 'delivery' ? 'Delivery' : 'Product'}
+                                                        </span>
+                                                        <h2 className="text-2xl font-bold text-white">{initiative.initiative}</h2>
+                                                    </div>
+                                                    <p className="text-slate-400">{initiative.squad}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                                <div>
+                                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Completion</div>
+                                                    <div className="text-3xl font-bold text-white mb-2">{initiative.completion}%</div>
+                                                    <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'}`}
+                                                            style={{ width: `${initiative.completion}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {initiative.type === 'delivery' && (
+                                                    <>
+                                                        {initiative.spi !== null && (
+                                                            <div>
+                                                                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">SPI</div>
+                                                                <div className={`text-3xl font-bold ${initiative.spi >= 1 ? 'text-green-400' : initiative.spi >= 0.9 ? 'text-blue-400' : 'text-orange-400'}`}>
+                                                                    {initiative.spi.toFixed(2)}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 mt-1">
+                                                                    {initiative.spi >= 1 ? 'Ahead of schedule' : initiative.spi >= 0.9 ? 'On track' : 'Behind schedule'}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {initiative.allocation !== null && (
+                                                            <div>
+                                                                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Team Allocation</div>
+                                                                <div className="text-3xl font-bold text-white">{initiative.allocation}</div>
+                                                                <div className="text-xs text-slate-500 mt-1">FTE</div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {initiative.start && (
+                                                    <div>
+                                                        <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Start Date</div>
+                                                        <div className="text-lg font-medium text-white">{initiative.start}</div>
+                                                    </div>
+                                                )}
+
+                                                {initiative.delivery && (
+                                                    <div>
+                                                        <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">
+                                                            {initiative.type === 'delivery' ? 'Estimated Delivery' : 'Quarter'}
+                                                        </div>
+                                                        <div className="text-lg font-medium text-white">{initiative.delivery}</div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {initiative.scope && (
+                                                <div className="mb-6">
+                                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Scope</div>
+                                                    <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{initiative.scope}</div>
+                                                </div>
+                                            )}
+
+                                            {initiative.comments && (
+                                                <div className="mb-6">
+                                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Comments</div>
+                                                    <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{linkifyText(initiative.comments)}</div>
+                                                </div>
+                                            )}
+
+                                            {initiative.devs && initiative.devs.length > 0 && (
+                                                <div>
+                                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-3">Allocated Team</div>
+                                                    <div className="space-y-2">
+                                                        {initiative.devs.map((dev, index) => (
+                                                            <div key={index} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-white/10">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                                                                        {dev.dev ? dev.dev.charAt(0).toUpperCase() : '?'}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-sm font-medium text-white">{dev.dev || 'Unknown'}</div>
+                                                                        <div className="text-xs text-slate-400">{dev.squad}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`text-sm font-bold ${dev.percentage > 100 ? 'text-rose-400' : dev.percentage >= 80 ? 'text-cyan-400' : 'text-sky-400'}`}>
+                                                                    {dev.percentage}%
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                );
+            };
 
             const OverallView = ({ productInitiatives, deliveryProjects }) => {
                 const [selectedSquad, setSelectedSquad] = useState('All');
@@ -2232,12 +3140,13 @@
                 { id: 'overall', label: 'Overall', icon: Icons.Layout },
                 { id: 'product', label: 'Product Roadmap', icon: Icons.Box },
                 { id: 'delivery', label: 'Delivery Roadmap', icon: Icons.Truck },
+                { id: 'strata', label: 'Strata Mapping', icon: Icons.Map },
             ];
 
             return (
                 <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-8 py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
                         <div className="flex items-center">
-                            <img src="logo.svg" alt="Logo" className="h-14 w-auto object-contain" />
+                            <img src="logo.png" alt="Logo" className="h-14 w-auto object-contain" />
                     </div>
 
                     <div className="hidden md:flex items-center gap-8">
@@ -2269,6 +3178,7 @@
             const [devAllocationData, setDevAllocationData] = useState([]);
             const [productInitiatives, setProductInitiatives] = useState([]);
             const [productBugRelease, setProductBugRelease] = useState([]);
+            const [strataMappingData, setStrataMappingData] = useState([]);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
 
@@ -2284,7 +3194,8 @@
                             const deliveryData = await DeliveryRoadmapData.load(CORS_PROXY);
                             setProjectData(deliveryData.projects);
                             setDevAllocationData(deliveryData.allocation);
-                            console.log('[APP] Delivery data loaded:', { projects: deliveryData.projects.length, allocation: deliveryData.allocation.length });
+                            setStrataMappingData(deliveryData.strataMapping || []);
+                            console.log('[APP] Delivery data loaded:', { projects: deliveryData.projects.length, allocation: deliveryData.allocation.length, strataMapping: (deliveryData.strataMapping || []).length });
                     } catch (err) {
                             console.error("[APP] Delivery data failed, using mock:", err.message);
                             setProjectData(DeliveryRoadmapData.MOCK_DATA.projects);
@@ -2335,10 +3246,10 @@
                         <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
                             <div>
                                 <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-                                    {activeView === 'overall' ? 'Overall Dashboard' : activeView === 'product' ? 'Product Roadmap' : 'Delivery Roadmap'}
+                                    {activeView === 'overall' ? 'Overall Dashboard' : activeView === 'product' ? 'Product Roadmap' : activeView === 'delivery' ? 'Delivery Roadmap' : 'Strata Mapping'}
                                 </h1>
                                 <p className="text-slate-400 mt-2">
-                                    {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : 'Execution & Resource Allocation'}
+                                    {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : activeView === 'delivery' ? 'Execution & Resource Allocation' : 'Strata Mapping & Analysis'}
                                 </p>
                             </div>
                             <div className="flex gap-4">
@@ -2353,6 +3264,7 @@
                                 {activeView === 'overall' && <OverallView productInitiatives={productInitiatives} deliveryProjects={projectData} />}
                             {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                             {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
+                            {activeView === 'strata' && <StrataMappingView productInitiatives={productInitiatives} deliveryProjects={projectData} devAllocationData={devAllocationData} strataMappingData={strataMappingData} />}
                         </main>
                     </div>
                 </div>
