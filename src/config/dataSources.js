@@ -19,6 +19,11 @@ export const DELIVERY_ROADMAP = {
             gid: '1194298779',
             url: 'https://docs.google.com/spreadsheets/d/1L98AGoj2jd-oWuxBZ_W0nVFZpwd3zr38jVW5iGhc0s8/export?format=csv&gid=1194298779',
             description: 'Asignación de desarrolladores por proyecto'
+        },
+        strataMapping: {
+            gid: '753917662',
+            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9DFccJbSxnK2hN65w-hQDKB0KrN-5MO7g8_G3l96wo8V3LtbEkQcZIoWn68zshwO_CSdGJi8ObQX-/pub?gid=753917662&single=true&output=csv',
+            description: 'Mapeo de Strata a Squads e Iniciativas'
         }
     }
 };
