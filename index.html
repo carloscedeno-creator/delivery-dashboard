@@ -1760,6 +1760,7 @@
                     if (!strataConfig) return { delivery: [], product: [] };
 
                     const deliveryInitiatives = [];
+                    const productInitiativesList = [];
 
                     // Get initiatives mapped to this strata from the mapping datasource
                     const mappedInitiatives = strataMappingData.filter(mapping => {
@@ -1769,30 +1770,48 @@
 
                     console.log(`[STRATA] Found ${mappedInitiatives.length} mapped initiatives for ${strataId}:`, mappedInitiatives);
 
-                    // For each mapped initiative, find it ONLY in Delivery data
+                    // For each mapped initiative, find it in Delivery and/or Product data
                     mappedInitiatives.forEach(mapping => {
                         const initiativeName = (mapping.initiative || '').trim();
                         const mappingType = (mapping.type || '').toLowerCase();
 
                         if (!initiativeName) return;
 
-                        // Only search in Delivery data (ignore Product)
-                        // Include if type is 'delivery' or empty/undefined (default to Delivery)
-                        // Exclude if type explicitly contains 'product'
-                        if (!mappingType.includes('product') && (mappingType.includes('delivery') || !mappingType)) {
+                        // Helper function to normalize initiative names for matching
+                        const normalizeInitiativeName = (name) => {
+                            return (name || '').trim().toLowerCase();
+                        };
+
+                        // Search in Delivery data
+                        if (mappingType.includes('delivery') || !mappingType || mappingType === 'both') {
                             const deliveryMatch = deliveryProjects.find(project => {
-                                const projectInitiative = (project.initiative || '').trim();
-                                return projectInitiative.toLowerCase() === initiativeName.toLowerCase() ||
-                                       projectInitiative.toLowerCase().includes(initiativeName.toLowerCase()) ||
-                                       initiativeName.toLowerCase().includes(projectInitiative.toLowerCase());
+                                const projectInitiative = normalizeInitiativeName(project.initiative);
+                                const searchName = normalizeInitiativeName(initiativeName);
+                                return projectInitiative === searchName ||
+                                       projectInitiative.includes(searchName) ||
+                                       searchName.includes(projectInitiative);
                             });
-                            if (deliveryMatch && !deliveryInitiatives.find(p => p.initiative === deliveryMatch.initiative)) {
+                            if (deliveryMatch && !deliveryInitiatives.find(p => normalizeInitiativeName(p.initiative) === normalizeInitiativeName(deliveryMatch.initiative))) {
                                 deliveryInitiatives.push(deliveryMatch);
+                            }
+                        }
+
+                        // Search in Product data
+                        if (mappingType.includes('product') || !mappingType || mappingType === 'both') {
+                            const productMatch = productInitiatives.find(initiative => {
+                                const productInitiative = normalizeInitiativeName(initiative.initiative);
+                                const searchName = normalizeInitiativeName(initiativeName);
+                                return productInitiative === searchName ||
+                                       productInitiative.includes(searchName) ||
+                                       searchName.includes(productInitiative);
+                            });
+                            if (productMatch && !productInitiativesList.find(i => normalizeInitiativeName(i.initiative) === normalizeInitiativeName(productMatch.initiative))) {
+                                productInitiativesList.push(productMatch);
                             }
                         }
                     });
 
-                    return { delivery: deliveryInitiatives, product: [] };
+                    return { delivery: deliveryInitiatives, product: productInitiativesList };
                 };
 
                 // Get initiatives for selected Strata
@@ -1802,30 +1821,38 @@
                 }, [selectedStrata, deliveryProjects, productInitiatives]);
 
                 // Combine and format initiatives for display
+                // Unifies data when the same initiative appears in both Delivery and Product
                 const allInitiatives = useMemo(() => {
                     const combined = [];
+                    const initiativeMap = new Map(); // Map to track unified initiatives by name
                     
-                    // Add Delivery initiatives only (exclude Product)
+                    // Helper function to normalize initiative names for matching
+                    const normalizeInitiativeName = (name) => {
+                        return (name || '').trim().toLowerCase();
+                    };
+
+                    // First, process Delivery initiatives
                     strataInitiatives.delivery.forEach((item, index) => {
+                        const initiativeName = normalizeInitiativeName(item.initiative);
                         const currentStatus = item.status || 0;
                         const realisticCompletion = item.realisticCompletion !== undefined && item.realisticCompletion !== null 
                             ? item.realisticCompletion 
                             : null;
                         
                         // Determine if completion might be misleading
-                        // Warning if: high status but low SPI, or comments suggest issues, or realistic completion is much lower
                         const mightBeMisleading = realisticCompletion !== null 
-                            ? (currentStatus - realisticCompletion > 20) // More than 20% difference
-                            : (currentStatus > 80 && item.spi < 0.9) || // High completion but behind schedule
+                            ? (currentStatus - realisticCompletion > 20)
+                            : (currentStatus > 80 && item.spi < 0.9) ||
                               (item.comments && item.comments.toLowerCase().includes('blocked'));
                         
-                        combined.push({
-                            id: `delivery-${index}`,
-                            type: 'delivery',
+                        const unifiedInitiative = {
+                            id: `unified-${index}`,
+                            type: 'delivery', // Default type
                             initiative: item.initiative,
-                            squad: item.squad,
+                            squad: item.squad || '',
                             status: item.status || 0,
-                            completion: currentStatus,
+                            completion: currentStatus, // Delivery completion
+                            productCompletion: null, // Product completion (documentation) - will be set if Product data exists
                             realisticCompletion: realisticCompletion,
                             mightBeMisleading: mightBeMisleading,
                             spi: item.spi || 0,
@@ -1834,11 +1861,84 @@
                             start: item.start || '',
                             delivery: item.delivery || '',
                             allocation: item.allocation || 0,
+                            // Product-specific fields (will be filled if Product data exists)
+                            ba: null,
+                            designer: null,
+                            team: null,
+                            quarter: null,
+                            effort: null,
+                            startDate: null,
+                            expectedDate: null,
                             devs: devAllocationData.filter(d => 
                                 d.squad === item.squad && d.initiative === item.initiative
                             )
-                        });
+                        };
+
+                        initiativeMap.set(initiativeName, unifiedInitiative);
                     });
+
+                    // Then, process Product initiatives and unify with Delivery if they match
+                    strataInitiatives.product.forEach((item, index) => {
+                        const initiativeName = normalizeInitiativeName(item.initiative);
+                        const existingInitiative = initiativeMap.get(initiativeName);
+
+                        if (existingInitiative) {
+                            // Unify: Combine Delivery and Product data
+                            existingInitiative.type = 'both'; // Mark as unified
+                            // Keep Delivery data as primary, but add Product-specific fields
+                            existingInitiative.ba = item.ba || existingInitiative.ba;
+                            existingInitiative.designer = item.designer || existingInitiative.designer;
+                            existingInitiative.team = item.team || existingInitiative.team;
+                            existingInitiative.quarter = item.quarter || existingInitiative.quarter;
+                            existingInitiative.effort = item.effort || existingInitiative.effort;
+                            existingInitiative.startDate = item.startDate || existingInitiative.startDate;
+                            existingInitiative.expectedDate = item.expectedDate || existingInitiative.expectedDate;
+                            
+                            // Keep Product completion separate (documentation)
+                            existingInitiative.productCompletion = item.completion || 0;
+                            
+                            // Merge comments if both exist
+                            if (item.comments && existingInitiative.comments) {
+                                existingInitiative.comments = `${existingInitiative.comments}\n[Product] ${item.comments}`;
+                            } else if (item.comments) {
+                                existingInitiative.comments = `[Product] ${item.comments}`;
+                            }
+                        } else {
+                            // Product-only initiative (not in Delivery)
+                            const productCompletion = item.completion || 0;
+                            const mightBeMisleading = productCompletion > 80 && 
+                                (item.status && item.status.toLowerCase().includes('blocked'));
+
+                            initiativeMap.set(initiativeName, {
+                                id: `product-${index}`,
+                                type: 'product',
+                                initiative: item.initiative,
+                                squad: item.team || item.squad || 'Product',
+                                status: item.status || '',
+                                completion: null, // No Delivery completion
+                                productCompletion: productCompletion, // Product completion (documentation)
+                                realisticCompletion: null,
+                                mightBeMisleading: mightBeMisleading,
+                                spi: null,
+                                scope: item.scope || '',
+                                comments: item.comments || '',
+                                start: item.startDate || item.start || '',
+                                delivery: item.quarter || '',
+                                allocation: null,
+                                ba: item.ba || null,
+                                designer: item.designer || null,
+                                team: item.team || null,
+                                quarter: item.quarter || null,
+                                effort: item.effort || null,
+                                startDate: item.startDate || null,
+                                expectedDate: item.expectedDate || null,
+                                devs: []
+                            });
+                        }
+                    });
+
+                    // Convert map to array
+                    combined.push(...Array.from(initiativeMap.values()));
 
                     return combined;
                 }, [strataInitiatives, devAllocationData]);
@@ -2332,7 +2432,7 @@
                                                                         #{index + 1}
                                                                     </span>
                                                                     <span className="text-xs px-2 py-1 rounded bg-slate-700/50 text-slate-300 border border-white/10">
-                                                                        {item.type === 'delivery' ? 'Delivery' : 'Product'}
+                                                                        {item.type === 'both' ? 'Delivery + Product' : item.type === 'delivery' ? 'Delivery' : 'Product'}
                                                                     </span>
                                                                     <h3 className="text-lg font-semibold text-white">{item.initiative}</h3>
                                                                 </div>
@@ -2340,42 +2440,64 @@
                                                                 
                                                                 <div className="flex items-center gap-4">
                                                                     <div className="flex-1">
-                                                                        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                                                                            <span className="flex items-center gap-1">
-                                                                                Completion
-                                                                                {item.mightBeMisleading && (
-                                                                                    <span className="text-amber-400" title="This percentage may not reflect the full project scope. Some tasks may not be included in the calculation.">
-                                                                                        ⚠️
+                                                                        {/* Delivery Completion */}
+                                                                        {(item.type === 'delivery' || item.type === 'both') && item.completion !== null && (
+                                                                            <>
+                                                                                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                                                                    <span className="flex items-center gap-1">
+                                                                                        Delivery Completion
+                                                                                        {item.mightBeMisleading && (
+                                                                                            <span className="text-amber-400" title="This percentage may not reflect the full project scope. Some tasks may not be included in the calculation.">
+                                                                                                ⚠️
+                                                                                            </span>
+                                                                                        )}
                                                                                     </span>
-                                                                                )}
-                                                                            </span>
-                                                                            <div className="flex flex-col items-end">
-                                                                                {item.realisticCompletion !== null ? (
-                                                                                    <>
-                                                                                        <span className="font-semibold text-white line-through text-slate-500 text-xs">{item.completion}%</span>
-                                                                                        <span className="font-semibold text-amber-400">{item.realisticCompletion}%</span>
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <span className="font-semibold text-white">{item.completion}%</span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden relative">
-                                                                            {item.realisticCompletion !== null && (
-                                                                                <div 
-                                                                                    className="h-full rounded-full bg-amber-500/30 absolute top-0 left-0"
-                                                                                    style={{ width: `${item.realisticCompletion}%` }}
-                                                                                    title="Realistic completion based on full project scope"
-                                                                                />
-                                                                            )}
-                                                                            <div 
-                                                                                className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'} ${item.realisticCompletion !== null ? 'opacity-50' : ''}`}
-                                                                                style={{ width: `${item.completion}%` }}
-                                                                                title={item.realisticCompletion !== null ? `Current: ${item.completion}% (may not include all tasks) | Realistic: ${item.realisticCompletion}%` : `Completion: ${item.completion}%`}
-                                                                            />
-                                                                        </div>
+                                                                                    <div className="flex flex-col items-end">
+                                                                                        {item.realisticCompletion !== null ? (
+                                                                                            <>
+                                                                                                <span className="font-semibold text-white line-through text-slate-500 text-xs">{item.completion}%</span>
+                                                                                                <span className="font-semibold text-amber-400">{item.realisticCompletion}%</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span className="font-semibold text-white">{item.completion}%</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="h-2 bg-slate-700 rounded-full overflow-hidden relative mb-2">
+                                                                                    {item.realisticCompletion !== null && (
+                                                                                        <div 
+                                                                                            className="h-full rounded-full bg-amber-500/30 absolute top-0 left-0"
+                                                                                            style={{ width: `${item.realisticCompletion}%` }}
+                                                                                            title="Realistic completion based on full project scope"
+                                                                                        />
+                                                                                    )}
+                                                                                    <div 
+                                                                                        className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'} ${item.realisticCompletion !== null ? 'opacity-50' : ''}`}
+                                                                                        style={{ width: `${item.completion}%` }}
+                                                                                        title={item.realisticCompletion !== null ? `Current: ${item.completion}% (may not include all tasks) | Realistic: ${item.realisticCompletion}%` : `Delivery Completion: ${item.completion}%`}
+                                                                                    />
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                        
+                                                                        {/* Product Completion (Documentation) */}
+                                                                        {(item.type === 'product' || item.type === 'both') && item.productCompletion !== null && (
+                                                                            <>
+                                                                                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                                                                    <span>Documentation Completion</span>
+                                                                                    <span className="font-semibold text-slate-300">{item.productCompletion}%</span>
+                                                                                </div>
+                                                                                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                                                                    <div 
+                                                                                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+                                                                                        style={{ width: `${item.productCompletion}%` }}
+                                                                                        title={`Documentation Completion: ${item.productCompletion}%`}
+                                                                                    />
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
-                                                                    {item.type === 'delivery' && item.spi !== null && (
+                                                                    {(item.type === 'delivery' || item.type === 'both') && item.spi !== null && (
                                                                         <div className="text-right">
                                                                             <div className="text-xs text-slate-400">SPI</div>
                                                                             <div className={`text-sm font-bold ${item.spi >= 1 ? 'text-green-400' : item.spi >= 0.9 ? 'text-blue-400' : 'text-orange-400'}`}>
@@ -2416,7 +2538,7 @@
                                                 <div>
                                                     <div className="flex items-center gap-3 mb-2">
                                                         <span className={`text-sm font-bold px-2 py-1 rounded bg-gradient-to-r ${currentStrata?.color || 'from-slate-500 to-slate-600'} text-white`}>
-                                                            {initiative.type === 'delivery' ? 'Delivery' : 'Product'}
+                                                            {initiative.type === 'both' ? 'Delivery + Product' : initiative.type === 'delivery' ? 'Delivery' : 'Product'}
                                                         </span>
                                                         <h2 className="text-2xl font-bold text-white">{initiative.initiative}</h2>
                                                     </div>
@@ -2425,60 +2547,83 @@
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                                <div>
-                                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
-                                                        Completion
-                                                        {initiative.mightBeMisleading && (
-                                                            <span className="text-amber-400 text-xs normal-case font-normal" title="This percentage may not reflect the full project scope. Some tasks may not be included in the calculation.">
-                                                                (⚠️ May not reflect full scope)
-                                                            </span>
+                                                {/* Delivery Completion */}
+                                                {(initiative.type === 'delivery' || initiative.type === 'both') && initiative.completion !== null && (
+                                                    <div>
+                                                        <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
+                                                            Delivery Completion
+                                                            {initiative.mightBeMisleading && (
+                                                                <span className="text-amber-400 text-xs normal-case font-normal" title="This percentage may not reflect the full project scope. Some tasks may not be included in the calculation.">
+                                                                    (⚠️ May not reflect full scope)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {initiative.realisticCompletion !== null ? (
+                                                            <>
+                                                                <div className="mb-2">
+                                                                    <div className="text-lg text-slate-500 line-through mb-1">
+                                                                        {initiative.completion}% (Current - tasks only)
+                                                                    </div>
+                                                                    <div className="text-3xl font-bold text-amber-400">
+                                                                        {initiative.realisticCompletion}% (Realistic - full scope)
+                                                                    </div>
+                                                                </div>
+                                                                <div className="h-3 bg-slate-700 rounded-full overflow-hidden relative mb-1">
+                                                                    <div 
+                                                                        className="h-full rounded-full bg-amber-500/30 absolute top-0 left-0"
+                                                                        style={{ width: `${initiative.realisticCompletion}%` }}
+                                                                        title="Realistic completion based on full project scope"
+                                                                    />
+                                                                    <div 
+                                                                        className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'} opacity-50`}
+                                                                        style={{ width: `${initiative.completion}%` }}
+                                                                        title={`Current: ${initiative.completion}% (may not include all tasks)`}
+                                                                    />
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 mt-1">
+                                                                    The realistic percentage accounts for all required tasks, not just existing ones.
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="text-3xl font-bold text-white mb-2">{initiative.completion}%</div>
+                                                                <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                                                                    <div 
+                                                                        className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'}`}
+                                                                        style={{ width: `${initiative.completion}%` }}
+                                                                    />
+                                                                </div>
+                                                                {initiative.mightBeMisleading && (
+                                                                    <div className="text-xs text-amber-400 mt-2">
+                                                                        ⚠️ This percentage may not reflect the full project scope. It only calculates existing tasks.
+                                                                    </div>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </div>
-                                                    {initiative.realisticCompletion !== null ? (
-                                                        <>
-                                                            <div className="mb-2">
-                                                                <div className="text-lg text-slate-500 line-through mb-1">
-                                                                    {initiative.completion}% (Current - tasks only)
-                                                                </div>
-                                                                <div className="text-3xl font-bold text-amber-400">
-                                                                    {initiative.realisticCompletion}% (Realistic - full scope)
-                                                                </div>
-                                                            </div>
-                                                            <div className="h-3 bg-slate-700 rounded-full overflow-hidden relative mb-1">
-                                                                <div 
-                                                                    className="h-full rounded-full bg-amber-500/30 absolute top-0 left-0"
-                                                                    style={{ width: `${initiative.realisticCompletion}%` }}
-                                                                    title="Realistic completion based on full project scope"
-                                                                />
-                                                                <div 
-                                                                    className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'} opacity-50`}
-                                                                    style={{ width: `${initiative.completion}%` }}
-                                                                    title={`Current: ${initiative.completion}% (may not include all tasks)`}
-                                                                />
-                                                            </div>
-                                                            <div className="text-xs text-slate-500 mt-1">
-                                                                The realistic percentage accounts for all required tasks, not just existing ones.
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <div className="text-3xl font-bold text-white mb-2">{initiative.completion}%</div>
-                                                            <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
-                                                                <div 
-                                                                    className={`h-full rounded-full bg-gradient-to-r ${currentStrata?.color || 'from-cyan-500 to-blue-500'}`}
-                                                                    style={{ width: `${initiative.completion}%` }}
-                                                                />
-                                                            </div>
-                                                            {initiative.mightBeMisleading && (
-                                                                <div className="text-xs text-amber-400 mt-2">
-                                                                    ⚠️ This percentage may not reflect the full project scope. It only calculates existing tasks.
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
+                                                )}
 
-                                                {initiative.type === 'delivery' && (
+                                                {/* Product Completion (Documentation) */}
+                                                {(initiative.type === 'product' || initiative.type === 'both') && initiative.productCompletion !== null && (
+                                                    <div>
+                                                        <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">
+                                                            Documentation Completion
+                                                        </div>
+                                                        <div className="text-3xl font-bold text-purple-400 mb-2">{initiative.productCompletion}%</div>
+                                                        <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+                                                                style={{ width: `${initiative.productCompletion}%` }}
+                                                                title={`Documentation Completion: ${initiative.productCompletion}%`}
+                                                            />
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1">
+                                                            Product documentation and requirements completion.
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {(initiative.type === 'delivery' || initiative.type === 'both') && (
                                                     <>
                                                         {initiative.spi !== null && (
                                                             <div>
@@ -2501,6 +2646,30 @@
                                                     </>
                                                 )}
 
+                                                {/* Product-specific fields (show when type is 'product' or 'both') */}
+                                                {(initiative.type === 'product' || initiative.type === 'both') && (
+                                                    <>
+                                                        {initiative.ba && (
+                                                            <div>
+                                                                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Business Analyst</div>
+                                                                <div className="text-lg font-medium text-white">{initiative.ba}</div>
+                                                            </div>
+                                                        )}
+                                                        {initiative.designer && (
+                                                            <div>
+                                                                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Designer</div>
+                                                                <div className="text-lg font-medium text-white">{initiative.designer}</div>
+                                                            </div>
+                                                        )}
+                                                        {initiative.effort && (
+                                                            <div>
+                                                                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Effort</div>
+                                                                <div className="text-lg font-medium text-white">{initiative.effort} days</div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+
                                                 {initiative.start && (
                                                     <div>
                                                         <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Start Date</div>
@@ -2511,7 +2680,7 @@
                                                 {initiative.delivery && (
                                                     <div>
                                                         <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">
-                                                            {initiative.type === 'delivery' ? 'Estimated Delivery' : 'Quarter'}
+                                                            {initiative.type === 'both' ? 'Delivery / Quarter' : initiative.type === 'delivery' ? 'Estimated Delivery' : 'Quarter'}
                                                         </div>
                                                         <div className="text-lg font-medium text-white">{initiative.delivery}</div>
                                                     </div>
