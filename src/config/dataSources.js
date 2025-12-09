@@ -105,6 +105,14 @@ export const listAllDataSources = () => {
 };
 
 // ============================================
+// JIRA & NOTION INTEGRATION
+// ============================================
+// Las configuraciones de Jira y Notion están en archivos separados:
+// - src/config/jiraConfig.js
+// - src/config/notionConfig.js
+// Esto permite mantener las credenciales seguras y organizadas
+
+// ============================================
 // EXPORTS AGRUPADOS
 // ============================================
 export default {

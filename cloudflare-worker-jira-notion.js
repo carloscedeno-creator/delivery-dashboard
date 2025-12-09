@@ -1,0 +1,266 @@
+// Cloudflare Worker para proxy de Google Sheets, Jira y Notion
+// Este worker maneja las llamadas a APIs externas de forma segura
+// manteniendo las credenciales en el backend
+
+addEventListener('fetch', event => {
+    event.respondWith(handleRequest(event.request))
+})
+
+async function handleRequest(request) {
+    const url = new URL(request.url)
+    const path = url.pathname
+
+    // Manejar CORS preflight
+    if (request.method === 'OPTIONS') {
+        return new Response(null, {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Max-Age': '86400'
+            }
+        })
+    }
+
+    // Proxy para Google Sheets (comportamiento original)
+    if (path === '/' || path === '') {
+        const targetUrl = url.searchParams.get('url')
+        
+        if (!targetUrl) {
+            return new Response('Missing url parameter', {
+                status: 400,
+                headers: {
+                    'Content-Type': 'text/plain',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            })
+        }
+
+        try {
+            const response = await fetch(targetUrl)
+            const data = await response.text()
+
+            return new Response(data, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/csv',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Cache-Control': 'public, max-age=300'
+                }
+            })
+        } catch (error) {
+            return new Response(`Error fetching data: ${error.message}`, {
+                status: 500,
+                headers: {
+                    'Content-Type': 'text/plain',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            })
+        }
+    }
+
+    // Endpoint para Jira
+    if (path === '/jira') {
+        return handleJiraRequest(request, url)
+    }
+
+    // Endpoint para Notion
+    if (path === '/notion') {
+        return handleNotionRequest(request, url)
+    }
+
+    return new Response('Not found', {
+        status: 404,
+        headers: {
+            'Content-Type': 'text/plain',
+            'Access-Control-Allow-Origin': '*'
+        }
+    })
+}
+
+async function handleJiraRequest(request, url) {
+    // Obtener credenciales de las variables de entorno del Worker
+    const JIRA_BASE_URL = JIRA_BASE_URL_ENV || ''
+    const JIRA_EMAIL = JIRA_EMAIL_ENV || ''
+    const JIRA_API_TOKEN = JIRA_API_TOKEN_ENV || ''
+
+    if (!JIRA_BASE_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
+        return new Response(JSON.stringify({ error: 'Jira credentials not configured' }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+    }
+
+    const action = url.searchParams.get('action')
+    const auth = btoa(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`)
+
+    try {
+        let jiraUrl = ''
+        let response
+
+        switch (action) {
+            case 'getEpicIssues':
+                const epicKey = url.searchParams.get('epicKey')
+                jiraUrl = `${JIRA_BASE_URL}/rest/api/3/search?jql=epic=${epicKey}`
+                response = await fetch(jiraUrl, {
+                    headers: {
+                        'Authorization': `Basic ${auth}`,
+                        'Accept': 'application/json'
+                    }
+                })
+                break
+
+            case 'getProjectIssues':
+                const projectKey = url.searchParams.get('projectKey')
+                jiraUrl = `${JIRA_BASE_URL}/rest/api/3/search?jql=project=${projectKey}`
+                response = await fetch(jiraUrl, {
+                    headers: {
+                        'Authorization': `Basic ${auth}`,
+                        'Accept': 'application/json'
+                    }
+                })
+                break
+
+            case 'search':
+                const jql = url.searchParams.get('jql')
+                jiraUrl = `${JIRA_BASE_URL}/rest/api/3/search?jql=${encodeURIComponent(jql)}`
+                response = await fetch(jiraUrl, {
+                    headers: {
+                        'Authorization': `Basic ${auth}`,
+                        'Accept': 'application/json'
+                    }
+                })
+                break
+
+            default:
+                return new Response(JSON.stringify({ error: 'Invalid action' }), {
+                    status: 400,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                })
+        }
+
+        if (!response.ok) {
+            throw new Error(`Jira API error: ${response.statusText}`)
+        }
+
+        const data = await response.json()
+
+        return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=300'
+            }
+        })
+    } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+    }
+}
+
+async function handleNotionRequest(request, url) {
+    // Obtener credenciales de las variables de entorno del Worker
+    const NOTION_API_TOKEN = NOTION_API_TOKEN_ENV || ''
+    const NOTION_DATABASE_ID = NOTION_DATABASE_ID_ENV || ''
+
+    if (!NOTION_API_TOKEN || !NOTION_DATABASE_ID) {
+        return new Response(JSON.stringify({ error: 'Notion credentials not configured' }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+    }
+
+    const action = url.searchParams.get('action')
+
+    try {
+        let notionUrl = ''
+        let response
+
+        switch (action) {
+            case 'getDatabasePages':
+                notionUrl = `https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`
+                const filter = request.method === 'POST' ? await request.json() : null
+                response = await fetch(notionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                        'Notion-Version': '2022-06-28',
+                        'Content-Type': 'application/json'
+                    },
+                    body: filter ? JSON.stringify({ filter }) : JSON.stringify({})
+                })
+                break
+
+            case 'searchPages':
+                const initiativeName = url.searchParams.get('initiativeName')
+                notionUrl = `https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`
+                // Buscar páginas que contengan el nombre de la iniciativa
+                const searchFilter = {
+                    property: 'Initiative', // Ajustar según tu base de datos
+                    title: {
+                        contains: initiativeName
+                    }
+                }
+                response = await fetch(notionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                        'Notion-Version': '2022-06-28',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filter: searchFilter })
+                })
+                break
+
+            default:
+                return new Response(JSON.stringify({ error: 'Invalid action' }), {
+                    status: 400,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                })
+        }
+
+        if (!response.ok) {
+            throw new Error(`Notion API error: ${response.statusText}`)
+        }
+
+        const data = await response.json()
+
+        return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=300'
+            }
+        })
+    } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+    }
+}
+
