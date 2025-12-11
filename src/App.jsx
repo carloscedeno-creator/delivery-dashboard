@@ -4,6 +4,8 @@ import Navbar from './components/Navbar';
 import OverallView from './components/OverallView';
 import ProductRoadmapView from './components/ProductRoadmapView';
 import DeliveryRoadmapView from './components/DeliveryRoadmapView';
+// Supabase integration - En desarrollo (próximamente)
+// import SupabaseTest from './components/SupabaseTest';
 import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
 
@@ -109,6 +111,8 @@ function App() {
                     {activeView === 'overall' && <OverallView />}
                     {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                     {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
+                    {/* Supabase integration - En desarrollo (próximamente) */}
+                    {/* {activeView === 'supabase-test' && <SupabaseTest />} */}
                 </main>
             </div>
         </div>

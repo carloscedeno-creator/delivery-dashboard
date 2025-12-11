@@ -299,6 +299,7 @@
                             if (hLower.includes('initiative') || hLower === 'initiative name') entry.initiative = val;
                             if (hLower.includes('squad') || hLower === 'team') entry.squad = val;
                             if (hLower.includes('type') || hLower === 'source') entry.type = val; // 'Delivery' or 'Product'
+                            if (hLower.includes('doc link') || hLower.includes('documentation link') || hLower === 'doc') entry.docLink = val;
                         }
                         // Attachments field (can contain URLs separated by commas or newlines)
                         if (h.toLowerCase().includes('attachment') || h.toLowerCase().includes('image') || h.toLowerCase().includes('file')) {
@@ -1774,6 +1775,7 @@
                     mappedInitiatives.forEach(mapping => {
                         const initiativeName = (mapping.initiative || '').trim();
                         const mappingType = (mapping.type || '').toLowerCase();
+                        const docLink = mapping.docLink || null;
 
                         if (!initiativeName) return;
 
@@ -1792,7 +1794,9 @@
                                        searchName.includes(projectInitiative);
                             });
                             if (deliveryMatch && !deliveryInitiatives.find(p => normalizeInitiativeName(p.initiative) === normalizeInitiativeName(deliveryMatch.initiative))) {
-                                deliveryInitiatives.push(deliveryMatch);
+                                // Add docLink from mapping to the delivery match
+                                const enrichedMatch = { ...deliveryMatch, docLink: docLink };
+                                deliveryInitiatives.push(enrichedMatch);
                             }
                         }
 
@@ -1806,7 +1810,9 @@
                                        searchName.includes(productInitiative);
                             });
                             if (productMatch && !productInitiativesList.find(i => normalizeInitiativeName(i.initiative) === normalizeInitiativeName(productMatch.initiative))) {
-                                productInitiativesList.push(productMatch);
+                                // Add docLink from mapping to the product match
+                                const enrichedMatch = { ...productMatch, docLink: docLink };
+                                productInitiativesList.push(enrichedMatch);
                             }
                         }
                     });
@@ -1861,6 +1867,7 @@
                             start: item.start || '',
                             delivery: item.delivery || '',
                             allocation: item.allocation || 0,
+                            docLink: item.docLink || null, // Documentation link from mapping
                             // Product-specific fields (will be filled if Product data exists)
                             ba: null,
                             designer: null,
@@ -1897,6 +1904,11 @@
                             // Keep Product completion separate (documentation)
                             existingInitiative.productCompletion = item.completion || 0;
                             
+                            // Use docLink from Product if Delivery doesn't have one
+                            if (!existingInitiative.docLink && item.docLink) {
+                                existingInitiative.docLink = item.docLink;
+                            }
+                            
                             // Merge comments if both exist
                             if (item.comments && existingInitiative.comments) {
                                 existingInitiative.comments = `${existingInitiative.comments}\n[Product] ${item.comments}`;
@@ -1925,6 +1937,7 @@
                                 start: item.startDate || item.start || '',
                                 delivery: item.quarter || '',
                                 allocation: null,
+                                docLink: item.docLink || null, // Documentation link from mapping
                                 ba: item.ba || null,
                                 designer: item.designer || null,
                                 team: item.team || null,
@@ -2436,7 +2449,25 @@
                                                                     </span>
                                                                     <h3 className="text-lg font-semibold text-white">{item.initiative}</h3>
                                                                 </div>
-                                                                <p className="text-sm text-slate-400 mb-3">{item.squad}</p>
+                                                                <div className="flex items-center justify-between mb-3">
+                                                                    <p className="text-sm text-slate-400">{item.squad}</p>
+                                                                    {item.docLink && (
+                                                                        <a
+                                                                            href={item.docLink}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                                                <polyline points="15 3 21 3 21 9"></polyline>
+                                                                                <line x1="10" y1="14" x2="21" y2="3"></line>
+                                                                            </svg>
+                                                                            Docs
+                                                                        </a>
+                                                                    )}
+                                                                </div>
                                                                 
                                                                 <div className="flex items-center gap-4">
                                                                     <div className="flex-1">
@@ -2542,7 +2573,24 @@
                                                         </span>
                                                         <h2 className="text-2xl font-bold text-white">{initiative.initiative}</h2>
                                                     </div>
-                                                    <p className="text-slate-400">{initiative.squad}</p>
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-slate-400">{initiative.squad}</p>
+                                                        {initiative.docLink && (
+                                                            <a
+                                                                href={initiative.docLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 hover:text-purple-200 transition-colors border border-purple-500/30"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                                                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                                                                </svg>
+                                                                View Documentation
+                                                            </a>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
 

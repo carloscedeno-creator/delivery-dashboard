@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { Box, Activity, AlertCircle, Truck, TrendingUp } from 'lucide-react';
+import { Box, Activity, AlertCircle, Truck, TrendingUp, Users, Calendar, Target, Clock, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { format, parseISO, isValid } from 'date-fns';
 import GanttChart from './GanttChart';
 import KPICard from './KPICard';
 
@@ -63,15 +64,29 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
     // Prepare data for Gantt Chart (convert to delivery format)
     const ganttData = useMemo(() => {
         return productInitiatives
-            .filter(item => item.startDate && item.expectedDate)
-            .map(item => ({
-                initiative: item.initiative,
-                squad: item.team || 'Product',
-                start: item.startDate,
-                delivery: item.expectedDate,
-                status: item.completion || 0,
-                spi: 1.0 // Default SPI for product initiatives
-            }));
+            .filter(item => {
+                // Need at least a start date and either expectedDate or endDate
+                return item.startDate && (item.expectedDate || item.endDate);
+            })
+            .map(item => {
+                // Use endDate if available, otherwise expectedDate
+                const endDate = item.endDate || item.expectedDate;
+                
+                return {
+                    initiative: item.initiative,
+                    squad: item.team || 'Product',
+                    start: item.startDate,
+                    delivery: endDate,
+                    status: item.completion || 0,
+                    spi: 1.0 // Default SPI for product initiatives
+                };
+            })
+            .filter(item => {
+                // Additional validation: ensure dates are valid strings
+                return item.start && item.delivery && 
+                       item.start.trim() !== '' && 
+                       item.delivery.trim() !== '';
+            });
     }, [productInitiatives]);
 
     const COLORS = ['#00D9FF', '#0EA5E9', '#22D3EE', '#67e8f9'];
@@ -135,46 +150,174 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
             {/* Product Roadmap Timeline */}
             {ganttData.length > 0 && (
                 <div className="glass rounded-2xl p-6">
-                    <h3 className="text-slate-400 text-sm font-medium mb-6">Timeline Overview (Roadmap)</h3>
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-cyan-400" />
+                            Timeline Overview
+                        </h3>
+                        <span className="text-sm text-slate-400">{ganttData.length} items on timeline</span>
+                    </div>
                     <GanttChart data={ganttData} />
                 </div>
             )}
 
             {/* Initiatives Timeline by Quarter */}
             <div className="glass rounded-2xl p-6">
-                <h3 className="text-slate-400 text-sm font-medium mb-6">Strategic Initiatives by Quarter</h3>
-                <div className="space-y-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                        <Target className="w-5 h-5 text-cyan-400" />
+                        Strategic Initiatives by Quarter
+                    </h3>
+                    <span className="text-sm text-slate-400">{productInitiatives.length} initiatives</span>
+                </div>
+                <div className="space-y-8">
                     {Object.entries(initiativesByQuarter).sort().map(([quarter, items]) => (
-                        <div key={quarter} className="border-b border-white/5 last:border-0 pb-6 last:pb-0">
-                            <h4 className="text-cyan-400 font-semibold mb-4">{quarter}</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {items.map((item, idx) => (
-                                    <div key={idx} className="bg-slate-800/50 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-all">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-slate-200 font-medium truncate pr-2" title={item.initiative}>
-                                                {item.initiative}
-                                            </span>
-                                            <span className={`text-xs px-2 py-1 rounded ${item.status === 'Done' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                item.status === 'In Progress' ? 'bg-blue-500/20 text-blue-400' :
-                                                    'bg-slate-700 text-slate-400'
-                                                }`}>
-                                                {item.status || 'Planned'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between text-xs text-slate-500 mt-2">
-                                            <span>{item.team || 'N/A'}</span>
-                                            <span>{item.ba || 'N/A'}</span>
-                                        </div>
-                                        {item.completion !== undefined && (
-                                            <div className="mt-3 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-cyan-500 rounded-full"
-                                                    style={{ width: `${item.completion}%` }}
-                                                />
+                        <div key={quarter} className="border-l-2 border-cyan-500/30 pl-6 pb-8 last:pb-0">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
+                                    <h4 className="text-cyan-400 font-bold text-lg">{quarter}</h4>
+                                </div>
+                                <span className="text-sm text-slate-400">{items.length} initiative{items.length !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                {items.map((item, idx) => {
+                                    // Format dates
+                                    const formatDate = (dateStr) => {
+                                        if (!dateStr) return null;
+                                        try {
+                                            const date = parseISO(dateStr);
+                                            if (isValid(date)) {
+                                                return format(date, 'MMM dd, yyyy');
+                                            }
+                                            // Try other formats
+                                            const parts = dateStr.split('/');
+                                            if (parts.length === 3) {
+                                                const d = new Date(parts[2], parts[1] - 1, parts[0]);
+                                                if (isValid(d)) return format(d, 'MMM dd, yyyy');
+                                            }
+                                        } catch (e) {
+                                            return dateStr;
+                                        }
+                                        return dateStr;
+                                    };
+
+                                    const getStatusConfig = (status) => {
+                                        const statusLower = (status || '').toLowerCase();
+                                        if (statusLower.includes('done') || statusLower.includes('completed')) {
+                                            return { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30', icon: CheckCircle2 };
+                                        }
+                                        if (statusLower.includes('progress') || statusLower.includes('active')) {
+                                            return { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30', icon: Activity };
+                                        }
+                                        if (statusLower.includes('blocked') || statusLower.includes('stuck')) {
+                                            return { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30', icon: AlertCircle };
+                                        }
+                                        return { bg: 'bg-slate-700/50', text: 'text-slate-400', border: 'border-slate-600/30', icon: Clock };
+                                    };
+
+                                    const statusConfig = getStatusConfig(item.status);
+                                    const StatusIcon = statusConfig.icon;
+
+                                    return (
+                                        <div 
+                                            key={idx} 
+                                            className="group bg-gradient-to-br from-slate-800/60 to-slate-900/60 p-5 rounded-xl border border-white/5 hover:border-cyan-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
+                                        >
+                                            {/* Header */}
+                                            <div className="flex justify-between items-start mb-4">
+                                                <h5 className="text-slate-100 font-semibold text-sm leading-tight pr-2 flex-1" title={item.initiative}>
+                                                    {item.initiative}
+                                                </h5>
+                                                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${statusConfig.bg} ${statusConfig.border} ${statusConfig.text} shrink-0`}>
+                                                    <StatusIcon className="w-3 h-3" />
+                                                    <span className="text-xs font-medium">{item.status || 'Planned'}</span>
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                ))}
+
+                                            {/* Team & BA Info */}
+                                            <div className="flex items-center gap-4 mb-4 text-xs">
+                                                {item.team && (
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        <Users className="w-3.5 h-3.5" />
+                                                        <span className="text-slate-300">{item.team}</span>
+                                                    </div>
+                                                )}
+                                                {item.ba && (
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        <Box className="w-3.5 h-3.5" />
+                                                        <span className="text-slate-300">{item.ba}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Dates */}
+                                            {(item.startDate || item.expectedDate) && (
+                                                <div className="flex items-center gap-3 mb-4 text-xs text-slate-500">
+                                                    {item.startDate && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Calendar className="w-3.5 h-3.5" />
+                                                            <span>Start: {formatDate(item.startDate)}</span>
+                                                        </div>
+                                                    )}
+                                                    {item.expectedDate && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Target className="w-3.5 h-3.5" />
+                                                            <span>Due: {formatDate(item.expectedDate)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Effort */}
+                                            {item.effort && (
+                                                <div className="mb-4">
+                                                    <div className="flex items-center justify-between text-xs mb-1.5">
+                                                        <span className="text-slate-400">Effort</span>
+                                                        <span className="text-cyan-400 font-medium">{item.effort} days</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Progress Bar */}
+                                            {item.completion !== undefined && (
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-slate-400">Progress</span>
+                                                        <span className={`font-semibold ${
+                                                            item.completion >= 90 ? 'text-emerald-400' :
+                                                            item.completion >= 50 ? 'text-blue-400' :
+                                                            item.completion > 0 ? 'text-amber-400' :
+                                                            'text-slate-500'
+                                                        }`}>
+                                                            {item.completion}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                                item.completion >= 90 ? 'bg-emerald-500' :
+                                                                item.completion >= 50 ? 'bg-blue-500' :
+                                                                item.completion > 0 ? 'bg-amber-500' :
+                                                                'bg-slate-600'
+                                                            }`}
+                                                            style={{ width: `${item.completion}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Designer */}
+                                            {item.designer && (
+                                                <div className="mt-3 pt-3 border-t border-white/5">
+                                                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                                        <Users className="w-3.5 h-3.5" />
+                                                        <span>Designer: <span className="text-slate-300">{item.designer}</span></span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     ))}
@@ -185,8 +328,14 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Bug vs Feature Mix */}
                 <div className="glass rounded-2xl p-6">
-                    <h3 className="text-slate-400 text-sm font-medium mb-6">Bug vs Feature Mix</h3>
-                    <div className="h-[200px]">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-cyan-400" />
+                            Bug vs Feature Mix
+                        </h3>
+                        <span className="text-xs text-slate-400">{productBugRelease.length} total</span>
+                    </div>
+                    <div className="h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -194,7 +343,7 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={60}
-                                    outerRadius={80}
+                                    outerRadius={90}
                                     paddingAngle={5}
                                     dataKey="value"
                                 >
@@ -202,17 +351,46 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} />
-                                <Legend />
+                                <Tooltip 
+                                    contentStyle={{ 
+                                        backgroundColor: '#1e293b', 
+                                        borderColor: '#334155', 
+                                        color: '#f8fafc',
+                                        borderRadius: '8px',
+                                        padding: '8px 12px'
+                                    }} 
+                                />
+                                <Legend 
+                                    wrapperStyle={{ fontSize: '12px', color: '#94a3b8' }}
+                                    iconType="circle"
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
+                    {bugReleaseData.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/5 flex justify-around text-xs">
+                            {bugReleaseData.map((entry, idx) => (
+                                <div key={idx} className="text-center">
+                                    <div className="text-slate-400 mb-1">{entry.name}</div>
+                                    <div className="text-white font-semibold">{entry.value}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Priority Breakdown */}
                 <div className="glass rounded-2xl p-6">
-                    <h3 className="text-slate-400 text-sm font-medium mb-6">Priority Breakdown</h3>
-                    <div className="h-[200px]">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-cyan-400" />
+                            Priority Breakdown
+                        </h3>
+                        <span className="text-xs text-slate-400">
+                            {priorityData.reduce((sum, item) => sum + item.value, 0)} items
+                        </span>
+                    </div>
+                    <div className="h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={priorityData}>
                                 <XAxis
@@ -222,11 +400,23 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
                                     tickLine={false}
                                     axisLine={false}
                                 />
+                                <YAxis
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                />
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+                                    contentStyle={{ 
+                                        backgroundColor: '#1e293b', 
+                                        borderColor: '#334155', 
+                                        color: '#f8fafc',
+                                        borderRadius: '8px',
+                                        padding: '8px 12px'
+                                    }}
                                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                 />
-                                <Bar dataKey="value" fill="#0EA5E9" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="value" fill="#0EA5E9" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -234,25 +424,37 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
 
                 {/* Initiatives per Team */}
                 <div className="glass rounded-2xl p-6">
-                    <h3 className="text-slate-400 text-sm font-medium mb-6">Initiatives per Team</h3>
-                    <div className="h-[200px]">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <Users className="w-5 h-5 text-cyan-400" />
+                            Initiatives per Team
+                        </h3>
+                        <span className="text-xs text-slate-400">{teamLoadData.length} teams</span>
+                    </div>
+                    <div className="h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={teamLoadData} layout="vertical">
                                 <XAxis type="number" hide />
                                 <YAxis
                                     dataKey="name"
                                     type="category"
-                                    width={80}
+                                    width={100}
                                     stroke="#94a3b8"
                                     fontSize={12}
                                     tickLine={false}
                                     axisLine={false}
                                 />
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+                                    contentStyle={{ 
+                                        backgroundColor: '#1e293b', 
+                                        borderColor: '#334155', 
+                                        color: '#f8fafc',
+                                        borderRadius: '8px',
+                                        padding: '8px 12px'
+                                    }}
                                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                 />
-                                <Bar dataKey="value" fill="#22D3EE" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="value" fill="#22D3EE" radius={[0, 6, 6, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

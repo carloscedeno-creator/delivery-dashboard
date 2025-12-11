@@ -1,15 +1,60 @@
 import React, { useMemo } from 'react';
-import { format, differenceInDays, addDays, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import { format, differenceInDays, addDays, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, isValid } from 'date-fns';
 import { motion } from 'framer-motion';
 
 const GanttChart = ({ data }) => {
+    // Helper to parse dates in multiple formats (DD/MM/YYYY, YYYY-MM-DD, etc.)
+    const parseDate = (dateStr) => {
+        if (!dateStr || !dateStr.trim()) return null;
+        
+        // Try ISO format first (YYYY-MM-DD)
+        try {
+            const isoDate = parseISO(dateStr);
+            if (isValid(isoDate)) {
+                return isoDate;
+            }
+        } catch (e) {
+            // Continue to try other formats
+        }
+
+        // Try DD/MM/YYYY format
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            
+            if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                const date = new Date(year, month - 1, day);
+                if (isValid(date)) {
+                    return date;
+                }
+            }
+        }
+
+        // Try standard Date parsing as fallback
+        const fallbackDate = new Date(dateStr);
+        if (isValid(fallbackDate)) {
+            return fallbackDate;
+        }
+
+        return null;
+    };
+
     // 1. Determine Date Range
     const { startDate, endDate, totalDays, months } = useMemo(() => {
         if (!data.length) return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
 
-        const dates = data.flatMap(d => [parseISO(d.start), parseISO(d.delivery)]);
-        const minDate = new Date(Math.min(...dates));
-        const maxDate = new Date(Math.max(...dates));
+        const parsedDates = data
+            .flatMap(d => [parseDate(d.start), parseDate(d.delivery)])
+            .filter(d => d !== null && isValid(d));
+
+        if (parsedDates.length === 0) {
+            return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
+        }
+
+        const minDate = new Date(Math.min(...parsedDates.map(d => d.getTime())));
+        const maxDate = new Date(Math.max(...parsedDates.map(d => d.getTime())));
 
         // Add some buffer
         const start = startOfMonth(minDate);
@@ -23,11 +68,18 @@ const GanttChart = ({ data }) => {
 
     // 2. Helper to calculate position and width
     const getPosition = (start, end) => {
-        const startOffset = differenceInDays(parseISO(start), startDate);
-        const duration = differenceInDays(parseISO(end), parseISO(start));
+        const startDateObj = parseDate(start);
+        const endDateObj = parseDate(end);
 
-        const left = (startOffset / totalDays) * 100;
-        const width = (duration / totalDays) * 100;
+        if (!startDateObj || !endDateObj || !isValid(startDateObj) || !isValid(endDateObj)) {
+            return { left: '0%', width: '0%' };
+        }
+
+        const startOffset = differenceInDays(startDateObj, startDate);
+        const duration = differenceInDays(endDateObj, startDateObj);
+
+        const left = Math.max(0, (startOffset / totalDays) * 100);
+        const width = Math.max(0, (duration / totalDays) * 100);
 
         return { left: `${left}%`, width: `${width}%` };
     };
@@ -65,7 +117,16 @@ const GanttChart = ({ data }) => {
                 {/* Rows */}
                 <div className="space-y-3">
                     {data.map((item, index) => {
+                        const startDateObj = parseDate(item.start);
+                        const endDateObj = parseDate(item.delivery);
                         const { left, width } = getPosition(item.start, item.delivery);
+                        
+                        // Format dates for tooltip
+                        const formatDateForTooltip = (dateObj) => {
+                            if (!dateObj || !isValid(dateObj)) return 'N/A';
+                            return format(dateObj, 'MMM dd, yyyy');
+                        };
+
                         return (
                             <motion.div
                                 key={index}
@@ -76,8 +137,8 @@ const GanttChart = ({ data }) => {
                             >
                                 {/* Label */}
                                 <div className="w-1/4 shrink-0 px-4">
-                                    <div className="font-medium text-sm truncate" title={item.initiative}>{item.initiative}</div>
-                                    <div className="text-xs text-muted-foreground truncate">{item.squad}</div>
+                                    <div className="font-medium text-sm truncate text-white" title={item.initiative}>{item.initiative}</div>
+                                    <div className="text-xs text-slate-400 truncate">{item.squad}</div>
                                 </div>
 
                                 {/* Bar Track */}
@@ -96,23 +157,36 @@ const GanttChart = ({ data }) => {
                                     })}
 
                                     {/* Progress Bar */}
-                                    <div
-                                        className="absolute h-4 rounded-full bg-slate-800/50 overflow-hidden"
-                                        style={{ left, width }}
-                                    >
+                                    {startDateObj && endDateObj && isValid(startDateObj) && isValid(endDateObj) ? (
                                         <div
-                                            className={`h-full ${getStatusColor(item.status)}/80 relative`}
-                                            style={{ width: `${item.status}%` }}
+                                            className="absolute h-4 rounded-full bg-slate-800/50 overflow-hidden border border-slate-700/50"
+                                            style={{ left, width }}
                                         >
-                                            {/* Shine effect */}
-                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full -translate-x-full animate-[shimmer_2s_infinite]" />
-                                        </div>
+                                            <div
+                                                className={`h-full ${getStatusColor(item.status)}/80 relative`}
+                                                style={{ width: `${item.status}%` }}
+                                            >
+                                                {/* Shine effect */}
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full -translate-x-full animate-[shimmer_2s_infinite]" />
+                                            </div>
 
-                                        {/* Tooltip on hover (simple implementation) */}
-                                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 text-xs px-2 py-1 rounded border border-white/10 whitespace-nowrap z-10 transition-opacity pointer-events-none">
-                                            {item.status}% Complete • SPI: {item.spi}
+                                            {/* Tooltip on hover */}
+                                            <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900/95 text-xs px-3 py-2 rounded-lg border border-white/10 whitespace-nowrap z-10 transition-opacity pointer-events-none shadow-lg">
+                                                <div className="font-semibold text-white mb-1">{item.initiative}</div>
+                                                <div className="text-slate-300 space-y-0.5">
+                                                    <div>Start: {formatDateForTooltip(startDateObj)}</div>
+                                                    <div>End: {formatDateForTooltip(endDateObj)}</div>
+                                                    <div className="pt-1 border-t border-white/10 mt-1">
+                                                        Progress: {item.status}% • SPI: {item.spi?.toFixed(2) || '1.00'}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="absolute left-0 text-xs text-slate-500 px-2">
+                                            Invalid dates: {item.start || 'N/A'} - {item.delivery || 'N/A'}
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         );
