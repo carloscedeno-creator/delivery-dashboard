@@ -11,6 +11,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
     v_user_id UUID;
+    v_is_active BOOLEAN;
 BEGIN
     -- Limpiar sesiones expiradas
     PERFORM cleanup_expired_sessions();
@@ -18,11 +19,20 @@ BEGIN
     -- Obtener user_id del token válido
     SELECT s.user_id INTO v_user_id
     FROM user_sessions s
-    INNER JOIN app_users u ON s.user_id = u.id
     WHERE s.token = p_token
         AND s.expires_at > NOW()
-        AND u.is_active = true
     LIMIT 1;
+    
+    -- Si encontramos un token válido, verificar que el usuario esté activo
+    IF v_user_id IS NOT NULL THEN
+        SELECT au.is_active INTO v_is_active
+        FROM app_users au
+        WHERE au.id = v_user_id;
+        
+        IF v_is_active IS NULL OR v_is_active = false THEN
+            v_user_id := NULL;
+        END IF;
+    END IF;
     
     RETURN v_user_id;
 END;
@@ -31,7 +41,11 @@ $$;
 GRANT EXECUTE ON FUNCTION get_user_from_token(VARCHAR) TO anon, authenticated, service_role;
 
 -- Recrear get_all_users con validación de sesión
-CREATE OR REPLACE FUNCTION get_all_users(p_session_token VARCHAR(500))
+-- Primero eliminar la función existente para evitar conflictos
+DROP FUNCTION IF EXISTS get_all_users(VARCHAR);
+DROP FUNCTION IF EXISTS get_all_users();
+
+CREATE FUNCTION get_all_users(p_session_token VARCHAR(500))
 RETURNS TABLE (
     id UUID,
     email VARCHAR(255),
@@ -43,10 +57,12 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_user_id UUID;
     v_user_role VARCHAR(50);
+    v_user_row app_users%ROWTYPE;
 BEGIN
     -- Validar token de sesión
     v_user_id := get_user_from_token(p_session_token);
@@ -55,26 +71,27 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized: Invalid or expired session';
     END IF;
     
-    -- Verificar que el usuario tenga rol admin
-    SELECT role INTO v_user_role
+    -- Verificar que el usuario tenga rol admin usando ROWTYPE
+    SELECT * INTO STRICT v_user_row
     FROM app_users
-    WHERE id = v_user_id;
+    WHERE app_users.id = v_user_id;
     
-    IF v_user_role != 'admin' THEN
+    IF v_user_row.role != 'admin' THEN
         RAISE EXCEPTION 'Unauthorized: Admin role required';
     END IF;
     
+    -- Retornar todos los usuarios usando RETURN QUERY
     RETURN QUERY
     SELECT 
-        u.id,
-        u.email,
-        u.display_name,
-        u.role,
-        u.is_active,
-        u.last_login_at,
-        u.created_at
-    FROM app_users u
-    ORDER BY u.created_at DESC;
+        app_users.id,
+        app_users.email,
+        app_users.display_name,
+        app_users.role,
+        app_users.is_active,
+        app_users.last_login_at,
+        app_users.created_at
+    FROM app_users
+    ORDER BY app_users.created_at DESC;
 END;
 $$;
 
@@ -98,9 +115,9 @@ BEGIN
     END IF;
     
     -- Verificar que el usuario tenga rol admin
-    SELECT role INTO v_current_user_role
-    FROM app_users
-    WHERE id = v_current_user_id;
+    SELECT au.role INTO v_current_user_role
+    FROM app_users au
+    WHERE au.id = v_current_user_id;
     
     IF v_current_user_role != 'admin' THEN
         RAISE EXCEPTION 'Unauthorized: Admin role required';
@@ -134,9 +151,9 @@ BEGIN
     END IF;
     
     -- Verificar que el usuario tenga rol admin
-    SELECT role INTO v_current_user_role
-    FROM app_users
-    WHERE id = v_current_user_id;
+    SELECT au.role INTO v_current_user_role
+    FROM app_users au
+    WHERE au.id = v_current_user_id;
     
     IF v_current_user_role != 'admin' THEN
         RAISE EXCEPTION 'Unauthorized: Admin role required';
@@ -172,9 +189,9 @@ BEGIN
     END IF;
     
     -- Verificar que el usuario tenga rol admin
-    SELECT role INTO v_current_user_role
-    FROM app_users
-    WHERE id = v_current_user_id;
+    SELECT au.role INTO v_current_user_role
+    FROM app_users au
+    WHERE au.id = v_current_user_id;
     
     IF v_current_user_role != 'admin' THEN
         RAISE EXCEPTION 'Unauthorized: Admin role required';
