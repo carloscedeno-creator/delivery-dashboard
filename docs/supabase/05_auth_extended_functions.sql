@@ -183,7 +183,9 @@ BEGIN
 END;
 $$;
 
+-- Solo authenticated y service_role pueden acceder (NO anon por seguridad)
 GRANT EXECUTE ON FUNCTION get_all_users TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION get_all_users FROM anon;
 
 -- Función para actualizar rol de usuario (solo admin)
 CREATE OR REPLACE FUNCTION update_user_role(
