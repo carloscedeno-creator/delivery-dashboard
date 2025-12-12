@@ -4,10 +4,9 @@ import Navbar from './components/Navbar';
 import OverallView from './components/OverallView';
 import ProductRoadmapView from './components/ProductRoadmapView';
 import DeliveryRoadmapView from './components/DeliveryRoadmapView';
-// Supabase integration - En desarrollo (próximamente)
-// import SupabaseTest from './components/SupabaseTest';
 import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
+import { getDeliveryRoadmapData, getDeveloperAllocationData } from './utils/supabaseApi';
 
 // URLs de las hojas usando la configuración centralizada
 const SHEET_URLS = {
@@ -42,6 +41,7 @@ function App() {
     const [productBugRelease, setProductBugRelease] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [dataSource, setDataSource] = useState('csv'); // 'supabase' o 'csv'
 
     useEffect(() => {
         const fetchWithFallback = async (url) => {
@@ -59,23 +59,69 @@ function App() {
         const loadData = async () => {
             try {
                 setLoading(true);
-                const [projText, allocText, prodInitText, prodBugText] = await Promise.all([
-                    fetchWithFallback(SHEET_URLS.project),
-                    fetchWithFallback(SHEET_URLS.allocation),
-                    fetchWithFallback(SHEET_URLS.productInitiatives),
-                    fetchWithFallback(SHEET_URLS.productBugRelease)
-                ]);
-                setProjectData(parseCSV(projText, 'project'));
-                setDevAllocationData(parseCSV(allocText, 'allocation'));
-                setProductInitiatives(parseCSV(prodInitText, 'productInitiatives'));
-                setProductBugRelease(parseCSV(prodBugText, 'productBugRelease'));
+                
+                // Intentar cargar desde Supabase primero (delivery roadmap)
+                try {
+                    console.log('[APP] 🔄 Intentando cargar datos desde Supabase...');
+                    const [deliveryData, allocationData] = await Promise.all([
+                        getDeliveryRoadmapData(),
+                        getDeveloperAllocationData()
+                    ]);
+                    
+                    // Validar que realmente hay datos
+                    if (!deliveryData || deliveryData.length === 0) {
+                        throw new Error('Supabase retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
+                    }
+                    
+                    setProjectData(deliveryData);
+                    setDevAllocationData(allocationData);
+                    setDataSource('supabase'); // Marcar que estamos usando Supabase
+                    console.log('[APP] ✅ Datos de delivery cargados desde Supabase:', {
+                        projects: deliveryData.length,
+                        allocations: allocationData.length,
+                        sampleProject: deliveryData[0]?.initiative || 'N/A'
+                    });
+                } catch (supabaseError) {
+                    console.error('[APP] ❌ Error cargando desde Supabase:', supabaseError);
+                    console.warn('[APP] ⚠️ Usando CSV como fallback (datos pueden estar desactualizados)');
+                    // Fallback a CSV para delivery
+                    try {
+                        const [projText, allocText] = await Promise.all([
+                            fetchWithFallback(SHEET_URLS.project),
+                            fetchWithFallback(SHEET_URLS.allocation)
+                        ]);
+                        setProjectData(parseCSV(projText, 'project'));
+                        setDevAllocationData(parseCSV(allocText, 'allocation'));
+                        setDataSource('csv'); // Marcar que estamos usando CSV
+                        console.warn('[APP] ⚠️ Usando datos de CSV. Los datos pueden no estar actualizados.');
+                    } catch (csvError) {
+                        console.error('[APP] ❌ Error también cargando CSV:', csvError);
+                        throw csvError;
+                    }
+                }
+
+                // Product roadmap sigue usando CSV (por ahora)
+                try {
+                    const [prodInitText, prodBugText] = await Promise.all([
+                        fetchWithFallback(SHEET_URLS.productInitiatives),
+                        fetchWithFallback(SHEET_URLS.productBugRelease)
+                    ]);
+                    setProductInitiatives(parseCSV(prodInitText, 'productInitiatives'));
+                    setProductBugRelease(parseCSV(prodBugText, 'productBugRelease'));
+                } catch (err) {
+                    console.warn('[APP] Error cargando product roadmap:', err);
+                    setProductInitiatives([]);
+                    setProductBugRelease([]);
+                }
+
                 setLoading(false);
             } catch (err) {
-                console.error("Fetch failed, using mock data:", err);
+                console.error("[APP] Error general, usando mock data:", err);
                 setProjectData(MOCK_PROJECT_DATA);
                 setDevAllocationData(MOCK_ALLOCATION_DATA);
                 setProductInitiatives([]);
                 setProductBugRelease([]);
+                setDataSource('csv'); // Mock data = CSV
                 setError(null);
                 setLoading(false);
             }
@@ -100,10 +146,17 @@ function App() {
                         </p>
                     </div>
                     <div className="flex gap-4">
-                        <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                            Live Data
-                        </div>
+                        {dataSource === 'supabase' ? (
+                            <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                Live Data
+                            </div>
+                        ) : (
+                            <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
+                                <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                                Not Connected
+                            </div>
+                        )}
                     </div>
                 </header>
 

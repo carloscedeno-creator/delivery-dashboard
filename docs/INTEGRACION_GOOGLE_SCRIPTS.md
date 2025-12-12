@@ -302,3 +302,5 @@ ORDER BY count DESC;
 3. Crear servicio de Supabase API
 4. Migrar componentes uno por uno
 5. Probar y optimizar
+
+

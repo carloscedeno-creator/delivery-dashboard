@@ -1,0 +1,203 @@
+---
+description: Testing standards, requirements, and best practices for the Back Objects Microservice
+globs: 
+alwaysApply: true
+---
+
+# Testing Standards
+
+## Testing Requirements
+
+### Pre-Commit Testing
+- **ALWAYS** run unit tests before committing code using git hooks (Husky)
+- Configure Husky pre-commit hook to execute `yarn test` automatically
+- Commits will be blocked if tests fail
+- This ensures no broken code enters the repository
+
+```bash
+# Example Husky pre-commit hook configuration
+# .husky/pre-commit
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+yarn test
+```
+
+### Test Coverage Requirements
+
+#### New Features
+- **MANDATORY**: Every new feature developed MUST have at least 5 unit tests to cover it
+- Tests should cover:
+  1. Happy path / success scenario
+  2. Error handling / failure scenarios (at least 2 different error cases)
+  3. Edge cases / boundary conditions
+  4. Validation scenarios
+  5. Integration with dependencies
+
+#### Bug Fixes
+- **MANDATORY**: Every bug fixed MUST have the proper amount of unit tests to prevent regression
+- Tests must:
+  - Reproduce the original bug (test should fail before fix, pass after fix)
+  - Cover the fix scenario explicitly
+  - Include edge cases related to the bug
+  - Test similar scenarios that could have the same issue
+- Minimum requirement: At least 2 tests per bug fix (one for the bug scenario, one for related edge cases)
+
+## Unit Testing Best Practices
+
+### Test File Organization
+- **ALWAYS** write unit tests for services (`.spec.ts` files)
+- Test files should be co-located with the source files they test
+- Use Jest as the testing framework
+- Use NestJS Testing utilities for module setup
+
+### Test Structure
+- Use `describe` blocks to group related tests
+- Use descriptive test names that explain what is being tested
+- Follow the pattern: `describe('FeatureService', () => { ... })`
+- Each test should be independent and not rely on other tests
+
+### Mocking Dependencies
+- **ALWAYS** mock external dependencies (repositories, services, HTTP clients)
+- Use Jest mocks for dependencies
+- Mock repositories using `getRepositoryToken(Entity, dbConfig.name)`
+- Mock services using `provide: ServiceClass, useValue: { ... }`
+- Use stubs from `domain/stubs/` for test data
+
+### Test Data
+- Use stubs from `domain/stubs/` for consistent test data
+- Create reusable test fixtures
+- Avoid hardcoding test data in test files - use stubs instead
+- Keep test data realistic and representative of production scenarios
+
+### Test Coverage
+- Test both success and error cases
+- Test edge cases and boundary conditions
+- Test validation scenarios
+- Test integration with dependencies (mocked)
+- Aim for high code coverage (target: >80% for services)
+
+## Test Setup Pattern
+
+```typescript
+// ✅ CORRECT: Test setup pattern
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { dbConfig } from '@avantodev/avanto-shared-resources';
+import { Repository } from 'typeorm';
+import { FeatureService } from './feature.service';
+import { Entity } from '@avantodev/avanto-db';
+import { entityStub } from './domain/stubs/entity.stub';
+
+describe('FeatureService', () => {
+  let service: FeatureService;
+  let mockRepository: jest.Mocked<Repository<Entity>>;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        FeatureService,
+        {
+          provide: getRepositoryToken(Entity, dbConfig.name),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            save: jest.fn(),
+            delete: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<FeatureService>(FeatureService);
+    mockRepository = module.get(getRepositoryToken(Entity, dbConfig.name));
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('create', () => {
+    it('should create an entity successfully', async () => {
+      // Test implementation
+    });
+
+    it('should throw NotFoundException when dependency is missing', async () => {
+      // Test implementation
+    });
+
+    it('should handle validation errors', async () => {
+      // Test implementation
+    });
+  });
+});
+```
+
+## Test Examples
+
+### Success Case Test
+```typescript
+it('should create the entity successfully', async () => {
+  const createDto = createEntityDtoStub;
+  const expectedEntity = entityStub;
+
+  mockRepository.save.mockResolvedValueOnce(expectedEntity);
+
+  const result = await service.create(createDto);
+
+  expect(result).toEqual(expectedEntity);
+  expect(mockRepository.save).toHaveBeenCalledWith(
+    expect.objectContaining(createDto),
+  );
+});
+```
+
+### Error Case Test
+```typescript
+it('should throw NotFoundException when related entity does not exist', async () => {
+  const createDto = createEntityDtoStub;
+
+  mockRelatedService.findOne.mockResolvedValueOnce(null);
+
+  await expect(service.create(createDto)).rejects.toThrow(NotFoundException);
+  expect(mockRepository.save).not.toHaveBeenCalled();
+});
+```
+
+### Edge Case Test
+```typescript
+it('should handle empty array input', async () => {
+  const emptyArray: CreateDto[] = [];
+
+  const result = await service.createBatch(emptyArray);
+
+  expect(result).toEqual([]);
+  expect(mockRepository.save).not.toHaveBeenCalled();
+});
+```
+
+## Testing Checklist
+
+Before submitting code, ensure:
+- [ ] All unit tests pass (`yarn test`)
+- [ ] At least 5 tests for new features
+- [ ] At least 2 tests for bug fixes (including regression test)
+- [ ] Tests cover success and error scenarios
+- [ ] Tests use stubs from `domain/stubs/`
+- [ ] All dependencies are properly mocked
+- [ ] Tests are independent and can run in any order
+- [ ] Test names clearly describe what is being tested
+- [ ] Pre-commit hook is configured to run tests
+
+## Anti-Patterns to Avoid
+
+1. ❌ **Don't** skip writing tests for new features
+2. ❌ **Don't** commit code without running tests first
+3. ❌ **Don't** write tests that depend on other tests
+4. ❌ **Don't** use real database connections in unit tests
+5. ❌ **Don't** hardcode test data - use stubs
+6. ❌ **Don't** test implementation details - test behavior
+7. ❌ **Don't** skip error case testing
+8. ❌ **Don't** write tests that are too complex - keep them simple and focused
+9. ❌ **Don't** ignore flaky tests - fix or remove them
+10. ❌ **Don't** commit tests that are commented out or skipped

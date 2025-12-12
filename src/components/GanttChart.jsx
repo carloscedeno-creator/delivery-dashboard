@@ -93,18 +93,18 @@ const GanttChart = ({ data }) => {
 
     return (
         <div className="w-full overflow-x-auto custom-scrollbar">
-            <div className="min-w-[800px]">
+            <div className="min-w-full md:min-w-[600px] lg:min-w-[800px]">
                 {/* Timeline Header */}
                 <div className="flex border-b border-white/10 mb-4 pb-2">
-                    <div className="w-1/4 shrink-0 font-medium text-muted-foreground pl-4">Initiative</div>
-                    <div className="w-3/4 relative h-8">
+                    <div className="w-1/3 md:w-1/4 shrink-0 font-medium text-muted-foreground pl-2 md:pl-4 text-xs md:text-sm">Initiative</div>
+                    <div className="w-2/3 md:w-3/4 relative h-8">
                         {months.map((month, index) => {
                             const monthStart = differenceInDays(month, startDate);
                             const left = (monthStart / totalDays) * 100;
                             return (
                                 <div
                                     key={index}
-                                    className="absolute top-0 text-xs text-muted-foreground border-l border-white/5 pl-1"
+                                    className="absolute top-0 text-[10px] md:text-xs text-muted-foreground border-l border-white/5 pl-1"
                                     style={{ left: `${left}%` }}
                                 >
                                     {format(month, 'MMM yyyy')}
@@ -136,13 +136,13 @@ const GanttChart = ({ data }) => {
                                 className="flex items-center group hover:bg-white/5 rounded-lg py-2 transition-colors"
                             >
                                 {/* Label */}
-                                <div className="w-1/4 shrink-0 px-4">
-                                    <div className="font-medium text-sm truncate text-white" title={item.initiative}>{item.initiative}</div>
-                                    <div className="text-xs text-slate-400 truncate">{item.squad}</div>
+                                <div className="w-1/3 md:w-1/4 shrink-0 px-2 md:px-4">
+                                    <div className="font-medium text-xs md:text-sm truncate text-white" title={item.initiative}>{item.initiative}</div>
+                                    <div className="text-[10px] md:text-xs text-slate-400 truncate">{item.squad}</div>
                                 </div>
 
                                 {/* Bar Track */}
-                                <div className="w-3/4 relative h-8 flex items-center px-2">
+                                <div className="w-2/3 md:w-3/4 relative h-8 flex items-center px-1 md:px-2">
                                     {/* Grid Lines */}
                                     {months.map((month, i) => {
                                         const monthStart = differenceInDays(month, startDate);
@@ -159,7 +159,7 @@ const GanttChart = ({ data }) => {
                                     {/* Progress Bar */}
                                     {startDateObj && endDateObj && isValid(startDateObj) && isValid(endDateObj) ? (
                                         <div
-                                            className="absolute h-4 rounded-full bg-slate-800/50 overflow-hidden border border-slate-700/50"
+                                            className="absolute h-4 md:h-5 rounded-full bg-slate-800/50 overflow-hidden border border-slate-700/50"
                                             style={{ left, width }}
                                         >
                                             <div
@@ -171,7 +171,7 @@ const GanttChart = ({ data }) => {
                                             </div>
 
                                             {/* Tooltip on hover */}
-                                            <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900/95 text-xs px-3 py-2 rounded-lg border border-white/10 whitespace-nowrap z-10 transition-opacity pointer-events-none shadow-lg">
+                                            <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900/95 text-[10px] md:text-xs px-2 md:px-3 py-1 md:py-2 rounded-lg border border-white/10 whitespace-nowrap z-10 transition-opacity pointer-events-none shadow-lg">
                                                 <div className="font-semibold text-white mb-1">{item.initiative}</div>
                                                 <div className="text-slate-300 space-y-0.5">
                                                     <div>Start: {formatDateForTooltip(startDateObj)}</div>

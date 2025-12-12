@@ -1,0 +1,82 @@
+---
+description: Business documentation standards, structure patterns, and guidelines for the Back Objects Microservice
+globs: 
+alwaysApply: true
+---
+
+# Documentation Standards
+
+## Business Documentation Standards
+
+### Documentation Location
+- **ALWAYS** save all business-related documentation and guidelines in the `docs/` directory at the project root
+- Use markdown format (`.md`) for all documentation files
+- Create project-specific subdirectories when needed: `docs/{project-name}/`
+
+### Documentation Structure Pattern
+Follow the established documentation pattern based on the Avanto documentation template:
+
+1. **Numbered Prefixes**: Use sequential numbering for ordered documentation:
+   - `01-{topic}.md` - First document
+   - `02-{topic}.md` - Second document
+   - `03-{topic}.md` - Third document
+   - etc.
+
+2. **Standard Documentation Files** (when applicable):
+   - `01-purpose-diagram.md` - Project purpose and high-level overview with diagrams
+   - `02-architecture-diagram.md` - Architecture diagrams and system design
+   - `03-developer-assessment.md` - Technical assessment for developers
+   - `04-product-owner-summary.md` - Business-focused summary for product owners
+   - `05-OWASP-SAMM-Analysis.md` - Security maturity assessment
+   - `06-code-analysis-and-improvements.md` - Code quality analysis
+   - `07-implementation-plan.md` - Implementation roadmap
+
+3. **File Naming Convention**:
+   - Use kebab-case for filenames
+   - Be descriptive: `api-integration-guide.md`, `deployment-procedures.md`
+   - Include diagrams using Mermaid syntax when appropriate
+
+4. **Documentation Content Structure**:
+   ```markdown
+   # Document Title
+   
+   Brief introduction or overview
+   
+   ## Section 1
+   Content...
+   
+   ## Section 2
+   Content...
+   
+   ```mermaid
+   graph TD
+       A[Component] --> B[Another Component]
+   ```
+   ```
+
+5. **Project-Specific Documentation**:
+   - Each microservice/project should have its own subdirectory: `docs/{project-name}/`
+   - Cross-cutting documentation (like AI coding workflows) can be in top-level `docs/` or specialized subdirectories
+   - Keep documentation organized by domain or topic
+
+### Documentation Best Practices
+- **ALWAYS** update documentation when making architectural or business logic changes
+- Include diagrams using Mermaid syntax for visual representation
+- Use clear headings and structure for easy navigation
+- Keep documentation up-to-date with code changes
+- Reference related documentation files when appropriate
+- Use consistent formatting across all documentation files
+
+```markdown
+# ✅ CORRECT: Documentation structure
+docs/
+├── back-objects-ms/
+│   ├── 01-purpose-diagram.md
+│   ├── 02-architecture-diagram.md
+│   ├── 03-developer-assessment.md
+│   └── 04-product-owner-summary.md
+├── AI coding/
+│   └── workflow-guidelines.md
+└── shared/
+    └── deployment-procedures.md
+```

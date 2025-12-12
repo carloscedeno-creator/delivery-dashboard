@@ -154,3 +154,5 @@ Una vez que la conexión funcione:
 - [Documentación de Supabase](https://supabase.com/docs)
 - [Integración con Google Scripts](./INTEGRACION_GOOGLE_SCRIPTS.md)
 - [Esquema de Base de Datos](../../GooglescriptsDelivery/docs/supabase/README.md)
+
+

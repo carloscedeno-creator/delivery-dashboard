@@ -1,0 +1,430 @@
+---
+description: NestJS microservice best practices, architecture patterns, and coding standards for the Back Objects Microservice
+globs: 
+alwaysApply: true
+---
+
+# Cursor Rules for Back Objects Microservice
+
+## Project Overview
+This is a NestJS microservice built with TypeScript, TypeORM, PostgreSQL, and follows a modular architecture pattern. The project uses OpenSpec for spec-driven development and implements domain-driven design principles.
+
+## Architecture Patterns
+
+### Module Organization
+- **Context Modules** (`src/context/`): Feature modules containing controllers and module definitions
+- **Shared Services** (`src/shared/context/`): Business logic services organized by domain
+- **Infrastructure** (`src/shared/infrastructure/`): Cross-cutting concerns (logging, persistence, messaging)
+- **Domain Layer** (`src/shared/context/*/domain/`): DTOs, stubs, mappers, and domain logic
+
+### Module Structure Pattern
+```typescript
+// Module file: src/context/{feature}/{feature}.module.ts
+@Module({
+  imports: [EntitiesModule, RelatedFeatureModule],
+  controllers: [FeatureController],
+  providers: [FeatureService],
+  exports: [FeatureService], // Export if used by other modules
+})
+export class FeatureModule {}
+```
+
+### Service Location
+- Services live in `src/shared/context/{feature}/{feature}.service.ts`
+- Controllers live in `src/context/{feature}/{feature}.controller.ts`
+- Services are injected into controllers via constructor injection
+
+## Code Organization Best Practices
+
+### 1. Dependency Injection
+- **ALWAYS** use constructor injection for dependencies
+- Use `@Inject()` decorator when injecting by token (e.g., repositories with named data sources)
+- Use `@InjectRepository(Entity, dbConfig.name)` for TypeORM repositories
+- Use `@InjectEntityManager(dbConfig.name)` for EntityManager when transactions are needed
+
+```typescript
+// ✅ CORRECT: Constructor injection
+constructor(
+  @InjectRepository(DynamicObject, dbConfig.name) 
+  private readonly repository: Repository<DynamicObject>,
+  @Inject(RelatedService)
+  private readonly relatedService: RelatedService,
+) {}
+```
+
+### 2. Logging
+- **ALWAYS** create a logger instance in services and controllers: `private readonly logger = new Logger(ClassName.name)`
+- Use appropriate log levels:
+  - `logger.log()` for informational messages (operations starting/completing)
+  - `logger.debug()` for detailed debugging information
+  - `logger.error()` for errors with stack traces: `logger.error(message, { stack: error.stack })`
+- Include context in log messages (IDs, operation names)
+- Log at method entry/exit for important operations
+
+```typescript
+// ✅ CORRECT: Structured logging
+this.logger.log(`Creating Dynamic Object: ${JSON.stringify(dto)}`);
+this.logger.debug(`Found creator user with ID: ${createdById}`);
+this.logger.error(`Failed to create: ${error.message}`, { stack: error.stack });
+```
+
+### 3. Error Handling
+- **ALWAYS** use try-catch blocks in service methods
+- Re-throw errors after logging: `throw error;`
+- Use NestJS built-in exceptions: `NotFoundException`, `BadRequestException`, etc.
+- Validate dependencies exist before operations (users, tenants, etc.)
+
+```typescript
+// ✅ CORRECT: Error handling pattern
+try {
+  const result = await this.repository.save(entity);
+  this.logger.log(`Entity created with ID: ${result.id}`);
+  return result;
+} catch (error) {
+  this.logger.error(`Failed to create entity: ${error.message}`, { stack: error.stack });
+  throw error;
+}
+```
+
+### 4. DTOs and Validation
+- **ALWAYS** use class-validator decorators: `@IsNotEmpty()`, `@IsNumber()`, `@IsBoolean()`, etc.
+- **ALWAYS** use `@ApiProperty()` from `@nestjs/swagger` for API documentation
+- Create separate DTOs for different operations:
+  - `Create{Entity}Dto` extends `OmitType({Entity}Dto, ['id', 'createdAt', 'updatedAt'])`
+  - `Update{Entity}Dto` extends `PartialType({Entity}Dto)`
+  - `Find{Entity}Dto` for query parameters
+- Place DTOs in `src/shared/context/{feature}/domain/dtos/`
+
+```typescript
+// ✅ CORRECT: DTO with validation
+export class CreateDynamicObjectDto extends OmitType(DynamicObjectDto, [
+  'id',
+  'createdAt',
+  'updatedAt',
+  'updatedById',
+]) {}
+```
+
+### 5. Controllers
+- **ALWAYS** use Swagger decorators: `@ApiTags()`, `@ApiOperation()`, `@ApiResponse()`
+- Keep controllers thin - delegate to services
+- Use appropriate HTTP decorators: `@Get()`, `@Post()`, `@Patch()`, `@Delete()`
+- Use `@Body()` for request bodies, `@Param()` for path parameters, `@Query()` for query strings
+- Log operations in controllers as well as services
+
+```typescript
+// ✅ CORRECT: Controller pattern
+@ApiTags('Dynamic Objects')
+@Controller('dynamic-objects')
+export class DynamicObjectsController {
+  private readonly logger = new Logger(DynamicObjectsController.name);
+
+  constructor(private readonly service: DynamicObjectsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new dynamic object' })
+  @ApiResponse({ status: 201, description: 'Successfully created.' })
+  async create(@Body() dto: CreateDynamicObjectDto) {
+    this.logger.log(`Creating new dynamic object...`);
+    return await this.service.create(dto);
+  }
+}
+```
+
+### 6. Services
+- **ALWAYS** validate related entities exist before operations
+- Use transactions for batch operations: `this.manager.transaction(async () => { ... })`
+- Load relations explicitly when needed: `relations: ['createdBy', 'updatedBy', 'tenant']`
+- Use TypeORM query builders for complex queries
+- Return entities, not DTOs (unless mapping is required)
+
+```typescript
+// ✅ CORRECT: Service method pattern
+async create(dto: CreateDynamicObjectDto): Promise<Entity> {
+  this.logger.log(`Creating Entity: ${JSON.stringify(dto)}`);
+  try {
+    // Validate dependencies
+    const user = await this.usersService.findOne(dto.createdById);
+    if (!user) {
+      throw new NotFoundException(`User not found: ${dto.createdById}`);
+    }
+
+    // Create entity
+    const entity = await this.repository.save({
+      ...dto,
+      createdBy: user,
+      updatedBy: user,
+    });
+
+    this.logger.log(`Entity created with ID: ${entity.id}`);
+    return entity;
+  } catch (error) {
+    this.logger.error(`Failed to create: ${error.message}`, { stack: error.stack });
+    throw error;
+  }
+}
+```
+
+### 7. Database Patterns
+- **ALWAYS** use named data sources: `dbConfig.name` when injecting repositories
+- Use `@InjectRepository(Entity, dbConfig.name)` pattern
+- Use `EntityManager` for transactions
+- Load relations explicitly - avoid lazy loading in production code
+- Use TypeORM's `In()` operator for array filters
+- Use `IsNull()` for null checks in queries
+
+```typescript
+// ✅ CORRECT: Repository injection
+@InjectRepository(DynamicObject, dbConfig.name)
+private readonly repository: Repository<DynamicObject>
+
+// ✅ CORRECT: Query with relations
+await this.repository.find({
+  where: { id: In(ids) },
+  relations: ['createdBy', 'updatedBy', 'tenant'],
+});
+```
+
+### 8. Middleware
+- Create middleware in `src/shared/middleware/`
+- Implement `NestMiddleware` interface
+- Register in `AppModule.configure()` method
+- Use `@Injectable()` decorator
+
+```typescript
+// ✅ CORRECT: Middleware pattern
+@Injectable()
+export class CorrelationIdMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    const id = randomUUID();
+    req[CORRELATION_ID_HEADER] = id;
+    res.set(CORRELATION_ID_HEADER, id);
+    next();
+  }
+}
+```
+
+### 9. Infrastructure Services
+- Place infrastructure code in `src/shared/infrastructure/`
+- Use dependency injection for infrastructure services
+- Configure logging in `src/shared/infrastructure/logger/`
+- Configure database in `src/shared/infrastructure/persistance/postgre-sql/`
+
+## TypeScript Best Practices
+
+### 1. Type Safety
+- **ALWAYS** use explicit return types for public methods: `async method(): Promise<Type>`
+- Use interfaces for complex types
+- Avoid `any` - use `unknown` if type is truly unknown
+- Use type assertions sparingly and with validation
+
+### 2. Imports
+- Group imports: NestJS decorators, then third-party, then local
+- Use absolute imports when possible (configured in tsconfig.json)
+- Avoid circular dependencies
+
+```typescript
+// ✅ CORRECT: Import organization
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Entity } from '@avantodev/avanto-db';
+import { CreateDto } from './domain/dtos/create.dto';
+```
+
+### 3. Configuration
+- Use environment variables via `process.env`
+- Load env vars with `dotenv/config` in `main.ts`
+- Use `dbConfig` from `@avantodev/avanto-shared-resources` for database config
+
+## Code Quality Standards
+
+### 1. Naming Conventions
+- **Controllers**: `{Feature}Controller` (PascalCase)
+- **Services**: `{Feature}Service` (PascalCase)
+- **DTOs**: `{Action}{Feature}Dto` (e.g., `CreateDynamicObjectDto`)
+- **Modules**: `{Feature}Module` (PascalCase)
+- **Files**: kebab-case matching class names
+- **Methods**: camelCase
+- **Constants**: UPPER_SNAKE_CASE
+
+### 2. File Organization
+```
+src/
+├── context/                    # Feature modules (controllers + module files)
+│   └── {feature}/
+│       ├── {feature}.controller.ts
+│       ├── {feature}.module.ts
+│       └── {feature}.controller.spec.ts
+├── shared/
+│   ├── context/               # Business logic services
+│   │   └── {feature}/
+│   │       ├── {feature}.service.ts
+│   │       ├── {feature}.service.spec.ts
+│   │       └── domain/
+│   │           ├── dtos/
+│   │           ├── stubs/
+│   │           └── mappers/   # If needed
+│   ├── infrastructure/        # Cross-cutting concerns
+│   │   ├── logger/
+│   │   ├── persistance/
+│   │   └── sqs/
+│   └── middleware/
+└── main.ts
+```
+
+### 3. Comments and Documentation
+- Use JSDoc comments for complex methods
+- Document business logic, not obvious code
+- Keep comments up-to-date with code changes
+- Use Swagger decorators for API documentation
+
+## OpenSpec Integration
+
+### When to Create Proposals
+- New features or capabilities
+- Breaking changes (API, schema)
+- Architecture changes
+- Performance optimizations that change behavior
+- Security pattern updates
+
+### When NOT to Create Proposals
+- Bug fixes (restore intended behavior)
+- Typos, formatting, comments
+- Non-breaking dependency updates
+- Configuration changes
+- Tests for existing behavior
+
+### Before Any Task
+1. Read relevant specs in `openspec/specs/`
+2. Check pending changes in `openspec/changes/`
+3. Read `openspec/project.md` for conventions
+4. Run `openspec list` to see active changes
+
+## Cursor Rules Management
+
+### Extending Cursor Rules
+- **ALWAYS** create new cursor rules to extend existing ones when introducing new patterns, conventions, or best practices
+- **NEVER** modify existing cursor rules directly - create new `.mdc` files in `.cursor/rules/` directory
+- New rules should follow the same frontmatter format:
+  ```yaml
+  ---
+  description: Brief description of what this rule covers
+  globs: optional/path/pattern (or empty)
+  alwaysApply: true/false
+  ---
+  ```
+- Use descriptive filenames: `{topic}-{purpose}.mdc` (e.g., `documentation-patterns.mdc`, `testing-guidelines.mdc`)
+- When creating rules, reference existing rules to avoid duplication and ensure consistency
+
+```markdown
+# Example: Creating a new rule file
+# File: .cursor/rules/api-versioning.mdc
+
+---
+description: API versioning patterns and conventions
+globs: src/context/**/*.controller.ts
+alwaysApply: true
+---
+
+# API Versioning Rules
+[Content here...]
+```
+
+## Security Best Practices
+
+1. **Input Validation**: Always validate input using class-validator decorators
+2. **Error Messages**: Don't expose sensitive information in error messages
+3. **Logging**: Don't log sensitive data (passwords, tokens, PII)
+4. **Dependencies**: Keep dependencies up-to-date
+5. **Environment Variables**: Never commit secrets to version control
+
+## Performance Best Practices
+
+1. **Database Queries**: 
+   - Load only needed relations
+   - Use indexes for frequently queried fields
+   - Use transactions for batch operations
+   - Avoid N+1 queries
+
+2. **Logging**: 
+   - Use appropriate log levels
+   - Don't log large objects in production
+   - Use structured logging
+
+3. **Error Handling**: 
+   - Fail fast with proper error messages
+   - Don't swallow errors silently
+
+## Common Patterns to Follow
+
+### Transaction Pattern
+```typescript
+async createBatch(dtos: CreateDto[]): Promise<Entity[]> {
+  return this.manager.transaction(async () => {
+    const entities = [];
+    for (const dto of dtos) {
+      const entity = await this.create(dto);
+      entities.push(entity);
+    }
+    return entities;
+  });
+}
+```
+
+### Find with Filters Pattern
+```typescript
+async findMany(dto: FindDto): Promise<Entity[]> {
+  return await this.repository.find({
+    where: {
+      ...(dto.ids && { id: In(dto.ids) }),
+      ...(dto.enabled !== undefined && { enabled: dto.enabled }),
+    },
+    relations: ['createdBy', 'updatedBy'],
+  });
+}
+```
+
+### Validation Pattern
+```typescript
+const entity = await this.relatedService.findOne(id);
+if (!entity) {
+  throw new NotFoundException(`Entity not found: ${id}`);
+}
+```
+
+## Anti-Patterns to Avoid
+
+1. ❌ **Don't** use `any` types
+2. ❌ **Don't** skip error handling
+3. ❌ **Don't** forget to log operations
+4. ❌ **Don't** expose internal implementation details in DTOs
+5. ❌ **Don't** create circular dependencies between modules
+6. ❌ **Don't** use lazy loading in production code
+7. ❌ **Don't** forget to export services used by other modules
+8. ❌ **Don't** skip validation of related entities
+9. ❌ **Don't** commit secrets or sensitive data
+10. ❌ **Don't** ignore TypeScript errors
+
+## Code Review Checklist
+
+Before submitting code, ensure:
+
+- [ ] Linting passes (`yarn lint`)
+- [ ] Code is formatted (`yarn format`)
+- [ ] Logging is implemented for important operations
+- [ ] Error handling is comprehensive
+- [ ] DTOs have validation decorators
+- [ ] Swagger documentation is complete
+- [ ] No `any` types (unless absolutely necessary)
+- [ ] Related entities are validated
+- [ ] Transactions are used for batch operations
+- [ ] Relations are explicitly loaded when needed
+- [ ] See `.cursor/rules/testing-standards.mdc` for testing requirements
+
+## Getting Help ##
+
+- Check existing code in the codebase for patterns
+- Review `openspec/AGENTS.md` for spec-driven development guidelines
+- Consult NestJS documentation: https://docs.nestjs.com
+- Review similar features in the codebase before creating new ones
