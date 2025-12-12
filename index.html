@@ -4735,7 +4735,18 @@
                                                 setError('Supabase is not configured');
                                                 return;
                                             }
-                                            const { data, error: fetchError } = await window.supabaseClient.rpc('get_all_users');
+                                            
+                                            // Obtener token de sesión
+                                            const sessionStr = localStorage.getItem('auth_session');
+                                            if (!sessionStr) {
+                                                setError('No active session');
+                                                return;
+                                            }
+                                            const session = JSON.parse(sessionStr);
+                                            
+                                            const { data, error: fetchError } = await window.supabaseClient.rpc('get_all_users', {
+                                                p_session_token: session.token
+                                            });
                                             if (fetchError) {
                                                 setError(fetchError.message);
                                                 return;
@@ -4757,7 +4768,19 @@
                                                 setError('Supabase is not configured');
                                                 return;
                                             }
-                                            const { error: approveError } = await window.supabaseClient.rpc('approve_user', { p_user_id: userId });
+                                            
+                                            // Obtener token de sesión
+                                            const sessionStr = localStorage.getItem('auth_session');
+                                            if (!sessionStr) {
+                                                setError('No active session');
+                                                return;
+                                            }
+                                            const session = JSON.parse(sessionStr);
+                                            
+                                            const { error: approveError } = await window.supabaseClient.rpc('approve_user', { 
+                                                p_user_id: userId,
+                                                p_session_token: session.token
+                                            });
                                             if (approveError) {
                                                 setError(approveError.message);
                                                 return;
@@ -4782,7 +4805,19 @@
                                                 setError('Supabase is not configured');
                                                 return;
                                             }
-                                            const { error: deactivateError } = await window.supabaseClient.rpc('deactivate_user', { p_user_id: userId });
+                                            
+                                            // Obtener token de sesión
+                                            const sessionStr = localStorage.getItem('auth_session');
+                                            if (!sessionStr) {
+                                                setError('No active session');
+                                                return;
+                                            }
+                                            const session = JSON.parse(sessionStr);
+                                            
+                                            const { error: deactivateError } = await window.supabaseClient.rpc('deactivate_user', { 
+                                                p_user_id: userId,
+                                                p_session_token: session.token
+                                            });
                                             if (deactivateError) {
                                                 setError(deactivateError.message);
                                                 return;
@@ -4804,9 +4839,19 @@
                                                 setError('Supabase is not configured');
                                                 return;
                                             }
+                                            
+                                            // Obtener token de sesión
+                                            const sessionStr = localStorage.getItem('auth_session');
+                                            if (!sessionStr) {
+                                                setError('No active session');
+                                                return;
+                                            }
+                                            const session = JSON.parse(sessionStr);
+                                            
                                             const { error: roleError } = await window.supabaseClient.rpc('update_user_role', {
                                                 p_user_id: userId,
-                                                p_new_role: newRole
+                                                p_new_role: newRole,
+                                                p_session_token: session.token
                                             });
                                             if (roleError) {
                                                 setError(roleError.message);
