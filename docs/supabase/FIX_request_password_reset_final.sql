@@ -16,16 +16,17 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_user_id UUID;
-    v_token VARCHAR(500);
-    v_display_name VARCHAR(255);
-    result_token VARCHAR(500);
-    result_display_name VARCHAR(255);
+    v_token_val VARCHAR(500);
+    v_display_name_val VARCHAR(255);
+    result_token_val VARCHAR(500);
+    result_display_name_val VARCHAR(255);
 BEGIN
     -- Buscar usuario (usar alias para evitar ambigüedad)
-    SELECT au.id, au.display_name INTO v_user_id, v_display_name
+    SELECT au.id, au.display_name INTO v_user_id, v_display_name_val
     FROM app_users au
     WHERE au.email = p_email AND au.is_active = true;
     
@@ -35,7 +36,7 @@ BEGIN
     END IF;
     
     -- Generar token único
-    v_token := 'reset_' || gen_random_uuid()::TEXT || '_' || extract(epoch from now())::TEXT;
+    v_token_val := 'reset_' || gen_random_uuid()::TEXT || '_' || extract(epoch from now())::TEXT;
     
     -- Limpiar tokens expirados o usados del usuario
     DELETE FROM password_reset_tokens 
@@ -44,16 +45,17 @@ BEGIN
     
     -- Crear nuevo token (válido por 1 hora)
     INSERT INTO password_reset_tokens (user_id, token, expires_at)
-    VALUES (v_user_id, v_token, NOW() + INTERVAL '1 hour')
-    RETURNING token INTO result_token;
+    VALUES (v_user_id, v_token_val, NOW() + INTERVAL '1 hour')
+    RETURNING password_reset_tokens.token INTO result_token_val;
     
     -- Asignar valores a variables de resultado
-    result_display_name := v_display_name;
+    result_display_name_val := v_display_name_val;
     
-    -- Retornar usando RETURN QUERY con VALUES para evitar completamente la ambigüedad
-    -- VALUES crea una tabla temporal sin conflictos de nombres
-    RETURN QUERY 
-    SELECT * FROM (VALUES (result_token::VARCHAR(500), result_display_name::VARCHAR(255))) AS t(token, display_name);
+    -- Retornar usando RETURN NEXT con asignación explícita
+    -- Usar nombres completamente diferentes para evitar ambigüedad
+    token := result_token_val;
+    display_name := result_display_name_val;
+    RETURN NEXT;
 END;
 $$;
 
