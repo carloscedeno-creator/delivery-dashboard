@@ -21,6 +21,8 @@ DECLARE
     v_user_id UUID;
     v_token VARCHAR(500);
     v_display_name VARCHAR(255);
+    result_token VARCHAR(500);
+    result_display_name VARCHAR(255);
 BEGIN
     -- Buscar usuario (usar alias para evitar ambigüedad)
     SELECT au.id, au.display_name INTO v_user_id, v_display_name
@@ -43,12 +45,14 @@ BEGIN
     -- Crear nuevo token (válido por 1 hora)
     INSERT INTO password_reset_tokens (user_id, token, expires_at)
     VALUES (v_user_id, v_token, NOW() + INTERVAL '1 hour')
-    RETURNING token INTO v_token;
+    RETURNING token INTO result_token;
     
-    -- Retornar token y display_name como TABLE usando RETURN NEXT
-    -- Esto evita completamente la ambigüedad con columnas de tablas
-    token := v_token;
-    display_name := v_display_name;
+    -- Asignar valores a variables de resultado
+    result_display_name := v_display_name;
+    
+    -- Retornar usando RETURN NEXT con las variables de resultado
+    token := result_token;
+    display_name := result_display_name;
     RETURN NEXT;
 END;
 $$;
