@@ -3553,7 +3553,7 @@
 
         // Componente Login
         const Login = ({ onLoginSuccess }) => {
-            const [mode, setMode] = useState('login'); // 'login', 'register', 'forgot'
+            const [mode, setMode] = useState('login'); // 'login', 'register', 'forgot', 'reset'
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [displayName, setDisplayName] = useState('');
@@ -3563,6 +3563,22 @@
             const [error, setError] = useState('');
             const [success, setSuccess] = useState('');
             const [loading, setLoading] = useState(false);
+
+            // Leer token de la URL al cargar el componente
+            useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const tokenParam = urlParams.get('token');
+                const modeParam = urlParams.get('mode');
+                
+                if (modeParam === 'reset' && tokenParam) {
+                    // Decodificar el token (puede estar URL-encoded)
+                    const decodedToken = decodeURIComponent(tokenParam);
+                    setResetToken(decodedToken);
+                    setMode('reset');
+                    // Limpiar la URL para que no se vea el token
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, []);
 
             const handleLogin = async (e) => {
                 e.preventDefault();
@@ -3995,8 +4011,12 @@
                                         <Icons.KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
                                         <input id="reset-token" type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} required
                                             className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="Enter reset token" />
+                                            placeholder="Enter reset token from email" 
+                                            readOnly={resetToken && resetToken.length > 20} />
                                     </div>
+                                    {resetToken && resetToken.length > 20 && (
+                                        <p className="mt-1 text-xs text-slate-500">Token loaded from email link</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label htmlFor="reset-password" className="block text-sm font-medium text-slate-300 mb-2">New Password</label>
