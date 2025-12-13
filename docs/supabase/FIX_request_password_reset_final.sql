@@ -50,10 +50,11 @@ BEGIN
     -- Asignar valores a variables de resultado
     result_display_name := v_display_name;
     
-    -- Retornar usando RETURN NEXT con las variables de resultado
-    token := result_token;
-    display_name := result_display_name;
-    RETURN NEXT;
+    -- Retornar usando RETURN QUERY con valores directos para evitar ambigüedad
+    RETURN QUERY 
+    SELECT 
+        result_token::VARCHAR(500),
+        result_display_name::VARCHAR(255);
 END;
 $$;
 
