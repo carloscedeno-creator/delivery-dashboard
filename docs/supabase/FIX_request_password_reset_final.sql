@@ -45,8 +45,12 @@ BEGIN
     VALUES (v_user_id, v_token, NOW() + INTERVAL '1 hour')
     RETURNING token INTO v_token;
     
-    -- Retornar token y display_name como TABLE (usar variable, no columna)
-    RETURN QUERY SELECT v_token AS token, v_display_name AS display_name;
+    -- Retornar token y display_name como TABLE
+    -- Usar nombres explícitos para evitar ambigüedad con columnas de tablas
+    RETURN QUERY 
+    SELECT 
+        v_token::VARCHAR(500) AS token, 
+        v_display_name::VARCHAR(255) AS display_name;
 END;
 $$;
 
