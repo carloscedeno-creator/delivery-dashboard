@@ -41,14 +41,23 @@ supabase link --project-ref sywkskwkexwwdzrbwinp
 
 ## Paso 6: Configurar variables de entorno
 
+**📖 Guía detallada:** Ver `docs/SUPABASE_EDGE_FUNCTIONS_SETUP.md` para instrucciones paso a paso con capturas.
+
+**Resumen rápido:**
+
 En el dashboard de Supabase:
 
-1. Ve a **Edge Functions** > **Settings**
-2. Agrega las siguientes variables de entorno:
+1. Ve a **Project Settings** (⚙️) > **Edge Functions** > **Settings**
+   - O busca "Environment Variables" en la barra de búsqueda
+2. Haz clic en **"Add new variable"** o **"New variable"**
+3. Agrega estas tres variables:
 
    - **RESEND_API_KEY**: Tu API key de Resend
    - **RESEND_FROM_EMAIL**: Email desde el cual enviar (ej: `noreply@agenticdream.com` o `onboarding@resend.dev` para pruebas)
    - **APP_URL**: URL de tu aplicación (ej: `https://carloscedeno-creator.github.io/delivery-dashboard`)
+
+**💡 Tip:** Si no encuentras la opción, ve directamente a:
+`https://supabase.com/dashboard/project/sywkskwkexwwdzrbwinp/settings/functions`
 
 ## Paso 7: Desplegar la Edge Function
 
