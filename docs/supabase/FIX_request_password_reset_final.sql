@@ -50,13 +50,10 @@ BEGIN
     -- Asignar valores a variables de resultado
     result_display_name := v_display_name;
     
-    -- Retornar usando RETURN QUERY con SELECT sin FROM para evitar ambigüedad
-    -- Esto evita cualquier conflicto con columnas de tablas
+    -- Retornar usando RETURN QUERY con VALUES para evitar completamente la ambigüedad
+    -- VALUES crea una tabla temporal sin conflictos de nombres
     RETURN QUERY 
-    SELECT 
-        result_token::VARCHAR(500),
-        result_display_name::VARCHAR(255)
-    FROM (SELECT result_token, result_display_name) AS t;
+    SELECT * FROM (VALUES (result_token::VARCHAR(500), result_display_name::VARCHAR(255))) AS t(token, display_name);
 END;
 $$;
 
