@@ -45,12 +45,11 @@ BEGIN
     VALUES (v_user_id, v_token, NOW() + INTERVAL '1 hour')
     RETURNING token INTO v_token;
     
-    -- Retornar token y display_name como TABLE
-    -- Usar un subquery para evitar ambigüedad con columnas de tablas
-    RETURN QUERY 
-    SELECT 
-        (SELECT v_token)::VARCHAR(500) AS token, 
-        (SELECT v_display_name)::VARCHAR(255) AS display_name;
+    -- Retornar token y display_name como TABLE usando RETURN NEXT
+    -- Esto evita completamente la ambigüedad con columnas de tablas
+    token := v_token;
+    display_name := v_display_name;
+    RETURN NEXT;
 END;
 $$;
 
