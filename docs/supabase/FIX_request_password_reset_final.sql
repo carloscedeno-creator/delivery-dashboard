@@ -46,11 +46,11 @@ BEGIN
     RETURNING token INTO v_token;
     
     -- Retornar token y display_name como TABLE
-    -- Usar nombres explícitos para evitar ambigüedad con columnas de tablas
+    -- Usar un subquery para evitar ambigüedad con columnas de tablas
     RETURN QUERY 
     SELECT 
-        v_token::VARCHAR(500) AS token, 
-        v_display_name::VARCHAR(255) AS display_name;
+        (SELECT v_token)::VARCHAR(500) AS token, 
+        (SELECT v_display_name)::VARCHAR(255) AS display_name;
 END;
 $$;
 
