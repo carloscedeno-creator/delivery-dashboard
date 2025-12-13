@@ -354,26 +354,47 @@ export const requestPasswordReset = async (email) => {
 
     const { token, display_name } = data[0];
 
+    // Validar que el token existe antes de enviar el email
+    if (!token) {
+      console.error('[AUTH] Token no generado correctamente');
+      // Por seguridad, retornamos éxito aunque no se pueda enviar el email
+      return { success: true };
+    }
+
     // 2. Enviar email usando Edge Function
     try {
       const supabaseUrl = supabaseClient.supabaseUrl || window.supabaseUrl || 'https://sywkskwkexwwdzrbwinp.supabase.co';
       const anonKey = supabaseClient.supabaseKey || window.supabaseAnonKey;
 
+      // Validar que todos los parámetros requeridos estén presentes
+      if (!email || !token) {
+        console.error('[AUTH] Email o token faltante para enviar email');
+        return { success: true }; // Por seguridad, no revelar el error
+      }
+
       const { data: emailData, error: emailError } = await supabaseClient.functions.invoke('send-password-reset-email', {
         body: {
           email: email,
           token: token,
-          display_name: display_name
+          display_name: display_name || 'User'
         }
       });
 
       if (emailError) {
         console.error('[AUTH] Error enviando email:', emailError);
+        console.error('[AUTH] Detalles del error:', {
+          name: emailError.name,
+          message: emailError.message,
+          status: emailError.status
+        });
         // No fallar si el email no se puede enviar, el token ya está creado
         // El usuario puede usar el token directamente si lo tiene
+      } else if (emailData) {
+        console.log('[AUTH] Email enviado correctamente:', emailData);
       }
     } catch (emailError) {
       console.error('[AUTH] Error llamando Edge Function:', emailError);
+      console.error('[AUTH] Stack:', emailError.stack);
       // Continuar aunque falle el envío del email
     }
 
