@@ -336,6 +336,7 @@ export const requestPasswordReset = async (email) => {
   }
 
   try {
+    // 1. Obtener token de la función SQL
     const { data, error } = await supabaseClient.rpc('request_password_reset', {
       p_email: email
     });
@@ -345,11 +346,39 @@ export const requestPasswordReset = async (email) => {
       return { success: false, error: error.message };
     }
 
+    // Si no hay data, el email no existe (por seguridad no lo revelamos)
+    if (!data || data.length === 0) {
+      // Por seguridad, siempre retornamos éxito
+      return { success: true };
+    }
+
+    const { token, display_name } = data[0];
+
+    // 2. Enviar email usando Edge Function
+    try {
+      const supabaseUrl = supabaseClient.supabaseUrl || window.supabaseUrl || 'https://sywkskwkexwwdzrbwinp.supabase.co';
+      const anonKey = supabaseClient.supabaseKey || window.supabaseAnonKey;
+
+      const { data: emailData, error: emailError } = await supabaseClient.functions.invoke('send-password-reset-email', {
+        body: {
+          email: email,
+          token: token,
+          display_name: display_name
+        }
+      });
+
+      if (emailError) {
+        console.error('[AUTH] Error enviando email:', emailError);
+        // No fallar si el email no se puede enviar, el token ya está creado
+        // El usuario puede usar el token directamente si lo tiene
+      }
+    } catch (emailError) {
+      console.error('[AUTH] Error llamando Edge Function:', emailError);
+      // Continuar aunque falle el envío del email
+    }
+
     // Por seguridad, siempre retornamos éxito (no revelamos si el email existe)
-    return {
-      success: true,
-      token: data
-    };
+    return { success: true };
   } catch (error) {
     console.error('[AUTH] Error en requestPasswordReset:', error);
     return { success: false, error: error.message };
