@@ -50,11 +50,12 @@ BEGIN
     -- Asignar valores a variables de resultado
     result_display_name := v_display_name;
     
-    -- Retornar usando RETURN QUERY con valores directos para evitar ambigüedad
+    -- Retornar usando RETURN QUERY con subconsultas para evitar ambigüedad
+    -- Usar SELECT con valores escalares para evitar conflictos con nombres de columnas
     RETURN QUERY 
     SELECT 
-        result_token::VARCHAR(500),
-        result_display_name::VARCHAR(255);
+        (SELECT result_token)::VARCHAR(500) AS token,
+        (SELECT result_display_name)::VARCHAR(255) AS display_name;
 END;
 $$;
 
