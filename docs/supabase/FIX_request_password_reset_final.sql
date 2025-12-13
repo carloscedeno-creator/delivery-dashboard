@@ -22,10 +22,10 @@ DECLARE
     v_token VARCHAR(500);
     v_display_name VARCHAR(255);
 BEGIN
-    -- Buscar usuario
-    SELECT id, display_name INTO v_user_id, v_display_name
-    FROM app_users
-    WHERE email = p_email AND is_active = true;
+    -- Buscar usuario (usar alias para evitar ambigüedad)
+    SELECT au.id, au.display_name INTO v_user_id, v_display_name
+    FROM app_users au
+    WHERE au.email = p_email AND au.is_active = true;
     
     IF v_user_id IS NULL THEN
         -- No revelar si el email existe o no por seguridad
@@ -45,8 +45,8 @@ BEGIN
     VALUES (v_user_id, v_token, NOW() + INTERVAL '1 hour')
     RETURNING token INTO v_token;
     
-    -- Retornar token y display_name como TABLE
-    RETURN QUERY SELECT v_token, v_display_name;
+    -- Retornar token y display_name como TABLE (usar variable, no columna)
+    RETURN QUERY SELECT v_token AS token, v_display_name AS display_name;
 END;
 $$;
 
