@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strata Dashboard</title>
+    <title>Delivery Dashboard</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -121,35 +121,6 @@
     <!-- Dependencies for Recharts UMD -->
     <script crossorigin src="https://unpkg.com/prop-types/prop-types.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/recharts@2.12.0/umd/Recharts.min.js"></script>
-    
-    <!-- Supabase Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <!-- Supabase Configuration -->
-    <script>
-        // Configuración de Supabase desde variables de entorno
-        // Estas se pueden configurar en un archivo .env o aquí directamente
-        window.SUPABASE_CONFIG = {
-            url: 'https://sywkskwkexwwdzrbwinp.supabase.co',
-            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5d2tza3drZXh3d2R6cmJ3aW5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NTk1OTksImV4cCI6MjA4MTAzNTU5OX0.bv147P9N53qjlt22SJKFMsI3R-Rce179Kev_V_UPMy0'
-        };
-        
-        // Inicializar cliente de Supabase
-        let supabaseClient = null;
-        if (window.supabase && window.SUPABASE_CONFIG) {
-            try {
-                supabaseClient = window.supabase.createClient(
-                    window.SUPABASE_CONFIG.url,
-                    window.SUPABASE_CONFIG.anonKey
-                );
-                console.log('[SUPABASE] Cliente inicializado');
-                // Exponer globalmente para uso en authService
-                window.supabaseClient = supabaseClient;
-            } catch (err) {
-                console.error('[SUPABASE] Error inicializando cliente:', err);
-            }
-        }
-    </script>
 
     <script type="text/babel">
         try {
@@ -213,42 +184,6 @@
                 ),
                 Map: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
-                ),
-                Menu: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                ),
-                LogOut: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                ),
-                Mail: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                ),
-                Lock: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                ),
-                LogIn: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-                ),
-                UserPlus: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
-                ),
-                User: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                ),
-                XCircle: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                ),
-                Clock: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                ),
-                KeyRound: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"></path><circle cx="16.5" cy="7.5" r=".5"></circle></svg>
-                ),
-                ArrowLeft: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
-                ),
-                CheckCircle: ({ size = 24, className = "" }) => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 )
             };
 
@@ -361,10 +296,12 @@
                             // Normalize header names for strata mapping
                             const hLower = h.toLowerCase();
                             if (hLower.includes('strata') || hLower === 'layer') entry.strata = val;
-                            if (hLower.includes('initiative') || hLower === 'initiative name') entry.initiative = val;
+                            // Support both "initiative" (singular) and "initiatives" (plural)
+                            if (hLower.includes('initiative') || hLower === 'initiative name' || hLower === 'initiatives') entry.initiative = val;
                             if (hLower.includes('squad') || hLower === 'team') entry.squad = val;
                             if (hLower.includes('type') || hLower === 'source') entry.type = val; // 'Delivery' or 'Product'
-                            if (hLower.includes('doc link') || hLower.includes('documentation link') || hLower === 'doc') entry.docLink = val;
+                            // Support "doc link", "documentation link", "doc", and "doc link" variations
+                            if (hLower.includes('doc link') || hLower.includes('documentation link') || hLower === 'doc' || hLower.includes('doc link')) entry.docLink = val;
                         }
                         // Attachments field (can contain URLs separated by commas or newlines)
                         if (h.toLowerCase().includes('attachment') || h.toLowerCase().includes('image') || h.toLowerCase().includes('file')) {
@@ -839,13 +776,13 @@
 
             return (
                 <div className="w-full overflow-x-auto custom-scrollbar">
-                    <div className="min-w-full md:min-w-[600px] lg:min-w-[800px]">
+                    <div className="min-w-[800px]">
                         <div className="flex border-b border-white/10 mb-4 pb-2 text-xs text-slate-500 relative h-8">
-                            <div className="w-1/3 md:w-1/4 pl-2 md:pl-4 shrink-0">Initiative</div>
-                            <div className="w-2/3 md:w-3/4 relative">
+                            <div className="w-1/4 pl-4 shrink-0">Initiative</div>
+                            <div className="w-3/4 relative">
                                 {months.map((m, i) => {
                                     const left = (diffDays(m, startDate) / totalDays) * 100;
-                                    return <div key={i} className="absolute top-0 border-l border-white/5 pl-1 text-[10px] md:text-xs" style={{ left: `${left}%` }}>{m.toLocaleString('default', { month: 'short' })}</div>
+                                    return <div key={i} className="absolute top-0 border-l border-white/5 pl-1" style={{ left: `${left}%` }}>{m.toLocaleString('default', { month: 'short' })}</div>
                                 })}
                             </div>
                         </div>
@@ -854,11 +791,11 @@
                                 const { left, width } = getPos(item.start, item.delivery);
                                 return (
                                     <div key={i} className="flex items-center group hover:bg-white/5 rounded-lg py-2 transition-colors">
-                                        <div className="w-1/3 md:w-1/4 shrink-0 px-2 md:px-4"><div className="font-medium text-xs md:text-sm text-slate-200 truncate" title={item.initiative}>{item.initiative}</div><div className="text-[10px] md:text-xs text-slate-500 truncate">{item.squad}</div></div>
-                                        <div className="w-2/3 md:w-3/4 relative h-8 flex items-center px-1 md:px-2">
+                                        <div className="w-1/4 shrink-0 px-4"><div className="font-medium text-sm text-slate-200 truncate" title={item.initiative}>{item.initiative}</div><div className="text-xs text-slate-500 truncate">{item.squad}</div></div>
+                                        <div className="w-3/4 relative h-8 flex items-center px-2">
                                             {months.map((m, idx) => { const l = (diffDays(m, startDate) / totalDays) * 100; return <div key={idx} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${l}%` }} /> })}
-                                            <div className="absolute h-4 md:h-5 bg-slate-700/80 rounded-full overflow-hidden border border-slate-600/30" style={{ left, width }}><div className={`h-full ${getStatusColor(item.spi)} opacity-90`} style={{ width: `${item.status}%` }} /></div>
-                                            <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 bg-slate-900 text-[10px] md:text-xs px-2 py-1 rounded border border-slate-700 transition-opacity pointer-events-none z-10 whitespace-nowrap">{item.status}% • {item.delivery}</div>
+                                            <div className="absolute h-5 bg-slate-700/80 rounded-full overflow-hidden border border-slate-600/30" style={{ left, width }}><div className={`h-full ${getStatusColor(item.spi)} opacity-90`} style={{ width: `${item.status}%` }} /></div>
+                                            <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 bg-slate-900 text-xs px-2 py-1 rounded border border-slate-700 transition-opacity pointer-events-none z-10">{item.status}% • {item.delivery}</div>
                                         </div>
                                     </div>
                                 );
@@ -998,14 +935,14 @@
 
                 return (
                     <div className="w-full overflow-x-auto custom-scrollbar">
-                        <div className="min-w-full md:min-w-[600px] lg:min-w-[800px]">
+                        <div className="min-w-[800px]">
                             <div className="flex border-b border-white/10 mb-4 pb-2 text-xs text-slate-500 relative h-8">
-                                <div className="w-1/3 md:w-1/4 pl-2 md:pl-4 shrink-0">Initiative</div>
-                                <div className="w-2/3 md:w-3/4 relative">
+                                <div className="w-1/4 pl-4 shrink-0">Initiative</div>
+                                <div className="w-3/4 relative">
                                     {months.map((m, i) => {
                                         const left = (diffDays(m, startDate) / totalDays) * 100;
                                         return (
-                                            <div key={i} className="absolute top-0 border-l border-white/5 pl-1 text-[10px] md:text-xs" style={{ left: `${left}%` }}>
+                                            <div key={i} className="absolute top-0 border-l border-white/5 pl-1" style={{ left: `${left}%` }}>
                                                 {m.toLocaleString('default', { month: 'short', year: '2-digit' })}
                                             </div>
                                         );
@@ -1018,21 +955,21 @@
                                     const completion = item.completion || 0;
                                     return (
                                         <div key={i} className="flex items-center group hover:bg-white/5 rounded-lg py-2 transition-colors">
-                                            <div className="w-1/3 md:w-1/4 shrink-0 px-2 md:px-4">
-                                                <div className="font-medium text-xs md:text-sm text-slate-200 truncate" title={item.initiative}>
+                                            <div className="w-1/4 shrink-0 px-4">
+                                                <div className="font-medium text-sm text-slate-200 truncate" title={item.initiative}>
                                                     {item.initiative}
                                                 </div>
-                                                <div className="text-[10px] md:text-xs text-slate-500 truncate">
+                                                <div className="text-xs text-slate-500 truncate">
                                                     {item.team || 'Product'} • {item.displayLabel}
                                                 </div>
                                             </div>
-                                            <div className="w-2/3 md:w-3/4 relative h-8 flex items-center px-1 md:px-2">
+                                            <div className="w-3/4 relative h-8 flex items-center px-2">
                                                 {months.map((m, idx) => {
                                                     const l = (diffDays(m, startDate) / totalDays) * 100;
                                                     return <div key={idx} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${l}%` }} />;
                                                 })}
                                                 <div 
-                                                    className="absolute h-4 md:h-5 bg-slate-700/80 rounded-full overflow-hidden border border-slate-600/30" 
+                                                    className="absolute h-5 bg-slate-700/80 rounded-full overflow-hidden border border-slate-600/30" 
                                                     style={{ left, width }}
                                                 >
                                                     <div 
@@ -1040,7 +977,7 @@
                                                         style={{ width: `${Math.min(100, completion)}%` }} 
                                                     />
                                                 </div>
-                                                <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-[10px] md:text-xs px-2 py-1 rounded border border-slate-700 transition-opacity pointer-events-none z-10 whitespace-nowrap">
+                                                <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-xs px-2 py-1 rounded border border-slate-700 transition-opacity pointer-events-none z-10 whitespace-nowrap">
                                                     {completion}% • {item.status || 'N/A'}
                                                 </div>
                                         </div>
@@ -1156,7 +1093,7 @@
             );
         };
 
-            const DeveloperWorkload = ({ devData, selectedSquad, selectedInitiative, selectedDeveloper }) => {
+            const DeveloperWorkload = ({ devData, selectedSquad, selectedInitiative }) => {
             const workload = useMemo(() => {
                 if (!devData) return [];
                     let filteredData = devData;
@@ -1171,11 +1108,6 @@
                         filteredData = filteredData.filter(item => item.initiative === selectedInitiative);
                     }
                     
-                    // Filter by developer
-                    if (selectedDeveloper !== 'All') {
-                        filteredData = filteredData.filter(item => item.dev === selectedDeveloper);
-                    }
-                    
                 const map = {};
                 filteredData.forEach(item => {
                     if (item.dev === 'None') return;
@@ -1184,40 +1116,32 @@
                     map[item.dev].tasks.push({ initiative: item.initiative, pct: item.percentage, squad: item.squad });
                 });
                 return Object.values(map).sort((a, b) => b.total - a.total);
-                }, [devData, selectedSquad, selectedInitiative, selectedDeveloper]);
+                }, [devData, selectedSquad, selectedInitiative]);
 
             return (
                 <div className="glass rounded-2xl p-6 mt-8">
                     <h2 className="text-xl font-semibold mb-6 text-white flex items-center gap-2"><Icons.Users className="text-cyan-400 w-5 h-5" /> Developer Workload & Allocation</h2>
-                    {workload.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400">
-                            <Icons.Users className="mx-auto mb-4 text-slate-600" size={48} />
-                            <p className="text-lg font-medium mb-2">No developers found</p>
-                            <p className="text-sm">Try adjusting your filters to see developer allocations.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {workload.map((dev, i) => (
-                                <div key={i} className="bg-slate-800/50 rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-slate-300 font-medium border border-white/5">{dev.name.charAt(0)}</div>
-                                            <div><div className="font-medium text-slate-200">{dev.name}</div><div className={`text-xs font-medium ${dev.total > 100 ? 'text-rose-400' : dev.total >= 80 ? 'text-cyan-400' : 'text-sky-400'}`}>{dev.total}% Allocation</div></div>
-                                        </div>
-                                        {dev.total > 100 && <div className="text-rose-400" title="Overallocated"><Icons.AlertCircle size={16} /></div>}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {workload.map((dev, i) => (
+                            <div key={i} className="bg-slate-800/50 rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-slate-300 font-medium border border-white/5">{dev.name.charAt(0)}</div>
+                                        <div><div className="font-medium text-slate-200">{dev.name}</div><div className={`text-xs font-medium ${dev.total > 100 ? 'text-rose-400' : dev.total >= 80 ? 'text-cyan-400' : 'text-sky-400'}`}>{dev.total}% Allocation</div></div>
                                     </div>
-                                    <div className="space-y-2">
-                                        {dev.tasks.map((task, t) => (
-                                            <div key={t} className="text-xs">
-                                                <div className="flex justify-between text-slate-400 mb-1"><span className="truncate pr-2" title={task.initiative}>{task.initiative}</span><span className="shrink-0">{task.pct}%</span></div>
-                                                <div className="h-1 bg-slate-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${task.squad === 'Core Infrastructure' ? 'bg-cyan-500' : task.squad === 'Integration' ? 'bg-sky-500' : 'bg-teal-500'}`} style={{ width: `${task.pct}%` }} /></div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    {dev.total > 100 && <div className="text-rose-400" title="Overallocated"><Icons.AlertCircle size={16} /></div>}
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                                <div className="space-y-2">
+                                    {dev.tasks.map((task, t) => (
+                                        <div key={t} className="text-xs">
+                                            <div className="flex justify-between text-slate-400 mb-1"><span className="truncate pr-2" title={task.initiative}>{task.initiative}</span><span className="shrink-0">{task.pct}%</span></div>
+                                            <div className="h-1 bg-slate-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${task.squad === 'Core Infrastructure' ? 'bg-cyan-500' : task.squad === 'Integration' ? 'bg-sky-500' : 'bg-teal-500'}`} style={{ width: `${task.pct}%` }} /></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         };
@@ -1859,17 +1783,34 @@
 
                         // Helper function to normalize initiative names for matching
                         const normalizeInitiativeName = (name) => {
-                            return (name || '').trim().toLowerCase();
+                            if (!name) return '';
+                            // Remove extra spaces, convert to lowercase, remove special characters for comparison
+                            return name.trim().toLowerCase()
+                                .replace(/[^\w\s]/g, ' ') // Replace special chars with space
+                                .replace(/\s+/g, ' ') // Normalize multiple spaces
+                                .trim();
                         };
 
-                        // Search in Delivery data
-                        if (mappingType.includes('delivery') || !mappingType || mappingType === 'both') {
+                        // Helper function for fuzzy matching (more flexible)
+                        const fuzzyMatch = (name1, name2) => {
+                            const n1 = normalizeInitiativeName(name1);
+                            const n2 = normalizeInitiativeName(name2);
+                            // Exact match
+                            if (n1 === n2) return true;
+                            // One contains the other
+                            if (n1.includes(n2) || n2.includes(n1)) return true;
+                            // Check if key words match (split by spaces and check overlap)
+                            const words1 = n1.split(/\s+/).filter(w => w.length > 2);
+                            const words2 = n2.split(/\s+/).filter(w => w.length > 2);
+                            const commonWords = words1.filter(w => words2.includes(w));
+                            // If more than 50% of words match, consider it a match
+                            return commonWords.length > 0 && (commonWords.length / Math.max(words1.length, words2.length)) > 0.5;
+                        };
+
+                        // Search in Delivery data (if no type specified or type includes delivery)
+                        if (!mappingType || mappingType.includes('delivery') || mappingType === 'both') {
                             const deliveryMatch = deliveryProjects.find(project => {
-                                const projectInitiative = normalizeInitiativeName(project.initiative);
-                                const searchName = normalizeInitiativeName(initiativeName);
-                                return projectInitiative === searchName ||
-                                       projectInitiative.includes(searchName) ||
-                                       searchName.includes(projectInitiative);
+                                return fuzzyMatch(project.initiative, initiativeName);
                             });
                             if (deliveryMatch && !deliveryInitiatives.find(p => normalizeInitiativeName(p.initiative) === normalizeInitiativeName(deliveryMatch.initiative))) {
                                 // Add docLink from mapping to the delivery match
@@ -1878,8 +1819,8 @@
                             }
                         }
 
-                        // Search in Product data
-                        if (mappingType.includes('product') || !mappingType || mappingType === 'both') {
+                        // Search in Product data (if no type specified or type includes product)
+                        if (!mappingType || mappingType.includes('product') || mappingType === 'both') {
                             const productMatch = productInitiatives.find(initiative => {
                                 const productInitiative = normalizeInitiativeName(initiative.initiative);
                                 const searchName = normalizeInitiativeName(initiativeName);
@@ -2991,34 +2932,9 @@
                 }, [selectedInitiative, filteredProductInitiatives, filteredDeliveryProjects]);
 
             return (
-                <div className="space-y-6 md:space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
-                        {/* Filters */}
-                        <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-                            <div className="relative group">
-                                <select
-                                    className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer w-full sm:w-auto min-w-[150px]"
-                                    value={selectedSquad}
-                                    onChange={(e) => { setSelectedSquad(e.target.value); setSelectedInitiative('All'); }}
-                                >
-                                    {squads.map(s => <option key={s} value={s}>{s} Squad</option>)}
-                                </select>
-                                <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none group-hover:text-cyan-400 transition-colors" size={16} />
-                            </div>
-
-                            <div className="relative group">
-                                <select
-                                    className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer w-full sm:w-auto min-w-[200px]"
-                                    value={selectedInitiative}
-                                    onChange={(e) => setSelectedInitiative(e.target.value)}
-                                >
-                                    {filteredInitiatives.map(i => <option key={i} value={i}>{i}</option>)}
-                                </select>
-                                <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none group-hover:text-cyan-400 transition-colors" size={16} />
-                            </div>
-                        </div>
-
-                        <div className="glass rounded-2xl p-4 md:p-6">
-                            <h3 className="text-slate-400 text-sm font-medium mb-4 md:mb-6 flex items-center gap-2">
+                <div className="space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
                                 <Icons.Layout size={18} />
                                 Overall Timeline
                             </h3>
@@ -3274,8 +3190,8 @@
                         </div>
 
                         {/* Roadmap / Timeline */}
-                        <div className="glass rounded-2xl p-4 md:p-6">
-                            <h3 className="text-slate-400 text-sm font-medium mb-4 md:mb-6 flex items-center gap-2">
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
                                 <Icons.Calendar size={18} />
                                 Product Roadmap Timeline
                             </h3>
@@ -3283,8 +3199,8 @@
                             </div>
 
                         {/* Initiatives Table */}
-                        <div className="glass rounded-2xl p-4 md:p-6">
-                            <h3 className="text-slate-400 text-sm font-medium mb-4 md:mb-6 flex items-center gap-2">
+                        <div className="glass rounded-2xl p-6">
+                            <h3 className="text-slate-400 text-sm font-medium mb-6 flex items-center gap-2">
                                 <Icons.List size={18} />
                                 Product Initiatives ({filteredInitiatives.length})
                             </h3>
@@ -3398,7 +3314,6 @@
         const DeliveryRoadmapView = ({ projectData, devAllocationData }) => {
             const [selectedSquad, setSelectedSquad] = useState('All');
             const [selectedInitiative, setSelectedInitiative] = useState('All');
-            const [selectedDeveloper, setSelectedDeveloper] = useState('All');
 
             const squads = useMemo(() => ['All', ...new Set(projectData.map(d => d.squad))], [projectData]);
             const initiatives = useMemo(() => {
@@ -3406,46 +3321,15 @@
                 if (selectedSquad !== 'All') {
                     data = data.filter(d => d.squad === selectedSquad);
                 }
-                // Filter by developer for initiative list
-                if (selectedDeveloper !== 'All') {
-                    data = data.filter(d => {
-                        if (!d.dev || d.dev === 'Unassigned') return false;
-                        const devNames = d.dev.split(',').map(name => name.trim());
-                        return devNames.includes(selectedDeveloper);
-                    });
-                }
                 return ['All', ...new Set(data.map(d => d.initiative))];
-            }, [projectData, selectedSquad, selectedDeveloper]);
-            
-            const developers = useMemo(() => {
-                const devSet = new Set();
-                if (devAllocationData && devAllocationData.length > 0) {
-                    devAllocationData.forEach(item => {
-                        if (item.dev && item.dev !== 'None') {
-                            devSet.add(item.dev);
-                        }
-                    });
-                }
-                return ['All', ...Array.from(devSet).sort()];
-            }, [devAllocationData]);
+            }, [projectData, selectedSquad]);
 
             const filteredData = useMemo(() => {
                 let data = projectData;
                 if (selectedSquad !== 'All') data = data.filter(d => d.squad === selectedSquad);
                 if (selectedInitiative !== 'All') data = data.filter(d => d.initiative === selectedInitiative);
-                
-                // Filter by developer - check if the dev field contains the selected developer
-                if (selectedDeveloper !== 'All') {
-                    data = data.filter(d => {
-                        if (!d.dev || d.dev === 'Unassigned') return false;
-                        // dev field can be a comma-separated string of developer names
-                        const devNames = d.dev.split(',').map(name => name.trim());
-                        return devNames.includes(selectedDeveloper);
-                    });
-                }
-                
                 return data;
-            }, [projectData, selectedSquad, selectedInitiative, selectedDeveloper]);
+            }, [projectData, selectedSquad, selectedInitiative]);
 
             const selectedItem = useMemo(() => {
                 if (selectedInitiative !== 'All') {
@@ -3465,7 +3349,7 @@
             return (
                 <div className="space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
                     {/* Filters */}
-                    <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-6 md:mb-8">
+                    <div className="flex gap-4 mb-8">
                         <div className="relative group">
                             <select
                                 className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[150px]"
@@ -3487,17 +3371,6 @@
                             </select>
                             <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none group-hover:text-cyan-400 transition-colors" size={16} />
                         </div>
-
-                        <div className="relative group">
-                            <select
-                                className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[180px]"
-                                value={selectedDeveloper}
-                                onChange={(e) => setSelectedDeveloper(e.target.value)}
-                            >
-                                {developers.map(dev => <option key={dev} value={dev}>{dev === 'All' ? 'All Developers' : dev}</option>)}
-                            </select>
-                            <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none group-hover:text-cyan-400 transition-colors" size={16} />
-                        </div>
                     </div>
 
                     {/* KPI Cards */}
@@ -3514,8 +3387,8 @@
                     ) : (
                         <div className="space-y-6">
                             {/* Roadmap / Timeline - Full Width */}
-                            <div className="glass rounded-2xl p-4 md:p-6">
-                                <h3 className="text-slate-400 text-sm font-medium mb-4 md:mb-6">Timeline Overview (Roadmap)</h3>
+                            <div className="glass rounded-2xl p-6">
+                                <h3 className="text-slate-400 text-sm font-medium mb-6">Timeline Overview (Roadmap)</h3>
                                 
                                 {/* Legend */}
                                 <div className="flex items-center gap-4 mb-6 pb-4 border-b border-white/10 text-xs text-slate-500">
@@ -3538,575 +3411,34 @@
                             </div>
 
                             {/* Resource Distribution */}
-                            <div className="glass rounded-2xl p-4 md:p-6">
-                                <h3 className="text-slate-400 text-sm font-medium mb-4 md:mb-6">Resource Distribution</h3>
+                            <div className="glass rounded-2xl p-6">
+                                <h3 className="text-slate-400 text-sm font-medium mb-6">Resource Distribution</h3>
                                 <AllocationChart data={filteredData} />
                             </div>
                         </div>
                     )}
 
                     {/* Developer Workload Section */}
-                        <DeveloperWorkload devData={devAllocationData} selectedSquad={selectedSquad} selectedInitiative={selectedInitiative} selectedDeveloper={selectedDeveloper} />
+                        <DeveloperWorkload devData={devAllocationData} selectedSquad={selectedSquad} selectedInitiative={selectedInitiative} />
                 </div>
             );
         };
 
-        // Componente Login
-        const Login = ({ onLoginSuccess }) => {
-            const [mode, setMode] = useState('login'); // 'login', 'register', 'forgot', 'reset'
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [displayName, setDisplayName] = useState('');
-            const [confirmPassword, setConfirmPassword] = useState('');
-            const [resetToken, setResetToken] = useState('');
-            const [newPassword, setNewPassword] = useState('');
-            const [error, setError] = useState('');
-            const [success, setSuccess] = useState('');
-            const [loading, setLoading] = useState(false);
-
-            // Leer token de la URL al cargar el componente
-            useEffect(() => {
-                const urlParams = new URLSearchParams(window.location.search);
-                const tokenParam = urlParams.get('token');
-                const modeParam = urlParams.get('mode');
-                
-                if (modeParam === 'reset' && tokenParam) {
-                    // Decodificar el token (puede estar URL-encoded)
-                    const decodedToken = decodeURIComponent(tokenParam);
-                    setResetToken(decodedToken);
-                    setMode('reset');
-                    // Limpiar la URL para que no se vea el token
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            }, []);
-
-            const handleLogin = async (e) => {
-                e.preventDefault();
-                setError('');
-                setSuccess('');
-                setLoading(true);
-
-                try {
-                    let loginFunction;
-                    try {
-                        const authModule = await import('./src/utils/authService.js');
-                        loginFunction = authModule.login;
-                    } catch (importError) {
-                        console.warn('[LOGIN] No se pudo importar authService, usando función inline');
-                        loginFunction = async (email, password) => {
-                            if (!window.supabaseClient) {
-                                return { success: false, error: 'Supabase is not configured' };
-                            }
-                            const passwordHash = btoa(password);
-                            const { data, error } = await window.supabaseClient.rpc('authenticate_user', {
-                                p_email: email,
-                                p_password_hash: passwordHash
-                            });
-                            if (error || !data || data.length === 0) {
-                                return { success: false, error: 'Invalid credentials or account not approved' };
-                            }
-                            const user = data[0];
-                            const token = 'token_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-                            await window.supabaseClient.rpc('create_session', {
-                                p_user_id: user.user_id,
-                                p_token: token,
-                                p_expires_in_hours: 24
-                            });
-                            const sessionInfo = {
-                                token,
-                                user: {
-                                    id: user.user_id,
-                                    email: user.email,
-                                    displayName: user.display_name,
-                                    role: user.role
-                                },
-                                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-                            };
-                            localStorage.setItem('auth_session', JSON.stringify(sessionInfo));
-                            return { success: true, user: sessionInfo.user, token };
-                        };
-                    }
-                    const result = await loginFunction(email, password);
-                    if (result.success) {
-                        onLoginSuccess(result.user);
-                    } else {
-                        setError(result.error || 'Error signing in');
-                    }
-                } catch (err) {
-                    console.error('[LOGIN] Error:', err);
-                    setError('Unexpected error signing in: ' + (err.message || 'Unknown error'));
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleRegister = async (e) => {
-                e.preventDefault();
-                setError('');
-                setSuccess('');
-                if (password !== confirmPassword) {
-                    setError('Passwords do not match');
-                    return;
-                }
-                setLoading(true);
-                try {
-                    let registerFunction;
-                    try {
-                        const authModule = await import('./src/utils/authService.js');
-                        registerFunction = authModule.register;
-                    } catch (importError) {
-                        registerFunction = async (email, password, displayName, role) => {
-                            if (!window.supabaseClient) {
-                                return { success: false, error: 'Supabase is not configured' };
-                            }
-                            const passwordHash = btoa(password);
-                            const { data, error } = await window.supabaseClient.rpc('register_user', {
-                                p_email: email,
-                                p_password_hash: passwordHash,
-                                p_display_name: displayName,
-                                p_role: role || 'Regular'
-                            });
-                            if (error) {
-                                return { success: false, error: error.message };
-                            }
-                            return { success: true, userId: data };
-                        };
-                    }
-                    const result = await registerFunction(email, password, displayName, 'Regular');
-                    if (result.success) {
-                        setSuccess('Account created successfully! Please wait for admin approval before signing in.');
-                        setTimeout(() => {
-                            setMode('login');
-                            setEmail('');
-                            setPassword('');
-                            setDisplayName('');
-                            setConfirmPassword('');
-                        }, 3000);
-                    } else {
-                        setError(result.error || 'Error creating account');
-                    }
-                } catch (err) {
-                    console.error('[REGISTER] Error:', err);
-                    setError('Unexpected error: ' + (err.message || 'Unknown error'));
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleForgotPassword = async (e) => {
-                e.preventDefault();
-                setError('');
-                setSuccess('');
-                setLoading(true);
-                try {
-                    let requestResetFunction;
-                    try {
-                        const authModule = await import('./src/utils/authService.js');
-                        requestResetFunction = authModule.requestPasswordReset;
-                    } catch (importError) {
-                        requestResetFunction = async (email) => {
-                            if (!window.supabaseClient) {
-                                return { success: false, error: 'Supabase is not configured' };
-                            }
-                            const { data, error } = await window.supabaseClient.rpc('request_password_reset', {
-                                p_email: email
-                            });
-                            if (error) {
-                                return { success: false, error: error.message };
-                            }
-                            return { success: true, token: data };
-                        };
-                    }
-                    const result = await requestResetFunction(email);
-                    if (result.success) {
-                        setSuccess('If the email exists, a reset token has been generated. Please check your email or contact admin.');
-                        setMode('reset');
-                    } else {
-                        setError(result.error || 'Error requesting password reset');
-                    }
-                } catch (err) {
-                    console.error('[FORGOT] Error:', err);
-                    setError('Unexpected error: ' + (err.message || 'Unknown error'));
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleResetPassword = async (e) => {
-                e.preventDefault();
-                setError('');
-                setSuccess('');
-                if (newPassword !== confirmPassword) {
-                    setError('Passwords do not match');
-                    return;
-                }
-                setLoading(true);
-                try {
-                    let resetFunction;
-                    try {
-                        const authModule = await import('./src/utils/authService.js');
-                        resetFunction = authModule.resetPassword;
-                    } catch (importError) {
-                        resetFunction = async (token, newPassword) => {
-                            if (!window.supabaseClient) {
-                                return { success: false, error: 'Supabase is not configured' };
-                            }
-                            const passwordHash = btoa(newPassword);
-                            const { data, error } = await window.supabaseClient.rpc('reset_password', {
-                                p_token: token,
-                                p_new_password_hash: passwordHash
-                            });
-                            if (error || !data) {
-                                return { success: false, error: 'Invalid or expired token' };
-                            }
-                            return { success: true };
-                        };
-                    }
-                    const result = await resetFunction(resetToken, newPassword);
-                    if (result.success) {
-                        setSuccess('Password reset successfully! You can now sign in.');
-                        setTimeout(() => {
-                            setMode('login');
-                            setResetToken('');
-                            setNewPassword('');
-                            setConfirmPassword('');
-                        }, 2000);
-                    } else {
-                        setError(result.error || 'Error resetting password');
-                    }
-                } catch (err) {
-                    console.error('[RESET] Error:', err);
-                    setError('Unexpected error: ' + (err.message || 'Unknown error'));
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const renderContent = () => {
-                if (mode === 'login') {
-                    return (
-                        <>
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
-                                    <img src="logo.png" alt="Logo" className="h-12 w-auto object-contain" />
-                                </div>
-                                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
-                                    Strata Dashboard
-                                </h1>
-                                <p className="text-slate-400 text-sm">Sign in to continue</p>
-                            </div>
-                            <form onSubmit={handleLogin} className="space-y-6">
-                                <div>
-                                    <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                                    <div className="relative">
-                                        <Icons.Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="your@email.com" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">Password</label>
-                                    <div className="relative">
-                                        <Icons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="••••••••" />
-                                    </div>
-                                </div>
-                                {error && (
-                                    <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-sm">
-                                        <Icons.AlertCircle size={16} />
-                                        <span>{error}</span>
-                                    </div>
-                                )}
-                                {success && (
-                                    <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
-                                        <Icons.CheckCircle size={16} />
-                                        <span>{success}</span>
-                                    </div>
-                                )}
-                                <button type="submit" disabled={loading}
-                                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                            <span>Signing in...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Icons.LogIn size={20} />
-                                            <span>Sign In</span>
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-                            <div className="mt-6 flex flex-col gap-3 text-center text-sm">
-                                <button onClick={() => setMode('register')} className="text-cyan-400 hover:text-cyan-300 transition-colors">
-                                    Create new account
-                                </button>
-                                <button onClick={() => setMode('forgot')} className="text-slate-400 hover:text-slate-300 transition-colors">
-                                    Forgot password?
-                                </button>
-                            </div>
-                        </>
-                    );
-                } else if (mode === 'register') {
-                    return (
-                        <>
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
-                                    <img src="logo.png" alt="Logo" className="h-12 w-auto object-contain" />
-                                </div>
-                                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
-                                    Create Account
-                                </h1>
-                                <p className="text-slate-400 text-sm">Sign up for Strata Dashboard</p>
-                            </div>
-                            <form onSubmit={handleRegister} className="space-y-6">
-                                <div>
-                                    <label htmlFor="reg-email" className="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                                    <div className="relative">
-                                        <Icons.Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reg-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="your@email.com" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="reg-name" className="block text-sm font-medium text-slate-300 mb-2">Display Name</label>
-                                    <div className="relative">
-                                        <Icons.UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reg-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="Your Name" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="reg-password" className="block text-sm font-medium text-slate-300 mb-2">Password</label>
-                                    <div className="relative">
-                                        <Icons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reg-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="••••••••" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="reg-confirm" className="block text-sm font-medium text-slate-300 mb-2">Confirm Password</label>
-                                    <div className="relative">
-                                        <Icons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reg-confirm" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="••••••••" />
-                                    </div>
-                                </div>
-                                {error && (
-                                    <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-sm">
-                                        <Icons.AlertCircle size={16} />
-                                        <span>{error}</span>
-                                    </div>
-                                )}
-                                {success && (
-                                    <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
-                                        <Icons.CheckCircle size={16} />
-                                        <span>{success}</span>
-                                    </div>
-                                )}
-                                <button type="submit" disabled={loading}
-                                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                            <span>Creating account...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Icons.UserPlus size={20} />
-                                            <span>Create Account</span>
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-                            <div className="mt-6 text-center">
-                                <button onClick={() => { setMode('login'); setError(''); setSuccess(''); }} className="text-cyan-400 hover:text-cyan-300 transition-colors text-sm flex items-center justify-center gap-2">
-                                    <Icons.ArrowLeft size={16} />
-                                    Back to Sign In
-                                </button>
-                            </div>
-                        </>
-                    );
-                } else if (mode === 'forgot') {
-                    return (
-                        <>
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
-                                    <img src="logo.png" alt="Logo" className="h-12 w-auto object-contain" />
-                                </div>
-                                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
-                                    Reset Password
-                                </h1>
-                                <p className="text-slate-400 text-sm">Enter your email to receive a reset token</p>
-                            </div>
-                            <form onSubmit={handleForgotPassword} className="space-y-6">
-                                <div>
-                                    <label htmlFor="forgot-email" className="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                                    <div className="relative">
-                                        <Icons.Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="forgot-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="your@email.com" />
-                                    </div>
-                                </div>
-                                {error && (
-                                    <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-sm">
-                                        <Icons.AlertCircle size={16} />
-                                        <span>{error}</span>
-                                    </div>
-                                )}
-                                {success && (
-                                    <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
-                                        <Icons.CheckCircle size={16} />
-                                        <span>{success}</span>
-                                    </div>
-                                )}
-                                <button type="submit" disabled={loading}
-                                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                            <span>Requesting...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Icons.KeyRound size={20} />
-                                            <span>Request Reset Token</span>
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-                            <div className="mt-6 text-center">
-                                <button onClick={() => { setMode('login'); setError(''); setSuccess(''); }} className="text-cyan-400 hover:text-cyan-300 transition-colors text-sm flex items-center justify-center gap-2">
-                                    <Icons.ArrowLeft size={16} />
-                                    Back to Sign In
-                                </button>
-                            </div>
-                        </>
-                    );
-                } else if (mode === 'reset') {
-                    return (
-                        <>
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
-                                    <img src="logo.png" alt="Logo" className="h-12 w-auto object-contain" />
-                                </div>
-                                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
-                                    Reset Password
-                                </h1>
-                                <p className="text-slate-400 text-sm">Enter your reset token and new password</p>
-                            </div>
-                            <form onSubmit={handleResetPassword} className="space-y-6">
-                                <div>
-                                    <label htmlFor="reset-token" className="block text-sm font-medium text-slate-300 mb-2">Reset Token</label>
-                                    <div className="relative">
-                                        <Icons.KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reset-token" type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="Enter reset token from email" 
-                                            readOnly={resetToken && resetToken.length > 20} />
-                                    </div>
-                                    {resetToken && resetToken.length > 20 && (
-                                        <p className="mt-1 text-xs text-slate-500">Token loaded from email link</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label htmlFor="reset-password" className="block text-sm font-medium text-slate-300 mb-2">New Password</label>
-                                    <div className="relative">
-                                        <Icons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reset-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="••••••••" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="reset-confirm" className="block text-sm font-medium text-slate-300 mb-2">Confirm New Password</label>
-                                    <div className="relative">
-                                        <Icons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                        <input id="reset-confirm" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                                            placeholder="••••••••" />
-                                    </div>
-                                </div>
-                                {error && (
-                                    <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-sm">
-                                        <Icons.AlertCircle size={16} />
-                                        <span>{error}</span>
-                                    </div>
-                                )}
-                                {success && (
-                                    <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
-                                        <Icons.CheckCircle size={16} />
-                                        <span>{success}</span>
-                                    </div>
-                                )}
-                                <button type="submit" disabled={loading}
-                                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                            <span>Resetting...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Icons.KeyRound size={20} />
-                                            <span>Reset Password</span>
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-                            <div className="mt-6 text-center">
-                                <button onClick={() => { setMode('login'); setError(''); setSuccess(''); }} className="text-cyan-400 hover:text-cyan-300 transition-colors text-sm flex items-center justify-center gap-2">
-                                    <Icons.ArrowLeft size={16} />
-                                    Back to Sign In
-                                </button>
-                            </div>
-                        </>
-                    );
-                }
-            };
-
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-[#0a0e17] px-4">
-                    <div className="w-full max-w-md">
-                        <div className="glass rounded-2xl p-8 border border-white/10">
-                            {renderContent()}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const Navbar = ({ activeView, setActiveView, currentUser, onLogout }) => {
-            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+        const Navbar = ({ activeView, setActiveView }) => {
             const navItems = [
                 { id: 'overall', label: 'Overall', icon: Icons.Layout },
                 { id: 'product', label: 'Product Roadmap', icon: Icons.Box },
                 { id: 'delivery', label: 'Delivery Roadmap', icon: Icons.Truck },
                 { id: 'strata', label: 'Strata Mapping', icon: Icons.Map },
             ];
-            
-            // Agregar menú de administración solo para admin
-            if (currentUser && currentUser.role === 'admin') {
-                navItems.push({ id: 'admin', label: 'User Administration', icon: Icons.Users });
-            }
 
             return (
-                <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-4 md:px-8 py-3 md:py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
+                <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-8 py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
                         <div className="flex items-center">
-                            <img src="logo.png" alt="Logo" className="h-10 md:h-14 w-auto object-contain" />
+                            <img src="logo.png" alt="Logo" className="h-14 w-auto object-contain" />
                     </div>
 
-                    {/* Desktop Menu */}
-                    <div className="hidden md:flex items-center gap-6 lg:gap-8">
+                    <div className="hidden md:flex items-center gap-8">
                         {navItems.map(item => (
                             <button
                                 key={item.id}
@@ -4118,63 +3450,12 @@
                         ))}
                     </div>
 
-                    {/* Mobile Menu Button */}
-                    <div className="md:hidden flex items-center gap-2">
-                        <button
-                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                            className="p-2 text-slate-400 hover:text-white transition-colors"
-                            aria-label="Toggle menu"
-                        >
-                            {mobileMenuOpen ? <Icons.X size={24} /> : <Icons.Menu size={24} />}
-                        </button>
-                    </div>
-
-                    {/* Mobile Menu Dropdown */}
-                    {mobileMenuOpen && (
-                        <div className="absolute top-full left-0 right-0 md:hidden glass border-b border-white/10 backdrop-blur-md bg-slate-900/95 shadow-lg">
-                            <div className="px-4 py-3 space-y-2">
-                                {navItems.map(item => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => {
-                                            setActiveView(item.id);
-                                            setMobileMenuOpen(false);
-                                        }}
-                                        className={`w-full text-left px-4 py-2 rounded-lg transition-colors flex items-center gap-3 ${activeView === item.id ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}`}
-                                    >
-                                        <item.icon size={20} />
-                                        <span className="font-medium">{item.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="flex items-center gap-2 md:gap-4">
-                        {currentUser && (
-                            <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-white/10">
-                                <div className="text-xs text-slate-400">{currentUser.displayName}</div>
-                                <div className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                                    {currentUser.role}
-                                </div>
-                            </div>
-                        )}
-                        <button className="p-2 text-slate-400 hover:text-white transition-colors relative hidden sm:block">
+                    <div className="flex items-center gap-4">
+                        <button className="p-2 text-slate-400 hover:text-white transition-colors relative">
                             <Icons.AlertCircle size={20} />
                             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
                         </button>
-                        {currentUser && (
-                            <button
-                                onClick={onLogout}
-                                className="p-2 text-slate-400 hover:text-white transition-colors"
-                                title="Cerrar sesión"
-                            >
-                                <Icons.LogOut size={20} />
-                            </button>
-                        )}
-                        {!currentUser && (
-                            <div className="w-8 h-8 rounded-full bg-slate-700 border border-white/10 flex items-center justify-center text-xs text-slate-300 hidden sm:flex">CC</div>
-                        )}
+                        <div className="w-8 h-8 rounded-full bg-slate-700 border border-white/10 flex items-center justify-center text-xs text-slate-300">CC</div>
                     </div>
                 </nav>
             );
@@ -4189,104 +3470,6 @@
             const [strataMappingData, setStrataMappingData] = useState([]);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
-            const [dataSource, setDataSource] = useState('csv'); // 'supabase' o 'csv'
-            const [currentUser, setCurrentUser] = useState(null);
-            const [authLoading, setAuthLoading] = useState(true);
-
-            // Validar sesión al cargar
-            useEffect(() => {
-                const checkAuth = async () => {
-                    try {
-                        // Obtener sesión desde localStorage
-                        const sessionStr = localStorage.getItem('auth_session');
-                        if (!sessionStr) {
-                            setCurrentUser(null);
-                            setAuthLoading(false);
-                            return;
-                        }
-                        
-                        const session = JSON.parse(sessionStr);
-                        
-                        // Verificar si la sesión expiró
-                        if (new Date(session.expiresAt) < new Date()) {
-                            localStorage.removeItem('auth_session');
-                            setCurrentUser(null);
-                            setAuthLoading(false);
-                            return;
-                        }
-                        
-                        // Validar con el servidor si Supabase está disponible
-                        if (window.supabaseClient) {
-                            try {
-                                const { data, error } = await window.supabaseClient.rpc('validate_session', {
-                                    p_token: session.token
-                                });
-                                
-                                if (error || !data || data.length === 0) {
-                                    localStorage.removeItem('auth_session');
-                                    setCurrentUser(null);
-                                } else {
-                                    const userData = data[0];
-                                    const updatedSession = {
-                                        ...session,
-                                        user: {
-                                            id: userData.user_id,
-                                            email: userData.email,
-                                            displayName: userData.display_name,
-                                            role: userData.role
-                                        }
-                                    };
-                                    localStorage.setItem('auth_session', JSON.stringify(updatedSession));
-                                    setCurrentUser(updatedSession.user);
-                                }
-                            } catch (validateError) {
-                                console.error('[APP] Error validando sesión:', validateError);
-                                // Si falla la validación, usar sesión local
-                                setCurrentUser(session.user);
-                            }
-                        } else {
-                            // Si no hay Supabase, usar sesión local
-                            setCurrentUser(session.user);
-                        }
-                    } catch (err) {
-                        console.error('[APP] Error validando sesión:', err);
-                        localStorage.removeItem('auth_session');
-                        setCurrentUser(null);
-                    } finally {
-                        setAuthLoading(false);
-                    }
-                };
-                checkAuth();
-            }, []);
-
-            // Manejar login exitoso
-            const handleLoginSuccess = (user) => {
-                setCurrentUser(user);
-            };
-
-            // Manejar logout
-            const handleLogout = async () => {
-                try {
-                    const sessionStr = localStorage.getItem('auth_session');
-                    if (sessionStr) {
-                        const session = JSON.parse(sessionStr);
-                        if (session.token && window.supabaseClient) {
-                            try {
-                                await window.supabaseClient.rpc('logout_session', {
-                                    p_token: session.token
-                                });
-                            } catch (logoutError) {
-                                console.error('[APP] Error cerrando sesión en servidor:', logoutError);
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.error('[APP] Error en logout:', err);
-                } finally {
-                    localStorage.removeItem('auth_session');
-                    setCurrentUser(null);
-                }
-            };
 
             useEffect(() => {
                     const loadData = async () => {
@@ -4294,361 +3477,18 @@
                         let hasErrors = false;
                         let errorMessages = [];
                         
-                        // Función para cargar desde Supabase
-                        const loadFromSupabase = async () => {
-                            if (!supabaseClient) {
-                                throw new Error('Supabase is not configured');
-                            }
-                            
-                            console.log('[APP] 🔄 Intentando cargar datos desde Supabase...');
-                            
-                            // Obtener squads
-                            const { data: squads, error: squadsError } = await supabaseClient
-                                .from('squads')
-                                .select('id, squad_key, squad_name')
-                                .order('squad_name', { ascending: true });
-                            
-                            if (squadsError) throw squadsError;
-                            if (!squads || squads.length === 0) {
-                                throw new Error('No hay squads en Supabase. Verifica que el servicio de sync haya ejecutado.');
-                            }
-                            
-                            // Obtener initiatives
-                            const { data: initiatives, error: initiativesError } = await supabaseClient
-                                .from('initiatives')
-                                .select('id, squad_id, initiative_key, initiative_name, created_at')
-                                .order('initiative_name', { ascending: true });
-                            
-                            if (initiativesError) throw initiativesError;
-                            if (!initiatives || initiatives.length === 0) {
-                                throw new Error('No hay initiatives en Supabase. Verifica que el servicio de sync haya ejecutado.');
-                            }
-                            
-                            // Obtener sprints activos o más recientes por squad
-                            const { data: activeSprints, error: sprintsError } = await supabaseClient
-                                .from('sprints')
-                                .select('id, squad_id, start_date, end_date, state, sprint_name')
-                                .or('state.eq.active,state.eq.closed')
-                                .order('end_date', { ascending: false });
-                            
-                            if (sprintsError) {
-                                console.warn('[SUPABASE] Error obteniendo sprints:', sprintsError);
-                            }
-                            
-                            // Crear mapa de sprint más reciente por squad
-                            const squadSprintMap = new Map();
-                            if (activeSprints) {
-                                for (const sprint of activeSprints) {
-                                    if (!squadSprintMap.has(sprint.squad_id)) {
-                                        squadSprintMap.set(sprint.squad_id, sprint);
-                                    }
-                                }
-                            }
-                            
-                            // Obtener issues con fechas para filtrar por sprint
-                            const { data: issues, error: issuesError } = await supabaseClient
-                                .from('issues')
-                                .select('id, squad_id, initiative_id, current_status, current_story_points, assignee_id, created_date, dev_start_date, dev_close_date, resolved_date');
-                            
-                            if (issuesError) console.warn('[SUPABASE] Error obteniendo issues:', issuesError);
-                            
-                            // Obtener relaciones issue-sprint
-                            const { data: issueSprints, error: issueSprintsError } = await supabaseClient
-                                .from('issue_sprints')
-                                .select('issue_id, sprint_id');
-                            
-                            if (issueSprintsError) {
-                                console.warn('[SUPABASE] Error obteniendo issue_sprints:', issueSprintsError);
-                            }
-                            
-                            // Crear mapa de sprints por issue
-                            const issueSprintMap = new Map();
-                            if (issueSprints) {
-                                for (const is of issueSprints) {
-                                    if (!issueSprintMap.has(is.issue_id)) {
-                                        issueSprintMap.set(is.issue_id, []);
-                                    }
-                                    issueSprintMap.get(is.issue_id).push(is.sprint_id);
-                                }
-                            }
-                            
-                            // Función para verificar si un issue está activo en el sprint actual
-                            const isIssueActiveInSprint = (issue, sprint) => {
-                                if (!sprint) return false;
-                                
-                                const sprintStart = new Date(sprint.start_date);
-                                const sprintEnd = new Date(sprint.end_date);
-                                const now = new Date();
-                                
-                                // Si el sprint ya terminó hace más de un sprint, no contar
-                                if (sprintEnd < now && sprint.state === 'closed') {
-                                    const daysSinceEnd = (now - sprintEnd) / (1000 * 60 * 60 * 24);
-                                    if (daysSinceEnd > 14) return false; // Más de 2 semanas = no contar
-                                }
-                                
-                                // PRIORIDAD 1: Verificar si el issue está explícitamente en este sprint (issue_sprints)
-                                // Esta es la fuente más confiable
-                                const issueSprintIds = issueSprintMap.get(issue.id) || [];
-                                if (issueSprintIds.includes(sprint.id)) {
-                                    return true; // Está en el sprint, contar
-                                }
-                                
-                                // PRIORIDAD 2: Si NO está en issue_sprints, verificar fechas SOLO para tickets muy recientes
-                                // Solo contar si fue creado DURANTE el sprint actual (no antes)
-                                const issueCreated = issue.created_date ? new Date(issue.created_date) : null;
-                                
-                                // Si fue creado durante el sprint actual, contarlo
-                                if (issueCreated && issueCreated >= sprintStart && issueCreated <= sprintEnd) {
-                                    return true;
-                                }
-                                
-                                // NO contar issues viejos que se solapan por fechas de desarrollo
-                                // Solo contamos si está explícitamente en el sprint o fue creado durante el sprint
-                                return false;
-                            };
-                            
-                            // Obtener desarrolladores
-                            const { data: developers, error: devsError } = await supabaseClient
-                                .from('developers')
-                                .select('id, display_name');
-                            
-                            if (devsError) console.warn('[SUPABASE] Error obteniendo developers:', devsError);
-                            
-                            // Obtener métricas de sprints
-                            const { data: sprintMetrics } = await supabaseClient
-                                .from('v_sprint_metrics_complete')
-                                .select('*')
-                                .order('end_date', { ascending: false })
-                                .limit(100);
-                            
-                            console.log('[SUPABASE] Datos encontrados:', {
-                                squads: squads.length,
-                                initiatives: initiatives.length,
-                                issues: (issues || []).length,
-                                developers: (developers || []).length
-                            });
-                            
-                            // Crear mapas
-                            const devMap = new Map((developers || []).map(d => [d.id, d.display_name]));
-                            const squadMap = new Map(squads.map(s => [s.id, s]));
-                            
-                            // Construir datos de delivery roadmap
-                            const roadmapData = [];
-                            const allocationMap = new Map();
-                            
-                            // Crear iniciativa "Otros" para cada squad que tenga issues sin iniciativa
-                            const issuesWithoutInitiative = (issues || []).filter(issue => !issue.initiative_id);
-                            const squadIdsWithUnassignedIssues = [...new Set(issuesWithoutInitiative.map(issue => issue.squad_id).filter(Boolean))];
-                            
-                            // Procesar iniciativas normales
-                            for (const initiative of initiatives) {
-                                const squad = squadMap.get(initiative.squad_id);
-                                if (!squad) continue;
-                                
-                                const initiativeIssues = (issues || []).filter(
-                                    issue => issue.initiative_id === initiative.id
-                                );
-                                
-                                const totalSP = initiativeIssues.reduce((sum, issue) => 
-                                    sum + (issue.current_story_points || 0), 0
-                                );
-                                const completedSP = initiativeIssues
-                                    .filter(issue => {
-                                        const status = issue.current_status?.toLowerCase() || '';
-                                        return status.includes('done') || status.includes('closed') || status.includes('resolved');
-                                    })
-                                    .reduce((sum, issue) => sum + (issue.current_story_points || 0), 0);
-                                
-                                const spi = totalSP > 0 ? (completedSP / totalSP) : 0;
-                                const completionPercentage = totalSP > 0 ? Math.round((completedSP / totalSP) * 100) : 0;
-                                
-                                const squadMetrics = (sprintMetrics || []).filter(
-                                    m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
-                                );
-                                const latestSprint = squadMetrics[0];
-                                
-                                const devIds = [...new Set(
-                                    initiativeIssues.map(issue => issue.assignee_id).filter(Boolean)
-                                )];
-                                const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
-                                
-                                roadmapData.push({
-                                    squad: squad.squad_name || squad.squad_key,
-                                    initiative: initiative.initiative_name || initiative.initiative_key,
-                                    start: latestSprint?.start_date 
-                                        ? new Date(latestSprint.start_date).toISOString().split('T')[0]
-                                        : new Date(initiative.created_at).toISOString().split('T')[0],
-                                    status: completionPercentage,
-                                    delivery: latestSprint?.end_date
-                                        ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-                                        : null,
-                                    spi: parseFloat(spi.toFixed(2)),
-                                    allocation: devNames.length,
-                                    comments: `${initiativeIssues.length} issues, ${totalSP} SP total`,
-                                    scope: initiative.initiative_name || '',
-                                    dev: devNames.join(', ') || 'Unassigned',
-                                    percentage: completionPercentage
-                                });
-                                
-                                // Agregar a allocation map (solo issues activos en sprint actual)
-                                const currentSprint = squadSprintMap.get(squad.id);
-                                let activeIssuesCount = 0;
-                                
-                                for (const issue of initiativeIssues) {
-                                    if (!issue.initiative_id || !issue.assignee_id) continue;
-                                    
-                                    // Filtrar: solo contar issues activos en el sprint actual
-                                    if (!isIssueActiveInSprint(issue, currentSprint)) {
-                                        continue; // Issue viejo o fuera del sprint, no contar
-                                    }
-                                    
-                                    activeIssuesCount++;
-                                    const dev = devMap.get(issue.assignee_id);
-                                    if (!dev) continue;
-                                    
-                                    const key = `${squad.squad_name}::${initiative.initiative_name}::${dev}`;
-                                    if (!allocationMap.has(key)) {
-                                        allocationMap.set(key, {
-                                            squad: squad.squad_name,
-                                            initiative: initiative.initiative_name,
-                                            dev: dev,
-                                            totalSP: 0
-                                        });
-                                    }
-                                    allocationMap.get(key).totalSP += issue.current_story_points || 0;
-                                }
-                                
-                                if (activeIssuesCount > 0) {
-                                    console.log(`[SUPABASE] ${initiative.initiative_name}: ${activeIssuesCount} issues activos de ${initiativeIssues.length} total`);
-                                }
-                            }
-                            
-                            // Procesar issues sin iniciativa agrupados por squad
-                            for (const squadId of squadIdsWithUnassignedIssues) {
-                                const squad = squadMap.get(squadId);
-                                if (!squad) continue;
-                                
-                                const unassignedIssues = issuesWithoutInitiative.filter(issue => issue.squad_id === squadId);
-                                
-                                if (unassignedIssues.length === 0) continue;
-                                
-                                const totalSP = unassignedIssues.reduce((sum, issue) => 
-                                    sum + (issue.current_story_points || 0), 0
-                                );
-                                const completedSP = unassignedIssues
-                                    .filter(issue => {
-                                        const status = issue.current_status?.toLowerCase() || '';
-                                        return status.includes('done') || status.includes('closed') || status.includes('resolved');
-                                    })
-                                    .reduce((sum, issue) => sum + (issue.current_story_points || 0), 0);
-                                
-                                const spi = totalSP > 0 ? (completedSP / totalSP) : 0;
-                                const completionPercentage = totalSP > 0 ? Math.round((completedSP / totalSP) * 100) : 0;
-                                
-                                const squadMetrics = (sprintMetrics || []).filter(
-                                    m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
-                                );
-                                const latestSprint = squadMetrics[0];
-                                
-                                const devIds = [...new Set(
-                                    unassignedIssues.map(issue => issue.assignee_id).filter(Boolean)
-                                )];
-                                const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
-                                
-                                roadmapData.push({
-                                    squad: squad.squad_name || squad.squad_key,
-                                    initiative: 'Otros',
-                                    start: latestSprint?.start_date 
-                                        ? new Date(latestSprint.start_date).toISOString().split('T')[0]
-                                        : new Date().toISOString().split('T')[0],
-                                    status: completionPercentage,
-                                    delivery: latestSprint?.end_date
-                                        ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-                                        : null,
-                                    spi: parseFloat(spi.toFixed(2)),
-                                    allocation: devNames.length,
-                                    comments: `${unassignedIssues.length} issues, ${totalSP} SP total`,
-                                    scope: 'Otros',
-                                    dev: devNames.join(', ') || 'Unassigned',
-                                    percentage: completionPercentage
-                                });
-                                
-                                // Agregar a allocation map (solo issues activos en sprint actual)
-                                const currentSprint = squadSprintMap.get(squad.id);
-                                
-                                for (const issue of unassignedIssues) {
-                                    if (!issue.assignee_id) continue;
-                                    
-                                    // Filtrar: solo contar issues activos en el sprint actual
-                                    if (!isIssueActiveInSprint(issue, currentSprint)) {
-                                        continue; // Issue viejo o fuera del sprint, no contar
-                                    }
-                                    
-                                    const dev = devMap.get(issue.assignee_id);
-                                    if (!dev) continue;
-                                    
-                                    const key = `${squad.squad_name}::Otros::${dev}`;
-                                    if (!allocationMap.has(key)) {
-                                        allocationMap.set(key, {
-                                            squad: squad.squad_name,
-                                            initiative: 'Otros',
-                                            dev: dev,
-                                            totalSP: 0
-                                        });
-                                    }
-                                    allocationMap.get(key).totalSP += issue.current_story_points || 0;
-                                }
-                                
-                                console.log(`[SUPABASE] Otros (${squad.squad_name}): ${unassignedIssues.length} issues sin iniciativa`);
-                            }
-                            
-                            if (roadmapData.length === 0) {
-                                throw new Error('No se pudieron generar datos de roadmap desde Supabase.');
-                            }
-                            
-                            // Capacidad del sprint: 8.5 días = 68 horas = 17 SP
-                            const SPRINT_CAPACITY_SP = 17;
-                            
-                            const allocations = Array.from(allocationMap.values()).map(allocation => ({
-                                squad: allocation.squad,
-                                initiative: allocation.initiative,
-                                dev: allocation.dev,
-                                percentage: Math.round((allocation.totalSP / SPRINT_CAPACITY_SP) * 100)
-                            }));
-                            
-                            console.log('[SUPABASE] Roadmap data generado:', roadmapData.length, 'items');
-                            return { projects: roadmapData, allocation: allocations };
-                        };
-                        
                         try {
-                            // Intentar cargar desde Supabase primero
-                            try {
-                                const supabaseData = await loadFromSupabase();
-                                setProjectData(supabaseData.projects);
-                                setDevAllocationData(supabaseData.allocation);
-                                setStrataMappingData([]); // Supabase no tiene strata mapping por ahora
-                                setDataSource('supabase');
-                                console.log('[APP] ✅ Datos de delivery cargados desde Supabase:', {
-                                    projects: supabaseData.projects.length,
-                                    allocation: supabaseData.allocation.length
-                                });
-                            } catch (supabaseError) {
-                                console.error('[APP] ❌ Error cargando desde Supabase:', supabaseError);
-                                console.warn('[APP] ⚠️ Usando CSV como fallback (datos pueden estar desactualizados)');
-                                
-                                // Fallback a CSV
-                                const deliveryData = await DeliveryRoadmapData.load(CORS_PROXY);
-                                setProjectData(deliveryData.projects);
-                                setDevAllocationData(deliveryData.allocation);
-                                setStrataMappingData(deliveryData.strataMapping || []);
-                                setDataSource('csv');
-                                console.log('[APP] Delivery data loaded from CSV:', { projects: deliveryData.projects.length, allocation: deliveryData.allocation.length, strataMapping: (deliveryData.strataMapping || []).length });
-                            }
+                            // Load Delivery Roadmap data (isolated module)
+                            console.log('[APP] Loading Delivery Roadmap data...');
+                            const deliveryData = await DeliveryRoadmapData.load(CORS_PROXY);
+                            setProjectData(deliveryData.projects);
+                            setDevAllocationData(deliveryData.allocation);
+                            setStrataMappingData(deliveryData.strataMapping || []);
+                            console.log('[APP] Delivery data loaded:', { projects: deliveryData.projects.length, allocation: deliveryData.allocation.length, strataMapping: (deliveryData.strataMapping || []).length });
                     } catch (err) {
                             console.error("[APP] Delivery data failed, using mock:", err.message);
                             setProjectData(DeliveryRoadmapData.MOCK_DATA.projects);
                             setDevAllocationData(DeliveryRoadmapData.MOCK_DATA.allocation);
-                            setDataSource('csv');
                             hasErrors = true;
                             errorMessages.push(`Delivery: ${err.message}`);
                         }
@@ -4685,48 +3525,27 @@
                 loadData();
             }, []);
 
-            // Mostrar loading de autenticación
-            if (authLoading) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-[#0a0e17]">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div>
-                    </div>
-                );
-            }
-
-            // Mostrar login si no está autenticado
-            if (!currentUser) {
-                return <Login onLoginSuccess={handleLoginSuccess} />;
-            }
-
             if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div></div>;
             if (error) return <div className="min-h-screen flex items-center justify-center text-rose-400"><div className="text-center"><Icons.AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div></div>;
 
             return (
                 <div className="min-h-screen font-sans bg-[#0a0e17]">
-                    <Navbar activeView={activeView} setActiveView={setActiveView} currentUser={currentUser} onLogout={handleLogout} />
-                    <div className="pt-16 md:pt-20 px-4 md:px-8 pb-8 md:pb-12">
-                        <header className="max-w-7xl mx-auto mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <Navbar activeView={activeView} setActiveView={setActiveView} />
+                    <div className="pt-24 px-8 pb-12">
+                        <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
                             <div>
-                                <h1 className="text-2xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-                                    {activeView === 'overall' ? 'Overall Dashboard' : activeView === 'product' ? 'Product Roadmap' : activeView === 'delivery' ? 'Delivery Roadmap' : activeView === 'strata' ? 'Strata Mapping' : 'User Administration'}
+                                <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
+                                    {activeView === 'overall' ? 'Overall Dashboard' : activeView === 'product' ? 'Product Roadmap' : activeView === 'delivery' ? 'Delivery Roadmap' : 'Strata Mapping'}
                                 </h1>
-                                <p className="text-slate-400 mt-1 md:mt-2 text-sm md:text-base">
-                                    {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : activeView === 'delivery' ? 'Execution & Resource Allocation' : activeView === 'strata' ? 'Strata Mapping & Analysis' : 'Manage users, roles, and access'}
+                                <p className="text-slate-400 mt-2">
+                                    {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : activeView === 'delivery' ? 'Execution & Resource Allocation' : 'Strata Mapping & Analysis'}
                                 </p>
                             </div>
                             <div className="flex gap-4">
-                                {dataSource === 'supabase' ? (
-                                    <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                        Live Data
-                                    </div>
-                                ) : (
-                                    <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
-                                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                                        Not Connected
-                                    </div>
-                                )}
+                                <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    Live Data
+                                </div>
                             </div>
                         </header>
 
@@ -4735,290 +3554,6 @@
                             {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                             {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
                             {activeView === 'strata' && <StrataMappingView productInitiatives={productInitiatives} deliveryProjects={projectData} devAllocationData={devAllocationData} strataMappingData={strataMappingData} />}
-                            {activeView === 'admin' && currentUser && currentUser.role === 'admin' && (() => {
-                                // Componente UserAdministration inline
-                                const UserAdministration = ({ currentUser }) => {
-                                    const [users, setUsers] = useState([]);
-                                    const [loading, setLoading] = useState(true);
-                                    const [error, setError] = useState('');
-                                    const [success, setSuccess] = useState('');
-
-                                    useEffect(() => {
-                                        loadUsers();
-                                    }, []);
-
-                                    const loadUsers = async () => {
-                                        setLoading(true);
-                                        setError('');
-                                        try {
-                                            if (!window.supabaseClient) {
-                                                setError('Supabase is not configured');
-                                                return;
-                                            }
-                                            
-                                            // Obtener token de sesión
-                                            const sessionStr = localStorage.getItem('auth_session');
-                                            if (!sessionStr) {
-                                                setError('No active session');
-                                                return;
-                                            }
-                                            const session = JSON.parse(sessionStr);
-                                            
-                                            const { data, error: fetchError } = await window.supabaseClient.rpc('get_all_users', {
-                                                p_session_token: session.token
-                                            });
-                                            if (fetchError) {
-                                                setError(fetchError.message);
-                                                return;
-                                            }
-                                            setUsers(data || []);
-                                        } catch (err) {
-                                            console.error('[USER ADMIN] Error loading users:', err);
-                                            setError('Error loading users: ' + (err.message || 'Unknown error'));
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    };
-
-                                    const handleApprove = async (userId) => {
-                                        setError('');
-                                        setSuccess('');
-                                        try {
-                                            if (!window.supabaseClient) {
-                                                setError('Supabase is not configured');
-                                                return;
-                                            }
-                                            
-                                            // Obtener token de sesión
-                                            const sessionStr = localStorage.getItem('auth_session');
-                                            if (!sessionStr) {
-                                                setError('No active session');
-                                                return;
-                                            }
-                                            const session = JSON.parse(sessionStr);
-                                            
-                                            const { error: approveError } = await window.supabaseClient.rpc('approve_user', { 
-                                                p_user_id: userId,
-                                                p_session_token: session.token
-                                            });
-                                            if (approveError) {
-                                                setError(approveError.message);
-                                                return;
-                                            }
-                                            setSuccess('User approved successfully');
-                                            await loadUsers();
-                                            setTimeout(() => setSuccess(''), 3000);
-                                        } catch (err) {
-                                            console.error('[USER ADMIN] Error approving user:', err);
-                                            setError('Error approving user: ' + (err.message || 'Unknown error'));
-                                        }
-                                    };
-
-                                    const handleDeactivate = async (userId) => {
-                                        setError('');
-                                        setSuccess('');
-                                        if (!confirm('Are you sure you want to deactivate this user? They will be logged out immediately.')) {
-                                            return;
-                                        }
-                                        try {
-                                            if (!window.supabaseClient) {
-                                                setError('Supabase is not configured');
-                                                return;
-                                            }
-                                            
-                                            // Obtener token de sesión
-                                            const sessionStr = localStorage.getItem('auth_session');
-                                            if (!sessionStr) {
-                                                setError('No active session');
-                                                return;
-                                            }
-                                            const session = JSON.parse(sessionStr);
-                                            
-                                            const { error: deactivateError } = await window.supabaseClient.rpc('deactivate_user', { 
-                                                p_user_id: userId,
-                                                p_session_token: session.token
-                                            });
-                                            if (deactivateError) {
-                                                setError(deactivateError.message);
-                                                return;
-                                            }
-                                            setSuccess('User deactivated successfully');
-                                            await loadUsers();
-                                            setTimeout(() => setSuccess(''), 3000);
-                                        } catch (err) {
-                                            console.error('[USER ADMIN] Error deactivating user:', err);
-                                            setError('Error deactivating user: ' + (err.message || 'Unknown error'));
-                                        }
-                                    };
-
-                                    const handleRoleChange = async (userId, newRole) => {
-                                        setError('');
-                                        setSuccess('');
-                                        try {
-                                            if (!window.supabaseClient) {
-                                                setError('Supabase is not configured');
-                                                return;
-                                            }
-                                            
-                                            // Obtener token de sesión
-                                            const sessionStr = localStorage.getItem('auth_session');
-                                            if (!sessionStr) {
-                                                setError('No active session');
-                                                return;
-                                            }
-                                            const session = JSON.parse(sessionStr);
-                                            
-                                            const { error: roleError } = await window.supabaseClient.rpc('update_user_role', {
-                                                p_user_id: userId,
-                                                p_new_role: newRole,
-                                                p_session_token: session.token
-                                            });
-                                            if (roleError) {
-                                                setError(roleError.message);
-                                                return;
-                                            }
-                                            setSuccess('User role updated successfully');
-                                            await loadUsers();
-                                            setTimeout(() => setSuccess(''), 3000);
-                                        } catch (err) {
-                                            console.error('[USER ADMIN] Error updating role:', err);
-                                            setError('Error updating role: ' + (err.message || 'Unknown error'));
-                                        }
-                                    };
-
-                                    const formatDate = (dateString) => {
-                                        if (!dateString) return 'Never';
-                                        const date = new Date(dateString);
-                                        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                    };
-
-                                    if (loading) {
-                                        return (
-                                            <div className="flex items-center justify-center h-64">
-                                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div>
-                                            </div>
-                                        );
-                                    }
-
-                                    return (
-                                        <div className="space-y-6">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Icons.Users className="text-cyan-400" size={28} />
-                                                    <h2 className="text-2xl font-bold text-slate-200">User Administration</h2>
-                                                </div>
-                                                <button onClick={loadUsers} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">
-                                                    Refresh
-                                                </button>
-                                            </div>
-                                            {error && (
-                                                <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-sm">
-                                                    <Icons.AlertCircle size={16} />
-                                                    <span>{error}</span>
-                                                </div>
-                                            )}
-                                            {success && (
-                                                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
-                                                    <Icons.CheckCircle size={16} />
-                                                    <span>{success}</span>
-                                                </div>
-                                            )}
-                                            <div className="glass rounded-xl border border-white/10 overflow-hidden">
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full">
-                                                        <thead className="bg-slate-800/50 border-b border-white/10">
-                                                            <tr>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">User</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Role</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Last Login</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Created</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Actions</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-white/5">
-                                                            {users.length === 0 ? (
-                                                                <tr>
-                                                                    <td colSpan="6" className="px-4 py-8 text-center text-slate-400">No users found</td>
-                                                                </tr>
-                                                            ) : (
-                                                                users.map((user) => (
-                                                                    <tr key={user.id} className="hover:bg-slate-800/30 transition-colors">
-                                                                        <td className="px-4 py-3">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <Icons.User size={16} className="text-slate-400" />
-                                                                                <div>
-                                                                                    <div className="text-slate-200 font-medium">{user.display_name}</div>
-                                                                                    <div className="text-slate-400 text-xs flex items-center gap-1">
-                                                                                        <Icons.Mail size={12} />
-                                                                                        {user.email}
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-4 py-3">
-                                                                            <select value={user.role} onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                                                                                className="px-2 py-1 bg-slate-700 border border-white/10 rounded text-slate-200 text-sm focus:outline-none focus:border-cyan-500/50">
-                                                                                <option value="Regular">Regular</option>
-                                                                                <option value="PM">PM</option>
-                                                                                <option value="Stakeholder">Stakeholder</option>
-                                                                                <option value="3amigos">3amigos</option>
-                                                                                <option value="admin">admin</option>
-                                                                            </select>
-                                                                        </td>
-                                                                        <td className="px-4 py-3">
-                                                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                                                                                user.is_active ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                                                                            }`}>
-                                                                                {user.is_active ? (
-                                                                                    <>
-                                                                                        <Icons.CheckCircle size={12} />
-                                                                                        Active
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
-                                                                                        <Icons.XCircle size={12} />
-                                                                                        Pending Approval
-                                                                                    </>
-                                                                                )}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-slate-400 text-sm">
-                                                                            <div className="flex items-center gap-1">
-                                                                                <Icons.Clock size={12} />
-                                                                                {formatDate(user.last_login_at)}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-slate-400 text-sm">{formatDate(user.created_at)}</td>
-                                                                        <td className="px-4 py-3">
-                                                                            <div className="flex items-center gap-2">
-                                                                                {!user.is_active ? (
-                                                                                    <button onClick={() => handleApprove(user.id)}
-                                                                                        className="px-3 py-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded text-sm transition-colors flex items-center gap-1">
-                                                                                        <Icons.CheckCircle size={14} />
-                                                                                        Approve
-                                                                                    </button>
-                                                                                ) : (
-                                                                                    <button onClick={() => handleDeactivate(user.id)}
-                                                                                        className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-sm transition-colors flex items-center gap-1">
-                                                                                        <Icons.XCircle size={14} />
-                                                                                        Deactivate
-                                                                                    </button>
-                                                                                )}
-                                                                            </div>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                };
-                                return <UserAdministration currentUser={currentUser} />;
-                            })()}
                         </main>
                     </div>
                 </div>
