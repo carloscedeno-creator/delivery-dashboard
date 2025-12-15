@@ -13,16 +13,26 @@ const NOTION_PROXY_URL = process.env.VITE_NOTION_PROXY_URL ||
 
 async function listDatabases() {
   try {
-    console.log('📊 Listing accessible Notion databases');
+    console.log('📊 Listing All Accessible Notion Databases');
     console.log('='.repeat(60));
     console.log('');
 
     const url = `${NOTION_PROXY_URL}?action=listDatabases`;
+    
+    // Incluir header de autorización si está disponible
+    const headers = {};
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseAnonKey) {
+      headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        ...headers
+      },
+      body: JSON.stringify({})
     });
 
     if (!response.ok) {
@@ -44,8 +54,9 @@ async function listDatabases() {
 
     if (databases.length === 0) {
       console.log('⚠️  No databases found. Check:');
+      console.log('   - NOTION_API_TOKEN is configured correctly');
       console.log('   - Integration has access to databases');
-      console.log('   - NOTION_API_TOKEN is correct');
+      console.log('   - Databases are shared with the integration');
       return;
     }
 
@@ -54,12 +65,18 @@ async function listDatabases() {
       console.log(`\n📊 Database ${index + 1}:`);
       console.log('-'.repeat(60));
       console.log(`ID: ${db.id}`);
-      console.log(`Title: ${db.title?.[0]?.plain_text || '(No title)'}`);
-      console.log(`URL: ${db.url}`);
-      console.log(`Created: ${db.created_time}`);
-      console.log(`Last Edited: ${db.last_edited_time}`);
       
-      // Mostrar propiedades de la base de datos si están disponibles
+      // Extraer título de la base de datos
+      const title = db.title?.[0]?.plain_text || 
+                    db.title?.[0]?.text?.content || 
+                    'Untitled';
+      console.log(`Title: ${title}`);
+      
+      console.log(`URL: ${db.url || 'N/A'}`);
+      console.log(`Created: ${db.created_time || 'N/A'}`);
+      console.log(`Last Edited: ${db.last_edited_time || 'N/A'}`);
+      
+      // Mostrar propiedades si están disponibles
       if (db.properties) {
         const propNames = Object.keys(db.properties);
         console.log(`Properties: ${propNames.length} properties`);
@@ -72,11 +89,11 @@ async function listDatabases() {
     // Resumen
     console.log('\n\n📋 Summary');
     console.log('='.repeat(60));
-    console.log(`\nTotal databases: ${databases.length}`);
+    console.log(`Total databases: ${databases.length}`);
     console.log('\n💡 To search in a specific database, use:');
-    console.log(`   node scripts/test-notion-search.js "Initiative Name" --database-id ${databases[0]?.id || 'DATABASE_ID'}`);
-    console.log('\n💡 To search in all databases (default), use:');
-    console.log(`   node scripts/test-notion-search.js "Initiative Name"`);
+    console.log('   node scripts/test-notion-search.js "Initiative Name" --database-id DATABASE_ID');
+    console.log('\n💡 To search in ALL databases (default), use:');
+    console.log('   node scripts/test-notion-search.js "Initiative Name"');
 
   } catch (error) {
     console.error('\n❌ Error listing databases:', error.message);

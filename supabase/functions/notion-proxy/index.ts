@@ -4,6 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const NOTION_API_TOKEN = Deno.env.get('NOTION_API_TOKEN')
+// NOTION_DATABASE_ID es opcional - si no está, se buscará en todas las bases de datos accesibles
 const NOTION_DATABASE_ID = Deno.env.get('NOTION_DATABASE_ID') // Base de datos por defecto (opcional)
 
 serve(async (req) => {
@@ -47,8 +48,8 @@ serve(async (req) => {
         notionUrl = 'https://api.notion.com/v1/search'
         const searchBody = {
           filter: {
-            property: 'object',
-            value: 'database'
+            value: 'database',
+            property: 'object'
           },
           page_size: 100
         }
@@ -116,8 +117,8 @@ serve(async (req) => {
           const searchUrl = 'https://api.notion.com/v1/search'
           const searchBody = {
             filter: {
-              property: 'object',
-              value: 'database'
+              value: 'database',
+              property: 'object'
             },
             page_size: 100
           }
