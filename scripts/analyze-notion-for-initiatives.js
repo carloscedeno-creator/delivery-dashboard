@@ -6,7 +6,11 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const NOTION_PROXY_URL = process.env.VITE_NOTION_PROXY_URL || 'https://sheets-proxy.carlos-cedeno.workers.dev/notion';
+// Usar Supabase Edge Function
+const NOTION_PROXY_URL = process.env.VITE_NOTION_PROXY_URL || 
+  (process.env.VITE_SUPABASE_URL 
+    ? `${process.env.VITE_SUPABASE_URL}/functions/v1/notion-proxy`
+    : 'https://sywkskwkexwwdzrbwinp.supabase.co/functions/v1/notion-proxy');
 const PRODUCT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSA1rr8EtTrBVQK_s1U4JJ-08AEmBiVRcfi6SepeBOPtlj4WPs6b7lUtyhg8lJixp-sg3R50cHkZ5NN/pub?gid=933125518&single=true&output=csv';
 const PROXY_URL = process.env.VITE_PROXY_URL || 'https://sheets-proxy.carlos-cedeno.workers.dev';
 
@@ -134,16 +138,34 @@ async function analyzeNotionPage(initiativeInfo) {
     const searchResponse = await fetch(searchUrl);
     
     if (!searchResponse.ok) {
-      const error = await searchResponse.json();
+      const errorText = await searchResponse.text();
+      let errorMessage = searchResponse.statusText;
+      try {
+        const error = JSON.parse(errorText);
+        errorMessage = error.error || errorMessage;
+      } catch (e) {
+        errorMessage = errorText || errorMessage;
+      }
       return {
         initiative: initiativeName,
         csvNotionUrl: csvNotionUrl,
         found: false,
-        error: error.error || searchResponse.statusText
+        error: errorMessage
       };
     }
     
-    const searchData = await searchResponse.json();
+    let searchData;
+    try {
+      const responseText = await searchResponse.text();
+      searchData = JSON.parse(responseText);
+    } catch (e) {
+      return {
+        initiative: initiativeName,
+        csvNotionUrl: csvNotionUrl,
+        found: false,
+        error: `Invalid JSON response: ${e.message}`
+      };
+    }
     pages = searchData.results || [];
     
     if (pages.length === 0) {
@@ -295,7 +317,7 @@ async function analyzeAllInitiatives() {
     const results = [];
     
     for (const initiative of initiatives) {
-      console.log(`\n📄 ${initiative}`);
+      console.log(`\n📄 ${initiative.name}`);
       console.log('-'.repeat(60));
       
       const analysis = await analyzeNotionPage(initiative);

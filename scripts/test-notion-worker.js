@@ -2,7 +2,10 @@
  * Script simple para probar el Cloudflare Worker de Notion
  */
 
-const NOTION_PROXY_URL = 'https://sheets-proxy.carlos-cedeno.workers.dev/notion';
+// Usar Supabase Edge Function
+const NOTION_PROXY_URL = process.env.VITE_SUPABASE_URL 
+  ? `${process.env.VITE_SUPABASE_URL}/functions/v1/notion-proxy`
+  : 'https://sywkskwkexwwdzrbwinp.supabase.co/functions/v1/notion-proxy';
 
 async function testWorker() {
   console.log('🧪 Testing Notion Worker');
