@@ -1855,7 +1855,7 @@
                 const strataInitiatives = useMemo(() => {
                     if (!selectedStrata) return { delivery: [], product: [] };
                     return searchInitiativesForStrata(selectedStrata);
-                }, [selectedStrata, deliveryProjects, productInitiatives]);
+                }, [selectedStrata, deliveryProjects, productInitiatives, strataMappingData]);
 
                 // Combine and format initiatives for display
                 // Unifies data when the same initiative appears in both Delivery and Product
