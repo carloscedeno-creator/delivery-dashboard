@@ -229,6 +229,57 @@ async function handleNotionRequest(request, url) {
                 })
                 break
 
+            case 'getPageBlocks':
+                const pageId = url.searchParams.get('pageId')
+                if (!pageId) {
+                    return new Response(JSON.stringify({ error: 'Missing pageId parameter' }), {
+                        status: 400,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    })
+                }
+                // Obtener bloques de la página (con paginación)
+                const allBlocks = []
+                let startCursor = null
+                let hasMore = true
+
+                while (hasMore) {
+                    notionUrl = `https://api.notion.com/v1/blocks/${pageId}/children`
+                    if (startCursor) {
+                        notionUrl += `?start_cursor=${startCursor}`
+                    }
+                    
+                    const blockResponse = await fetch(notionUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                            'Notion-Version': '2022-06-28'
+                        }
+                    })
+
+                    if (!blockResponse.ok) {
+                        throw new Error(`Notion API error: ${blockResponse.statusText}`)
+                    }
+
+                    const blockData = await blockResponse.json()
+                    allBlocks.push(...(blockData.results || []))
+
+                    hasMore = blockData.has_more || false
+                    startCursor = blockData.next_cursor || null
+                }
+
+                // Retornar todos los bloques
+                return new Response(JSON.stringify({ results: allBlocks }), {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*',
+                        'Cache-Control': 'public, max-age=300'
+                    }
+                })
+
             default:
                 return new Response(JSON.stringify({ error: 'Invalid action' }), {
                     status: 400,
