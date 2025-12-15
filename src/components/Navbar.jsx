@@ -6,8 +6,6 @@ const Navbar = ({ activeView, setActiveView }) => {
         { id: 'overall', label: 'Overall', icon: Layout },
         { id: 'product', label: 'Product Roadmap', icon: Box },
         { id: 'delivery', label: 'Delivery Roadmap', icon: Truck },
-        // Supabase integration - En desarrollo (próximamente)
-        // { id: 'supabase-test', label: 'Supabase Test', icon: Database },
     ];
 
     return (

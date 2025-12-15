@@ -83,8 +83,6 @@ export const parseCSV = (text, type) => {
             if (h === 'Completion (%)') entry.completion = val;
             if (h === 'Start Date') entry.startDate = val;
             if (h === 'Expected Date') entry.expectedDate = val;
-            if (h === 'End Date') entry.endDate = val;
-            if (h === 'SH Review Date') entry.shReviewDate = val;
 
             // Bug/Release fields
             if (h === 'Type') entry.type = val;
