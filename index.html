@@ -1772,6 +1772,8 @@
                     });
 
                     console.log(`[STRATA] Found ${mappedInitiatives.length} mapped initiatives for ${strataId}:`, mappedInitiatives);
+                    console.log(`[STRATA] Delivery projects available: ${deliveryProjects.length}`);
+                    console.log(`[STRATA] Product initiatives available: ${productInitiatives.length}`);
 
                     // For each mapped initiative, find it in Delivery and/or Product data
                     mappedInitiatives.forEach(mapping => {
@@ -1810,12 +1812,19 @@
                         // Search in Delivery data (if no type specified or type includes delivery)
                         if (!mappingType || mappingType.includes('delivery') || mappingType === 'both') {
                             const deliveryMatch = deliveryProjects.find(project => {
-                                return fuzzyMatch(project.initiative, initiativeName);
+                                const matches = fuzzyMatch(project.initiative, initiativeName);
+                                if (matches) {
+                                    console.log(`[STRATA] ✅ Matched "${initiativeName}" with Delivery: "${project.initiative}"`);
+                                }
+                                return matches;
                             });
                             if (deliveryMatch && !deliveryInitiatives.find(p => normalizeInitiativeName(p.initiative) === normalizeInitiativeName(deliveryMatch.initiative))) {
                                 // Add docLink from mapping to the delivery match
                                 const enrichedMatch = { ...deliveryMatch, docLink: docLink };
                                 deliveryInitiatives.push(enrichedMatch);
+                                console.log(`[STRATA] ✅ Added to delivery initiatives: "${enrichedMatch.initiative}"`);
+                            } else if (!deliveryMatch) {
+                                console.log(`[STRATA] ❌ No match found for "${initiativeName}" in Delivery projects`);
                             }
                         }
 
