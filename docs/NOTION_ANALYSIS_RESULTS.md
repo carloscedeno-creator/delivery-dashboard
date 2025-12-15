@@ -34,40 +34,37 @@ Se encontraron **23 iniciativas únicas** en el CSV de productos:
 
 ## ⚠️ Problema Identificado
 
-### Cloudflare Worker No Actualizado
+### Proxy de Notion No Configurado
 
-El Cloudflare Worker desplegado (`https://sheets-proxy.carlos-cedeno.workers.dev`) **NO tiene el código actualizado** que incluye el endpoint `/notion`.
+El código está configurado para usar un proxy (`https://sheets-proxy.carlos-cedeno.workers.dev/notion`), pero **este proxy no existe o no está configurado**.
 
 **Síntoma:**
 - Todas las peticiones a `/notion?action=...` devuelven: `"Missing url parameter"`
-- Esto indica que el worker está interpretando las peticiones como endpoint raíz (`/`) en lugar del endpoint `/notion`
+- Esto indica que el servicio proxy no está disponible o no tiene el endpoint `/notion` implementado
 
-**Código Local vs Desplegado:**
-- ✅ **Código local** (`cloudflare-worker-jira-notion.js`): Tiene el endpoint `/notion` implementado
-- ❌ **Worker desplegado**: No tiene el endpoint `/notion` (código antiguo)
+**Situación:**
+- ❌ **Proxy configurado en código**: No existe o no está funcionando
+- ✅ **Código local**: Tiene lógica para llamar a Notion, pero necesita un proxy funcional
 
 ## 🔧 Solución Requerida
 
-### 1. Desplegar Worker Actualizado
+### Opción Recomendada: Supabase Edge Function
 
-El archivo `cloudflare-worker-jira-notion.js` necesita ser desplegado en Cloudflare Workers.
+Ya que estás usando Supabase, la mejor solución es crear una **Supabase Edge Function** que actúe como proxy para Notion.
 
-**Pasos:**
-1. Ir a Cloudflare Dashboard > Workers & Pages
-2. Seleccionar el worker `sheets-proxy`
-3. Actualizar el código con el contenido de `cloudflare-worker-jira-notion.js`
-4. Guardar y desplegar
+**Ver documentación completa en:** `docs/NOTION_SETUP_CORRECTED.md`
 
-### 2. Verificar Variables de Entorno
+**Pasos resumidos:**
+1. Crear Edge Function `notion-proxy` en Supabase
+2. Configurar secrets: `NOTION_API_TOKEN` y `NOTION_DATABASE_ID`
+3. Desplegar la función
+4. Actualizar `notionConfig.js` para usar la URL de Supabase
 
-Asegurarse de que el worker tenga configuradas las variables de entorno:
-- `NOTION_API_TOKEN_ENV` - Token de API de Notion
-- `NOTION_DATABASE_ID_ENV` - ID de la base de datos de Notion
-
-### 3. Verificar Acceso a Base de Datos
+### Verificar Acceso a Base de Datos
 
 - La integración de Notion debe tener acceso a la base de datos
 - El Database ID debe ser correcto
+- El Internal Integration Token debe estar configurado
 
 ## 📝 Próximos Pasos
 
