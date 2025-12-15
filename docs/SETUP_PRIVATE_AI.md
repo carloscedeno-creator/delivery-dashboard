@@ -4,38 +4,194 @@
 
 Configurar una solución de IA completamente privada que procese documentación de Notion sin exponer datos a APIs públicas.
 
-## 🏗️ Opciones de Implementación
+## 🏗️ Opciones de Implementación para Nube (Supabase + GitHub Pages)
 
-### Opción 1: Ollama (Recomendado) ⭐
+### Opción 1: Supabase Edge Function + VPS Privado con Ollama ⭐ (Recomendado)
+
+**Arquitectura:**
+```
+GitHub Pages (Frontend)
+    ↓
+Supabase Edge Function (Backend privado)
+    ↓
+VPS/Servidor Privado con Ollama (IA privada)
+```
 
 **Ventajas:**
-- ✅ Setup muy simple
-- ✅ Modelos open-source gratuitos
-- ✅ 100% local, datos nunca salen
-- ✅ Buena calidad con modelos modernos
-- ✅ No requiere GPU (aunque ayuda)
+- ✅ Datos nunca salen de tu control
+- ✅ Edge Function maneja la lógica
+- ✅ Ollama en servidor privado (VPS, AWS EC2 privado, etc.)
+- ✅ Escalable y profesional
+- ✅ Completamente privado
 
-**Instalación:**
+**Setup:**
 
+1. **Configurar VPS/Servidor Privado con Ollama:**
 ```bash
-# Windows (usando WSL o Docker)
-# Opción A: Docker
-docker run -d -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
+# En tu VPS (AWS EC2, DigitalOcean, etc.)
+# Instalar Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
 
-# Opción B: Instalador nativo
-# Descargar de: https://ollama.ai/download
-
-# Descargar modelo (recomendado para análisis)
+# Descargar modelo
 ollama pull llama2:13b
-# o más rápido pero menos preciso:
-ollama pull mistral:7b
-# o mejor para código/documentación técnica:
-ollama pull codellama:13b
 
-# Verificar
-ollama list
-ollama run llama2:13b "Hello, test"
+# Configurar para acceso desde Supabase (con autenticación)
+# Usar nginx reverse proxy con autenticación básica
 ```
+
+2. **Crear Supabase Edge Function:**
+```typescript
+// supabase/functions/analyze-notion/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const OLLAMA_PRIVATE_URL = Deno.env.get('OLLAMA_PRIVATE_URL') // URL de tu VPS privado
+const OLLAMA_API_KEY = Deno.env.get('OLLAMA_API_KEY') // API key para autenticación
+
+serve(async (req) => {
+  // CORS
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204 })
+  }
+
+  try {
+    const { content, initiativeName } = await req.json()
+    
+    // Llamar a Ollama en servidor privado
+    const ollamaResponse = await fetch(`${OLLAMA_PRIVATE_URL}/api/generate`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OLLAMA_API_KEY}` // Autenticación
+      },
+      body: JSON.stringify({
+        model: 'llama2:13b',
+        prompt: `Analiza esta documentación de Notion para la iniciativa "${initiativeName}".
+
+Extrae y estructura la siguiente información en JSON:
+{
+  "status": "in_progress|blocked|done|planned",
+  "completion": 0-100,
+  "tasksCompleted": 0,
+  "tasksTotal": 0,
+  "storyPointsDone": 0,
+  "storyPointsTotal": 0,
+  "blockers": [],
+  "dependencies": [],
+  "risks": [],
+  "extractedData": {
+    "startDate": "",
+    "expectedDelivery": "",
+    "team": ""
+  }
+}
+
+Documentación:
+${content}
+
+Responde SOLO con el JSON, sin texto adicional.`,
+        stream: false,
+        options: {
+          temperature: 0.3,
+          num_predict: 2000
+        }
+      })
+    })
+
+    if (!ollamaResponse.ok) {
+      throw new Error(`Ollama error: ${ollamaResponse.statusText}`)
+    }
+
+    const aiData = await ollamaResponse.json()
+    
+    // Parsear respuesta JSON
+    let analysis
+    try {
+      analysis = JSON.parse(aiData.response)
+    } catch (e) {
+      // Intentar extraer JSON si está embebido en texto
+      const jsonMatch = aiData.response.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        analysis = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('Invalid JSON response from AI')
+      }
+    }
+
+    // Guardar en Supabase
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { error: dbError } = await supabase
+      .from('notion_ai_analysis')
+      .upsert({
+        initiative_name: initiativeName,
+        analysis_date: new Date().toISOString(),
+        status: analysis.status,
+        completion_percentage: analysis.completion,
+        metrics: analysis,
+        extracted_data: analysis.extractedData,
+        confidence_score: 0.85,
+        raw_content: content.substring(0, 10000), // Limitar tamaño
+        ai_model: 'llama2:13b',
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'initiative_name'
+      })
+
+    if (dbError) {
+      console.error('DB error:', dbError)
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        analysis,
+        synced: !dbError
+      }),
+      { 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        } 
+      }
+    )
+
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message 
+      }),
+      { 
+        status: 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        } 
+      }
+    )
+  }
+})
+```
+
+3. **Configurar Variables de Entorno en Supabase:**
+```bash
+# En Supabase Dashboard > Edge Functions > Settings > Secrets
+OLLAMA_PRIVATE_URL=https://tu-vps-privado.com:11434
+OLLAMA_API_KEY=tu-api-key-secreta
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+```
+
+### Opción 2: Supabase Edge Function con Modelo Embedding Local
+
+**Para análisis más simples sin necesidad de servidor externo:**
+- Usar embeddings locales dentro de Supabase
+- Análisis basado en reglas + embeddings
+- Más limitado pero completamente dentro de Supabase
 
 **Configuración en el proyecto:**
 
@@ -51,42 +207,39 @@ export const AI_CONFIG = {
 };
 ```
 
-### Opción 2: Supabase Edge Function
+### Opción 2: Supabase Edge Function con Análisis Basado en Reglas
 
-**Ventajas:**
-- ✅ Integrado con Supabase
-- ✅ Datos nunca salen de Supabase
-- ✅ Puede usar Ollama interno o modelo local
-- ✅ Fácil deployment
+**Para casos donde no necesitas IA completa:**
+- Análisis de patrones con regex y reglas
+- Extracción de métricas estructuradas
+- Más rápido y económico
+- Funciona completamente dentro de Supabase
 
 **Implementación:**
-
 ```typescript
-// supabase/functions/analyze-notion/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// Llamar a Ollama interno o procesar localmente
-serve(async (req) => {
-  const { content, initiativeName } = await req.json()
-  
-  // Llamar a Ollama (debe estar accesible desde Supabase)
-  const ollamaResponse = await fetch('http://ollama:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama2:13b',
-      prompt: `Analiza esta documentación...\n\n${content}`,
-      stream: false
-    })
-  })
-  
-  // Procesar respuesta y guardar en Supabase
-  // ...
-})
+// Análisis basado en patrones sin IA externa
+// Buscar porcentajes, estados, tareas completadas, etc.
+// Usar expresiones regulares y parsing estructurado
 ```
 
-### Opción 3: Servidor Privado Interno
+### Opción 3: VPS Privado con API REST
+
+**Arquitectura alternativa:**
+```
+GitHub Pages → Supabase Edge Function → VPS Privado (Ollama)
+```
+
+**Setup del VPS:**
+```bash
+# En VPS (DigitalOcean, AWS EC2, etc.)
+# 1. Instalar Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull llama2:13b
+
+# 2. Configurar nginx con autenticación
+# 3. Exponer API REST protegida
+# 4. Configurar firewall (solo permitir Supabase)
+```
 
 **Ventajas:**
 - ✅ Control total
@@ -102,108 +255,97 @@ serve(async (req) => {
 # Setup de API REST con FastAPI o similar
 ```
 
-## 🔧 Integración en el Proyecto
+## 🔧 Integración en el Proyecto (Nube)
 
-### 1. Crear Servicio de IA Privada
+### 1. Crear Servicio de IA Privada (Frontend)
 
 ```javascript
 // src/services/privateAiService.js
-import { AI_CONFIG } from '../config/aiConfig.js';
+// Este servicio llama a Supabase Edge Function, que a su vez llama a Ollama privado
 
 export class PrivateAIService {
-  constructor() {
-    this.baseUrl = AI_CONFIG.baseUrl;
-    this.model = AI_CONFIG.model;
+  constructor(supabaseClient) {
+    this.supabase = supabaseClient;
   }
 
-  async analyze(content, prompt) {
+  async analyzeInitiative(initiativeName, notionContent) {
     try {
-      // Si es Ollama
-      if (AI_CONFIG.provider === 'ollama') {
-        return await this.analyzeWithOllama(content, prompt);
-      }
+      console.log(`[AI] Analyzing initiative: ${initiativeName}`);
       
-      // Si es Edge Function
-      if (AI_CONFIG.provider === 'edge-function') {
-        return await this.analyzeWithEdgeFunction(content, prompt);
+      // Llamar a Supabase Edge Function
+      // La Edge Function se conecta a Ollama privado
+      const { data, error } = await this.supabase.functions.invoke('analyze-notion', {
+        body: {
+          initiativeName,
+          content: notionContent
+        }
+      });
+
+      if (error) {
+        console.error('[AI] Edge Function error:', error);
+        throw error;
       }
-      
-      throw new Error('AI provider not configured');
+
+      if (!data.success) {
+        throw new Error(data.error || 'AI analysis failed');
+      }
+
+      console.log(`[AI] Analysis completed for ${initiativeName}`);
+      return data.analysis;
+
     } catch (error) {
-      console.error('[AI] Error analyzing:', error);
+      console.error('[AI] Error analyzing initiative:', error);
       throw error;
     }
   }
 
-  async analyzeWithOllama(content, prompt) {
-    const fullPrompt = `${prompt}\n\nDocumentación:\n${content}\n\nResponde en formato JSON válido.`;
-    
-    const response = await fetch(`${this.baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.model,
-        prompt: fullPrompt,
-        stream: false,
-        options: {
-          temperature: 0.3,
-          num_predict: 2000
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
-    // Parsear respuesta JSON
+  async getAnalysisHistory(initiativeName) {
     try {
-      return JSON.parse(data.response);
-    } catch (e) {
-      // Si no es JSON válido, intentar extraerlo
-      const jsonMatch = data.response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      throw new Error('Invalid JSON response from AI');
+      const { data, error } = await this.supabase
+        .from('notion_ai_analysis')
+        .select('*')
+        .eq('initiative_name', initiativeName)
+        .order('analysis_date', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('[AI] Error fetching history:', error);
+      throw error;
     }
-  }
-
-  async analyzeWithEdgeFunction(content, prompt) {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.VITE_SUPABASE_URL,
-      process.env.VITE_SUPABASE_ANON_KEY
-    );
-
-    const { data, error } = await supabase.functions.invoke('analyze-notion', {
-      body: { content, prompt, initiativeName }
-    });
-
-    if (error) throw error;
-    return data;
   }
 }
 
-export const privateAIService = new PrivateAIService();
+// Uso en componentes
+export const createAIService = (supabaseClient) => {
+  return new PrivateAIService(supabaseClient);
+};
 ```
 
-### 2. Configuración de Variables de Entorno
+### 2. Configuración para Nube
 
+**En Supabase Dashboard (Edge Functions Secrets):**
 ```env
-# .env.local
-# Opción Ollama
-OLLAMA_API_URL=http://localhost:11434
-OLLAMA_MODEL=llama2:13b
-
-# Opción Edge Function
-AI_EDGE_FUNCTION_URL=https://[project].supabase.co/functions/v1/analyze-notion
-
-# Configuración general
-AI_PROVIDER=ollama  # 'ollama', 'edge-function', o 'private-server'
+# Secrets de Edge Function (NO en .env del frontend)
+OLLAMA_PRIVATE_URL=https://tu-vps-privado.com:11434
+OLLAMA_API_KEY=tu-api-key-secreta-para-autenticacion
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ... (service_role key)
 ```
+
+**En Frontend (.env.local - solo Supabase):**
+```env
+# Solo necesitas las keys de Supabase en el frontend
+VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ... (anon key)
+```
+
+**⚠️ IMPORTANTE:**
+- Las credenciales de Ollama NUNCA van en el frontend
+- Solo se configuran como secrets en Supabase Edge Functions
+- El frontend solo llama a la Edge Function
+- La Edge Function se conecta al VPS privado con Ollama
 
 ## 🧪 Testing
 
