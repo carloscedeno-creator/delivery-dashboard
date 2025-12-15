@@ -1,11 +1,12 @@
 // Supabase Edge Function para proxy de Notion API
 // Mantiene las credenciales seguras en el backend
+// Soporta múltiples bases de datos
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const NOTION_API_TOKEN = Deno.env.get('NOTION_API_TOKEN')
 // NOTION_DATABASE_ID es opcional - si no está, se buscará en todas las bases de datos accesibles
-const NOTION_DATABASE_ID = Deno.env.get('NOTION_DATABASE_ID') // Base de datos por defecto (opcional)
+const NOTION_DATABASE_ID = Deno.env.get('NOTION_DATABASE_ID')
 
 serve(async (req) => {
   // CORS preflight
@@ -96,7 +97,6 @@ serve(async (req) => {
 
       case 'searchPages': {
         const initiativeName = url.searchParams.get('initiativeName')
-        const databaseId = url.searchParams.get('databaseId') || NOTION_DATABASE_ID
         
         if (!initiativeName) {
           return new Response(
@@ -111,7 +111,9 @@ serve(async (req) => {
           )
         }
 
-        // Si no hay databaseId específico, buscar en todas las bases de datos
+        // Buscar en todas las bases de datos accesibles si no hay databaseId específico
+        const databaseId = url.searchParams.get('databaseId') || NOTION_DATABASE_ID
+        
         if (!databaseId) {
           // Buscar en todas las bases de datos accesibles
           const searchUrl = 'https://api.notion.com/v1/search'
@@ -147,28 +149,44 @@ serve(async (req) => {
               const dbId = db.id
               notionUrl = `https://api.notion.com/v1/databases/${dbId}/query`
               
-              // Intentar buscar con propiedad "Initiative" (title)
-              const searchFilter = {
-                property: 'Initiative',
-                title: {
-                  contains: initiativeName
-                }
-              }
+              // Intentar diferentes propiedades comunes para buscar
+              const possibleProperties = ['Initiative', 'Name', 'Title', 'Nombre', 'Iniciativa']
               
-              const dbResponse = await fetch(notionUrl, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${NOTION_API_TOKEN}`,
-                  'Notion-Version': '2022-06-28',
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ filter: searchFilter })
-              })
+              for (const propName of possibleProperties) {
+                try {
+                  const searchFilter = {
+                    property: propName,
+                    title: {
+                      contains: initiativeName
+                    }
+                  }
+                  
+                  const dbResponse = await fetch(notionUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                      'Notion-Version': '2022-06-28',
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filter: searchFilter })
+                  })
 
-              if (dbResponse.ok) {
-                const dbData = await dbResponse.json()
-                if (dbData.results && dbData.results.length > 0) {
-                  allResults.push(...dbData.results)
+                  if (dbResponse.ok) {
+                    const dbData = await dbResponse.json()
+                    if (dbData.results && dbData.results.length > 0) {
+                      // Agregar información de la base de datos a cada resultado
+                      const resultsWithDb = dbData.results.map(page => ({
+                        ...page,
+                        database_id: dbId,
+                        database_title: db.title?.[0]?.plain_text || 'Unknown'
+                      }))
+                      allResults.push(...resultsWithDb)
+                      break // Si encontramos resultados, no probar otras propiedades
+                    }
+                  }
+                } catch (e) {
+                  // Continuar con la siguiente propiedad si esta falla
+                  continue
                 }
               }
             } catch (e) {
@@ -193,22 +211,38 @@ serve(async (req) => {
         // Buscar en una base de datos específica
         notionUrl = `https://api.notion.com/v1/databases/${databaseId}/query`
         // Buscar páginas que contengan el nombre de la iniciativa
-        // Ajustar la propiedad según tu base de datos
-        const searchFilter = {
-          property: 'Initiative', // ⚠️ Ajustar según tu base de datos
-          title: {
-            contains: initiativeName
+        // Intentar diferentes propiedades comunes
+        const possibleProperties = ['Initiative', 'Name', 'Title', 'Nombre', 'Iniciativa']
+        
+        for (const propName of possibleProperties) {
+          try {
+            const searchFilter = {
+              property: propName,
+              title: {
+                contains: initiativeName
+              }
+            }
+            response = await fetch(notionUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ filter: searchFilter })
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              if (data.results && data.results.length > 0) {
+                break // Si encontramos resultados, usar esta propiedad
+              }
+            }
+          } catch (e) {
+            // Continuar con la siguiente propiedad
+            continue
           }
         }
-        response = await fetch(notionUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${NOTION_API_TOKEN}`,
-            'Notion-Version': '2022-06-28',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ filter: searchFilter })
-        })
         break
       }
 

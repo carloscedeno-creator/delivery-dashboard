@@ -14,13 +14,15 @@ La función está desplegada pero **necesita los secrets configurados** para fun
 
 ### Secrets Requeridos:
 
-1. **`NOTION_API_TOKEN`**
+1. **`NOTION_API_TOKEN`** ✅ (Ya configurado)
    - Tu Internal Integration Token de Notion
    - Obtener en: https://www.notion.so/my-integrations
 
-2. **`NOTION_DATABASE_ID`**
+2. **`NOTION_DATABASE_ID`** ⚠️ (Opcional)
    - ID de tu base de datos de Notion
    - Se encuentra en la URL de la base de datos
+   - **IMPORTANTE:** Si NO lo configuras, la función buscará automáticamente en **TODAS** las bases de datos accesibles
+   - Esto es útil cuando tienes múltiples bases de datos (como en tu caso)
 
 ### Cómo Configurar Secrets:
 
@@ -45,6 +47,18 @@ supabase secrets set NOTION_DATABASE_ID=tu-database-id-aqui --project-ref sywksk
 ```
 
 ## 🧪 Probar la Función
+
+### Listar Bases de Datos Accesibles
+
+Primero, puedes listar todas las bases de datos accesibles:
+
+```bash
+node scripts/list-notion-databases.js
+```
+
+Esto mostrará todas las bases de datos a las que tu integración tiene acceso.
+
+### Probar Búsqueda
 
 Una vez configurados los secrets, puedes probar:
 
