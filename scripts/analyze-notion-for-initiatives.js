@@ -48,27 +48,50 @@ async function getInitiativesFromCSV() {
       throw new Error('Could not find header row with "Initiative"');
     }
     
-    // Encontrar índice de la columna "Initiative"
+    // Encontrar índices de columnas relevantes
     const initiativeIndex = headers.findIndex(h => 
       h.toLowerCase().includes('initiative')
     );
+    
+    // Buscar columna con URL de Notion (puede llamarse "Notion", "Link", "URL", "Doc Link", etc.)
+    const notionUrlIndex = headers.findIndex(h => {
+      const lower = h.toLowerCase();
+      return lower.includes('notion') || 
+             (lower.includes('link') && !lower.includes('attachment')) ||
+             lower.includes('url') ||
+             lower.includes('doc link') ||
+             lower.includes('documentation');
+    });
     
     if (initiativeIndex === -1) {
       throw new Error('Could not find "Initiative" column');
     }
     
-    // Extraer iniciativas únicas
-    const initiatives = new Set();
+    // Extraer iniciativas con sus URLs de Notion si existen
+    const initiativesMap = new Map();
     
     for (let i = headerIndex + 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-      if (values[initiativeIndex] && values[initiativeIndex].trim()) {
-        initiatives.add(values[initiativeIndex].trim());
+      const initiativeName = values[initiativeIndex]?.trim();
+      const notionUrl = notionUrlIndex >= 0 ? values[notionUrlIndex]?.trim() : null;
+      
+      if (initiativeName) {
+        initiativesMap.set(initiativeName, {
+          name: initiativeName,
+          notionUrl: notionUrl || null
+        });
       }
     }
     
-    console.log(`✅ Found ${initiatives.size} unique initiatives\n`);
-    return Array.from(initiatives).sort();
+    console.log(`✅ Found ${initiativesMap.size} unique initiatives`);
+    if (notionUrlIndex >= 0) {
+      const withUrls = Array.from(initiativesMap.values()).filter(i => i.notionUrl).length;
+      console.log(`   ${withUrls} have Notion URLs in CSV\n`);
+    } else {
+      console.log(`   (No Notion URL column found in CSV)\n`);
+    }
+    
+    return Array.from(initiativesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     
   } catch (error) {
     console.error('❌ Error fetching initiatives from CSV:', error.message);
@@ -79,9 +102,34 @@ async function getInitiativesFromCSV() {
 /**
  * Analiza una página de Notion para una iniciativa
  */
-async function analyzeNotionPage(initiativeName) {
+async function analyzeNotionPage(initiativeInfo) {
+  const initiativeName = initiativeInfo.name;
+  const csvNotionUrl = initiativeInfo.notionUrl;
+  
   try {
-    // Buscar página en Notion
+    let page = null;
+    let pages = [];
+    
+    // Si tenemos URL de Notion del CSV, intentar extraer el page ID
+    if (csvNotionUrl) {
+      console.log(`   📎 Found Notion URL in CSV: ${csvNotionUrl}`);
+      
+      // Intentar extraer page ID de la URL de Notion
+      // Formato: https://www.notion.so/[workspace]/[page-title]-[page-id]
+      const pageIdMatch = csvNotionUrl.match(/([a-f0-9]{32})/i);
+      if (pageIdMatch) {
+        const pageIdFromUrl = pageIdMatch[1];
+        // Formatear como UUID (agregar guiones)
+        const formattedId = `${pageIdFromUrl.slice(0, 8)}-${pageIdFromUrl.slice(8, 12)}-${pageIdFromUrl.slice(12, 16)}-${pageIdFromUrl.slice(16, 20)}-${pageIdFromUrl.slice(20)}`;
+        
+        console.log(`   🔍 Trying to fetch page by ID: ${formattedId}`);
+        
+        // Intentar obtener la página directamente por ID
+        // Nota: Necesitaríamos un endpoint para obtener página por ID, por ahora usamos búsqueda
+      }
+    }
+    
+    // Buscar página en Notion por nombre
     const searchUrl = `${NOTION_PROXY_URL}?action=searchPages&initiativeName=${encodeURIComponent(initiativeName)}`;
     const searchResponse = await fetch(searchUrl);
     
@@ -89,24 +137,39 @@ async function analyzeNotionPage(initiativeName) {
       const error = await searchResponse.json();
       return {
         initiative: initiativeName,
+        csvNotionUrl: csvNotionUrl,
         found: false,
         error: error.error || searchResponse.statusText
       };
     }
     
     const searchData = await searchResponse.json();
-    const pages = searchData.results || [];
+    pages = searchData.results || [];
     
     if (pages.length === 0) {
       return {
         initiative: initiativeName,
+        csvNotionUrl: csvNotionUrl,
         found: false,
         reason: 'No pages found in Notion'
       };
     }
     
-    // Analizar primera página encontrada
-    const page = pages[0];
+    // Si tenemos URL del CSV, verificar si coincide con alguna página encontrada
+    if (csvNotionUrl && pages.length > 0) {
+      const matchingPage = pages.find(p => csvNotionUrl.includes(p.id.replace(/-/g, '')));
+      if (matchingPage) {
+        console.log(`   ✅ CSV URL matches found page!`);
+        page = matchingPage;
+      } else {
+        console.log(`   ⚠️  CSV URL doesn't match found pages, using first result`);
+        page = pages[0];
+      }
+    } else {
+      // Analizar primera página encontrada
+      page = pages[0];
+    }
+    
     const pageId = page.id;
     
     // Obtener bloques
@@ -170,20 +233,32 @@ async function analyzeNotionPage(initiativeName) {
       blockTypes[block.type] = (blockTypes[block.type] || 0) + 1;
     });
     
+    // Buscar propiedades de tipo URL que puedan contener links
+    const urlProperties = {};
+    Object.entries(properties).forEach(([propName, prop]) => {
+      if (prop.type === 'url' && prop.url) {
+        urlProperties[propName] = prop.url;
+      }
+    });
+    
     return {
       initiative: initiativeName,
+      csvNotionUrl: csvNotionUrl,
       found: true,
       pageId: pageId,
       url: page.url,
       properties: propertyInfo,
+      urlProperties: urlProperties, // Propiedades de tipo URL encontradas
       blockTypes: blockTypes,
       totalBlocks: blocks.length,
-      lastEdited: page.last_edited_time
+      lastEdited: page.last_edited_time,
+      matchesCsvUrl: csvNotionUrl ? page.url.includes(pageId.replace(/-/g, '')) : null
     };
     
   } catch (error) {
     return {
       initiative: initiativeName,
+      csvNotionUrl: csvNotionUrl,
       found: false,
       error: error.message
     };
@@ -204,7 +279,11 @@ async function analyzeAllInitiatives() {
     
     console.log('📋 Initiatives to analyze:');
     initiatives.forEach((init, index) => {
-      console.log(`   ${index + 1}. ${init}`);
+      if (init.notionUrl) {
+        console.log(`   ${index + 1}. ${init.name} [📎 Has Notion URL]`);
+      } else {
+        console.log(`   ${index + 1}. ${init.name}`);
+      }
     });
     console.log('');
     
@@ -225,9 +304,25 @@ async function analyzeAllInitiatives() {
       if (analysis.found) {
         console.log(`   ✅ Found in Notion`);
         console.log(`   URL: ${analysis.url}`);
+        if (analysis.csvNotionUrl) {
+          console.log(`   CSV URL: ${analysis.csvNotionUrl}`);
+          if (analysis.matchesCsvUrl) {
+            console.log(`   ✅ URLs match!`);
+          } else {
+            console.log(`   ⚠️  URLs don't match`);
+          }
+        }
         console.log(`   Blocks: ${analysis.totalBlocks}`);
         console.log(`   Properties: ${Object.keys(analysis.properties).length}`);
         console.log(`   Block Types: ${Object.keys(analysis.blockTypes).join(', ')}`);
+        
+        // Mostrar propiedades de tipo URL
+        if (Object.keys(analysis.urlProperties || {}).length > 0) {
+          console.log(`   URL Properties:`);
+          Object.entries(analysis.urlProperties).forEach(([propName, url]) => {
+            console.log(`     ${propName}: ${url}`);
+          });
+        }
         
         // Mostrar propiedades importantes
         const importantProps = ['Status', 'Completion', 'Progress', 'Estado', 'Completación'];
@@ -239,6 +334,9 @@ async function analyzeAllInitiatives() {
         });
       } else {
         console.log(`   ❌ Not found: ${analysis.reason || analysis.error || 'Unknown error'}`);
+        if (analysis.csvNotionUrl) {
+          console.log(`   📎 CSV has URL but page not found: ${analysis.csvNotionUrl}`);
+        }
       }
       
       // Pequeña pausa para no sobrecargar APIs
