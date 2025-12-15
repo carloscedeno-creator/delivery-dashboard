@@ -137,7 +137,15 @@ async function analyzeNotionPage(initiativeInfo) {
     // No especificamos databaseId para buscar en todas
     const searchUrl = `${NOTION_PROXY_URL}?action=searchPages&initiativeName=${encodeURIComponent(initiativeName)}`;
     console.log(`   🔍 Searching in all accessible databases...`);
-    const searchResponse = await fetch(searchUrl);
+    
+    // Incluir header de autorización si está disponible
+    const headers = {};
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseAnonKey) {
+      headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    }
+    
+    const searchResponse = await fetch(searchUrl, { headers });
     
     if (!searchResponse.ok) {
       const errorText = await searchResponse.text();
@@ -271,12 +279,15 @@ async function analyzeNotionPage(initiativeInfo) {
       found: true,
       pageId: pageId,
       url: page.url,
+      databaseId: page.database_id || null,
+      databaseTitle: page.database_title || null,
       properties: propertyInfo,
       urlProperties: urlProperties, // Propiedades de tipo URL encontradas
       blockTypes: blockTypes,
       totalBlocks: blocks.length,
       lastEdited: page.last_edited_time,
-      matchesCsvUrl: csvNotionUrl ? page.url.includes(pageId.replace(/-/g, '')) : null
+      matchesCsvUrl: csvNotionUrl ? page.url.includes(pageId.replace(/-/g, '')) : null,
+      totalPagesFound: pages.length // Número total de páginas encontradas
     };
     
   } catch (error) {
@@ -327,6 +338,9 @@ async function analyzeAllInitiatives() {
       
       if (analysis.found) {
         console.log(`   ✅ Found in Notion`);
+        if (analysis.databaseTitle) {
+          console.log(`   📊 Database: ${analysis.databaseTitle} (${analysis.databaseId})`);
+        }
         console.log(`   URL: ${analysis.url}`);
         if (analysis.csvNotionUrl) {
           console.log(`   CSV URL: ${analysis.csvNotionUrl}`);
@@ -392,6 +406,20 @@ async function analyzeAllInitiatives() {
       console.log('='.repeat(60));
       
       const foundResults = results.filter(r => r.found);
+      
+      // Análisis por base de datos
+      const databasesUsed = new Map();
+      foundResults.forEach(r => {
+        const dbKey = r.databaseTitle || r.databaseId || 'Unknown';
+        databasesUsed.set(dbKey, (databasesUsed.get(dbKey) || 0) + 1);
+      });
+      
+      if (databasesUsed.size > 0) {
+        console.log(`\n📊 Databases Used (${databasesUsed.size}):`);
+        Array.from(databasesUsed.entries()).forEach(([db, count]) => {
+          console.log(`   ${db}: ${count} initiative(s)`);
+        });
+      }
       
       // Propiedades comunes
       const allProps = new Set();
