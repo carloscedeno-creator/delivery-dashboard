@@ -133,8 +133,10 @@ async function analyzeNotionPage(initiativeInfo) {
       }
     }
     
-    // Buscar página en Notion por nombre
+    // Buscar página en Notion por nombre (en todas las bases de datos)
+    // No especificamos databaseId para buscar en todas
     const searchUrl = `${NOTION_PROXY_URL}?action=searchPages&initiativeName=${encodeURIComponent(initiativeName)}`;
+    console.log(`   🔍 Searching in all accessible databases...`);
     const searchResponse = await fetch(searchUrl);
     
     if (!searchResponse.ok) {

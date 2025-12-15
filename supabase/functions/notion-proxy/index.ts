@@ -4,7 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const NOTION_API_TOKEN = Deno.env.get('NOTION_API_TOKEN')
-const NOTION_DATABASE_ID = Deno.env.get('NOTION_DATABASE_ID')
+const NOTION_DATABASE_ID = Deno.env.get('NOTION_DATABASE_ID') // Base de datos por defecto (opcional)
 
 serve(async (req) => {
   // CORS preflight
@@ -24,9 +24,9 @@ serve(async (req) => {
   const action = url.searchParams.get('action')
 
   // Verificar credenciales
-  if (!NOTION_API_TOKEN || !NOTION_DATABASE_ID) {
+  if (!NOTION_API_TOKEN) {
     return new Response(
-      JSON.stringify({ error: 'Notion credentials not configured' }),
+      JSON.stringify({ error: 'NOTION_API_TOKEN not configured' }),
       {
         status: 500,
         headers: {
@@ -42,8 +42,44 @@ serve(async (req) => {
     let response
 
     switch (action) {
+      case 'listDatabases': {
+        // Buscar todas las bases de datos accesibles usando la API de búsqueda
+        notionUrl = 'https://api.notion.com/v1/search'
+        const searchBody = {
+          filter: {
+            property: 'object',
+            value: 'database'
+          },
+          page_size: 100
+        }
+        response = await fetch(notionUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(searchBody)
+        })
+        break
+      }
+
       case 'getDatabasePages': {
-        notionUrl = `https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`
+        // Permitir databaseId como parámetro o usar el default
+        const databaseId = url.searchParams.get('databaseId') || NOTION_DATABASE_ID
+        if (!databaseId) {
+          return new Response(
+            JSON.stringify({ error: 'Missing databaseId parameter or NOTION_DATABASE_ID secret' }),
+            {
+              status: 400,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              }
+            }
+          )
+        }
+        notionUrl = `https://api.notion.com/v1/databases/${databaseId}/query`
         const filter = req.method === 'POST' ? await req.json().catch(() => null) : null
         response = await fetch(notionUrl, {
           method: 'POST',
@@ -59,6 +95,8 @@ serve(async (req) => {
 
       case 'searchPages': {
         const initiativeName = url.searchParams.get('initiativeName')
+        const databaseId = url.searchParams.get('databaseId') || NOTION_DATABASE_ID
+        
         if (!initiativeName) {
           return new Response(
             JSON.stringify({ error: 'Missing initiativeName parameter' }),
@@ -72,7 +110,87 @@ serve(async (req) => {
           )
         }
 
-        notionUrl = `https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`
+        // Si no hay databaseId específico, buscar en todas las bases de datos
+        if (!databaseId) {
+          // Buscar en todas las bases de datos accesibles
+          const searchUrl = 'https://api.notion.com/v1/search'
+          const searchBody = {
+            filter: {
+              property: 'object',
+              value: 'database'
+            },
+            page_size: 100
+          }
+          
+          const databasesResponse = await fetch(searchUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+              'Notion-Version': '2022-06-28',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(searchBody)
+          })
+
+          if (!databasesResponse.ok) {
+            throw new Error(`Failed to list databases: ${databasesResponse.statusText}`)
+          }
+
+          const databasesData = await databasesResponse.json()
+          const databases = databasesData.results || []
+
+          // Buscar en todas las bases de datos
+          const allResults = []
+          for (const db of databases) {
+            try {
+              const dbId = db.id
+              notionUrl = `https://api.notion.com/v1/databases/${dbId}/query`
+              
+              // Intentar buscar con propiedad "Initiative" (title)
+              const searchFilter = {
+                property: 'Initiative',
+                title: {
+                  contains: initiativeName
+                }
+              }
+              
+              const dbResponse = await fetch(notionUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                  'Notion-Version': '2022-06-28',
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ filter: searchFilter })
+              })
+
+              if (dbResponse.ok) {
+                const dbData = await dbResponse.json()
+                if (dbData.results && dbData.results.length > 0) {
+                  allResults.push(...dbData.results)
+                }
+              }
+            } catch (e) {
+              // Continuar con la siguiente base de datos si hay error
+              console.error(`Error searching in database ${db.id}:`, e)
+            }
+          }
+
+          return new Response(
+            JSON.stringify({ results: allResults }),
+            {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=300'
+              }
+            }
+          )
+        }
+
+        // Buscar en una base de datos específica
+        notionUrl = `https://api.notion.com/v1/databases/${databaseId}/query`
         // Buscar páginas que contengan el nombre de la iniciativa
         // Ajustar la propiedad según tu base de datos
         const searchFilter = {
@@ -154,7 +272,7 @@ serve(async (req) => {
 
       default:
         return new Response(
-          JSON.stringify({ error: 'Invalid action. Supported: getDatabasePages, searchPages, getPageBlocks' }),
+          JSON.stringify({ error: 'Invalid action. Supported: listDatabases, getDatabasePages, searchPages, getPageBlocks' }),
           {
             status: 400,
             headers: {

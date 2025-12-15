@@ -20,7 +20,14 @@ async function searchInitiative(initiativeName) {
     console.log(`🔍 Searching for: "${initiativeName}"`);
     console.log('='.repeat(60));
 
-    const url = `${NOTION_PROXY_URL}?action=searchPages&initiativeName=${encodeURIComponent(initiativeName)}`;
+    let url = `${NOTION_PROXY_URL}?action=searchPages&initiativeName=${encodeURIComponent(initiativeName)}`;
+    if (databaseId) {
+      url += `&databaseId=${encodeURIComponent(databaseId)}`;
+      console.log(`   🔍 Searching in specific database: ${databaseId}`);
+    } else {
+      console.log(`   🔍 Searching in ALL accessible databases...`);
+    }
+    
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -112,8 +119,12 @@ async function searchInitiative(initiativeName) {
   }
 }
 
-// Obtener nombre de iniciativa de argumentos o usar ejemplo
+// Obtener nombre de iniciativa y databaseId de argumentos
 const initiativeName = process.argv[2] || 'Strata Public API';
+const databaseIdIndex = process.argv.findIndex(arg => arg === '--database-id' || arg === '-d');
+const databaseId = databaseIdIndex >= 0 && process.argv[databaseIdIndex + 1] 
+  ? process.argv[databaseIdIndex + 1] 
+  : null;
 
 // Ejecutar
 searchInitiative(initiativeName)
