@@ -28,7 +28,14 @@ async function searchInitiative(initiativeName) {
       console.log(`   🔍 Searching in ALL accessible databases...`);
     }
     
-    const response = await fetch(url);
+    // Incluir header de autorización si está disponible
+    const headers = {};
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseAnonKey) {
+      headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    }
+    
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       const error = await response.json();

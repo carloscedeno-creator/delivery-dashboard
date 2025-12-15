@@ -22,11 +22,19 @@ async function inspectDatabase() {
 
     // Obtener todas las páginas (sin filtro)
     const url = `${NOTION_PROXY_URL}?action=getDatabasePages`;
+    
+    // Incluir header de autorización si está disponible
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseAnonKey) {
+      headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    }
+    
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: headers,
       body: JSON.stringify({})
     });
 

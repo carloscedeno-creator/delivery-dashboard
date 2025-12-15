@@ -11,6 +11,18 @@ async function testWorker() {
   console.log('🧪 Testing Notion Worker');
   console.log('='.repeat(60));
   
+  // Incluir header de autorización si está disponible
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (supabaseAnonKey) {
+    headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    console.log('   Using Supabase anon key for authentication');
+  } else {
+    console.log('   ⚠️  No VITE_SUPABASE_ANON_KEY found - may fail');
+  }
+  
   // Test 1: getDatabasePages
   console.log('\n1️⃣ Testing getDatabasePages...');
   try {
@@ -18,9 +30,7 @@ async function testWorker() {
     console.log(`   URL: ${url1}`);
     const response1 = await fetch(url1, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: headers,
       body: JSON.stringify({})
     });
     
@@ -47,7 +57,9 @@ async function testWorker() {
   try {
     const url2 = `${NOTION_PROXY_URL}?action=searchPages&initiativeName=Strata`;
     console.log(`   URL: ${url2}`);
-    const response2 = await fetch(url2);
+    const response2 = await fetch(url2, {
+      headers: headers
+    });
     
     const text2 = await response2.text();
     console.log(`   Status: ${response2.status}`);

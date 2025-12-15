@@ -204,8 +204,19 @@ export const extractStructuredContent = async (pageId) => {
  */
 export const searchPagesByInitiative = async (initiativeName) => {
   try {
-    const proxyUrl = `${NOTION_CONFIG.proxyUrl}?action=searchPages&databaseId=${NOTION_CONFIG.databaseId}&initiativeName=${encodeURIComponent(initiativeName)}`;
-    const response = await fetch(proxyUrl);
+    // No especificar databaseId para buscar en todas las bases de datos
+    const proxyUrl = `${NOTION_CONFIG.proxyUrl}?action=searchPages&initiativeName=${encodeURIComponent(initiativeName)}`;
+    
+    // Incluir header de autorización si está disponible
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseAnonKey) {
+      headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    }
+    
+    const response = await fetch(proxyUrl, { headers });
 
     if (!response.ok) {
       throw new Error(`Notion API error: ${response.statusText}`);
@@ -228,14 +239,15 @@ export const extractPageProperties = (page) => {
   if (!page || !page.properties) return {};
 
   const properties = {};
-  const configProps = NOTION_CONFIG.properties;
-
-  Object.keys(configProps).forEach(key => {
-    const propName = configProps[key];
-    const prop = page.properties[propName];
+  
+  // Extraer TODAS las propiedades disponibles (no solo las configuradas)
+  Object.entries(page.properties).forEach(([propName, prop]) => {
+    properties[propName] = extractPropertyValue(prop);
     
-    if (prop) {
-      properties[key] = extractPropertyValue(prop);
+    // También agregar con nombre normalizado (sin espacios, lowercase)
+    const normalizedName = propName.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedName !== propName.toLowerCase()) {
+      properties[normalizedName] = extractPropertyValue(prop);
     }
   });
 

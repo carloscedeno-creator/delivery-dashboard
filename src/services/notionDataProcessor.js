@@ -55,11 +55,42 @@ export const extractTasks = (structuredContent) => {
 };
 
 /**
- * Extrae story points del texto
+ * Extrae story points del texto o propiedades
  * @param {string} text - Texto a analizar
+ * @param {Object} properties - Propiedades de Notion
  * @returns {Object} Story points completados y totales
  */
-export const extractStoryPoints = (text) => {
+export const extractStoryPoints = (text, properties = {}) => {
+  // Primero intentar desde propiedades de Notion (diferentes nombres posibles)
+  const storyPointsProperty = properties['Story Points'] || 
+                              properties['Story point estimate'] ||
+                              properties['story_points'] ||
+                              properties.storyPoints ||
+                              null;
+  
+  if (storyPointsProperty !== null && storyPointsProperty !== undefined) {
+    let points = 0;
+    
+    if (typeof storyPointsProperty === 'number') {
+      points = storyPointsProperty;
+    } else if (typeof storyPointsProperty === 'string') {
+      points = parseInt(storyPointsProperty) || 0;
+    } else if (typeof storyPointsProperty === 'object' && storyPointsProperty.value) {
+      points = parseInt(storyPointsProperty.value) || 0;
+    }
+    
+    if (points > 0) {
+      // Calcular completados basado en completion percentage
+      const completion = extractCompletionPercentage(text) || 
+                        (properties.completion || properties.Completion || 0);
+      
+      return {
+        done: Math.round((points * completion) / 100),
+        total: points
+      };
+    }
+  }
+  
   if (!text) return { done: 0, total: 0 };
 
   // Buscar patrones de story points
@@ -118,17 +149,43 @@ export const extractStoryPoints = (text) => {
  * @returns {string} Estado detectado
  */
 export const detectStatus = (text, properties = {}) => {
-  // Primero verificar propiedades
-  if (properties.status) {
+  // Primero verificar propiedades de Notion (diferentes nombres posibles)
+  const statusProperty = properties.Status || 
+                         properties.status || 
+                         properties.Estado || 
+                         properties.estado ||
+                         properties['Task name']?.status ||
+                         null;
+  
+  if (statusProperty) {
+    const statusValue = typeof statusProperty === 'object' 
+      ? statusProperty.name || statusProperty.value || statusProperty
+      : statusProperty;
+    
     const statusMap = {
       'Not Started': 'planned',
       'In Progress': 'in_progress',
       'Done': 'done',
       'Blocked': 'blocked',
       'On Hold': 'blocked',
-      'Review': 'in_progress'
+      'Review': 'in_progress',
+      'To Do': 'planned',
+      'In Review': 'in_progress',
+      'Completed': 'done',
+      'Cancelled': 'cancelled'
     };
-    return statusMap[properties.status] || properties.status.toLowerCase();
+    
+    const normalizedStatus = statusValue?.toString().trim();
+    if (statusMap[normalizedStatus]) {
+      return statusMap[normalizedStatus];
+    }
+    
+    // Si es un objeto con name
+    if (typeof statusProperty === 'object' && statusProperty.name) {
+      return statusMap[statusProperty.name] || statusProperty.name.toLowerCase().replace(/\s+/g, '_');
+    }
+    
+    return normalizedStatus?.toLowerCase().replace(/\s+/g, '_') || 'planned';
   }
 
   // Buscar en el texto
@@ -345,13 +402,20 @@ export const processExtractedData = (extractedData, knownInitiatives = []) => {
     .reduce((acc, curr) => ({ ...acc, ...curr }), {});
 
   // Extraer métricas
-  const completion = extractCompletionPercentage(allContent) || 
-                     allProperties.completion || 
-                     null;
+  // Intentar obtener completion desde propiedades primero
+  let completion = null;
+  if (allProperties.completion || allProperties.Completion) {
+    completion = allProperties.completion || allProperties.Completion;
+  } else if (allProperties['Completion %'] || allProperties['Progress']) {
+    completion = allProperties['Completion %'] || allProperties['Progress'];
+  } else {
+    completion = extractCompletionPercentage(allContent);
+  }
 
   const tasks = extractTasks(allStructured);
   
-  const storyPoints = extractStoryPoints(allContent);
+  // Extraer story points (con propiedades)
+  const storyPoints = extractStoryPoints(allContent, allProperties);
 
   const status = detectStatus(allContent, allProperties);
 

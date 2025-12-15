@@ -18,11 +18,19 @@ async function listDatabases() {
     console.log('');
 
     const url = `${NOTION_PROXY_URL}?action=listDatabases`;
+    
+    // Incluir header de autorización si está disponible
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseAnonKey) {
+      headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+    }
+    
     const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: headers
     });
 
     if (!response.ok) {

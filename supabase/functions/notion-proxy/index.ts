@@ -1,6 +1,6 @@
 // Supabase Edge Function para proxy de Notion API
 // Mantiene las credenciales seguras en el backend
-// Soporta múltiples bases de datos
+// Soporta múltiples bases de datos y búsqueda global mejorada
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
@@ -115,7 +115,58 @@ serve(async (req) => {
         const databaseId = url.searchParams.get('databaseId') || NOTION_DATABASE_ID
         
         if (!databaseId) {
-          // Buscar en todas las bases de datos accesibles
+          // PRIMERO: Buscar páginas directamente por título usando la API de búsqueda global
+          const globalSearchUrl = 'https://api.notion.com/v1/search'
+          const globalSearchBody = {
+            query: initiativeName,
+            filter: {
+              value: 'page',
+              property: 'object'
+            },
+            page_size: 100
+          }
+          
+          const globalSearchResponse = await fetch(globalSearchUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+              'Notion-Version': '2022-06-28',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(globalSearchBody)
+          })
+
+          const allResults = []
+          
+          if (globalSearchResponse.ok) {
+            const globalData = await globalSearchResponse.json()
+            const globalPages = globalData.results || []
+            
+            // Filtrar páginas que coincidan con el nombre de la iniciativa
+            const matchingPages = globalPages.filter(page => {
+              const pageTitle = page.properties?.Name?.title?.[0]?.plain_text ||
+                               page.properties?.Title?.title?.[0]?.plain_text ||
+                               page.properties?.Initiative?.title?.[0]?.plain_text ||
+                               page.properties?.Nombre?.title?.[0]?.plain_text ||
+                               ''
+              return pageTitle.toLowerCase().includes(initiativeName.toLowerCase()) ||
+                     initiativeName.toLowerCase().includes(pageTitle.toLowerCase())
+            })
+            
+            // Agregar información de base de datos si está disponible
+            matchingPages.forEach(page => {
+              if (page.parent?.database_id) {
+                allResults.push({
+                  ...page,
+                  database_id: page.parent.database_id
+                })
+              } else {
+                allResults.push(page)
+              }
+            })
+          }
+
+          // SEGUNDO: Buscar en todas las bases de datos por propiedades
           const searchUrl = 'https://api.notion.com/v1/search'
           const searchBody = {
             filter: {
@@ -135,63 +186,65 @@ serve(async (req) => {
             body: JSON.stringify(searchBody)
           })
 
-          if (!databasesResponse.ok) {
-            throw new Error(`Failed to list databases: ${databasesResponse.statusText}`)
-          }
+          if (databasesResponse.ok) {
+            const databasesData = await databasesResponse.json()
+            const databases = databasesData.results || []
 
-          const databasesData = await databasesResponse.json()
-          const databases = databasesData.results || []
-
-          // Buscar en todas las bases de datos
-          const allResults = []
-          for (const db of databases) {
-            try {
-              const dbId = db.id
-              notionUrl = `https://api.notion.com/v1/databases/${dbId}/query`
-              
-              // Intentar diferentes propiedades comunes para buscar
-              const possibleProperties = ['Initiative', 'Name', 'Title', 'Nombre', 'Iniciativa']
-              
-              for (const propName of possibleProperties) {
-                try {
-                  const searchFilter = {
-                    property: propName,
-                    title: {
-                      contains: initiativeName
+            // Buscar en todas las bases de datos
+            for (const db of databases) {
+              try {
+                const dbId = db.id
+                notionUrl = `https://api.notion.com/v1/databases/${dbId}/query`
+                
+                // Intentar diferentes propiedades comunes para buscar
+                const possibleProperties = ['Initiative', 'Name', 'Title', 'Nombre', 'Iniciativa']
+                
+                for (const propName of possibleProperties) {
+                  try {
+                    const searchFilter = {
+                      property: propName,
+                      title: {
+                        contains: initiativeName
+                      }
                     }
-                  }
-                  
-                  const dbResponse = await fetch(notionUrl, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${NOTION_API_TOKEN}`,
-                      'Notion-Version': '2022-06-28',
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ filter: searchFilter })
-                  })
+                    
+                    const dbResponse = await fetch(notionUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                        'Notion-Version': '2022-06-28',
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ filter: searchFilter })
+                    })
 
-                  if (dbResponse.ok) {
-                    const dbData = await dbResponse.json()
-                    if (dbData.results && dbData.results.length > 0) {
-                      // Agregar información de la base de datos a cada resultado
-                      const resultsWithDb = dbData.results.map(page => ({
-                        ...page,
-                        database_id: dbId,
-                        database_title: db.title?.[0]?.plain_text || 'Unknown'
-                      }))
-                      allResults.push(...resultsWithDb)
-                      break // Si encontramos resultados, no probar otras propiedades
+                    if (dbResponse.ok) {
+                      const dbData = await dbResponse.json()
+                      if (dbData.results && dbData.results.length > 0) {
+                        // Agregar información de la base de datos a cada resultado
+                        const resultsWithDb = dbData.results.map(page => {
+                          // Evitar duplicados
+                          const existing = allResults.find(r => r.id === page.id)
+                          if (existing) return null
+                          return {
+                            ...page,
+                            database_id: dbId,
+                            database_title: db.title?.[0]?.plain_text || 'Unknown'
+                          }
+                        }).filter(Boolean)
+                        allResults.push(...resultsWithDb)
+                        break // Si encontramos resultados, no probar otras propiedades
+                      }
                     }
+                  } catch (e) {
+                    // Continuar con la siguiente propiedad si esta falla
+                    continue
                   }
-                } catch (e) {
-                  // Continuar con la siguiente propiedad si esta falla
-                  continue
                 }
+              } catch (e) {
+                // Continuar con la siguiente base de datos si hay error
+                console.error(`Error searching in database ${db.id}:`, e)
               }
-            } catch (e) {
-              // Continuar con la siguiente base de datos si hay error
-              console.error(`Error searching in database ${db.id}:`, e)
             }
           }
 
