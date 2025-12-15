@@ -24,9 +24,12 @@ export const NOTION_CONFIG = {
     // Ejemplo: https://www.notion.so/workspace/DATABASE_ID?v=...
     databaseId: process.env.VITE_NOTION_DATABASE_ID || '',
     
-    // Configuración del proxy backend (Cloudflare Worker)
+    // Configuración del proxy backend (Supabase Edge Function)
     // El proxy manejará la autenticación de forma segura
-    proxyUrl: process.env.VITE_NOTION_PROXY_URL || 'https://sheets-proxy.carlos-cedeno.workers.dev/notion',
+    // Si VITE_SUPABASE_URL está configurado, usa la Edge Function
+    // Si no, usa la URL personalizada de VITE_NOTION_PROXY_URL
+    proxyUrl: process.env.VITE_NOTION_PROXY_URL || 
+             (process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL}/functions/v1/notion-proxy` : ''),
     
     // Cache time en segundos (5 minutos por defecto)
     cacheTime: 300,
