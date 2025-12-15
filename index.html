@@ -1831,16 +1831,19 @@
                         // Search in Product data (if no type specified or type includes product)
                         if (!mappingType || mappingType.includes('product') || mappingType === 'both') {
                             const productMatch = productInitiatives.find(initiative => {
-                                const productInitiative = normalizeInitiativeName(initiative.initiative);
-                                const searchName = normalizeInitiativeName(initiativeName);
-                                return productInitiative === searchName ||
-                                       productInitiative.includes(searchName) ||
-                                       searchName.includes(productInitiative);
+                                const matches = fuzzyMatch(initiative.initiative, initiativeName);
+                                if (matches) {
+                                    console.log(`[STRATA] ✅ Matched "${initiativeName}" with Product: "${initiative.initiative}"`);
+                                }
+                                return matches;
                             });
                             if (productMatch && !productInitiativesList.find(i => normalizeInitiativeName(i.initiative) === normalizeInitiativeName(productMatch.initiative))) {
                                 // Add docLink from mapping to the product match
                                 const enrichedMatch = { ...productMatch, docLink: docLink };
                                 productInitiativesList.push(enrichedMatch);
+                                console.log(`[STRATA] ✅ Added to product initiatives: "${enrichedMatch.initiative}"`);
+                            } else if (!productMatch) {
+                                console.log(`[STRATA] ❌ No match found for "${initiativeName}" in Product initiatives`);
                             }
                         }
                     });
