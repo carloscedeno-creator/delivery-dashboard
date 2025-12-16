@@ -1,24 +1,20 @@
 /**
- * Servicio de sincronización automática Notion → Supabase
- * Se ejecuta cada 30 minutos (igual que Jira)
+ * Servicio de sincronización automática de Notion → Supabase
+ * Se ejecuta cada 30 minutos usando node-cron
+ * Similar al patrón de sincronización de Jira
  */
 
-import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { syncAllInitiatives } from './sync-notion-all-initiatives.js';
-
-dotenv.config();
-
-// Configuración
-const SYNC_INTERVAL_MINUTES = parseInt(process.env.NOTION_SYNC_INTERVAL_MINUTES || '30');
-const RUN_ON_START = process.env.NOTION_SYNC_RUN_ON_START !== 'false'; // Por defecto ejecutar al iniciar
+import { syncAllInitiatives } from './sync-notion-initiatives.js';
 
 let isRunning = false;
 let lastSyncTime = null;
 let syncCount = 0;
 
-// Función wrapper para ejecutar sync
-async function runSync() {
+/**
+ * Función principal de sincronización
+ */
+async function performSync() {
   if (isRunning) {
     console.log('⏸️  Sync already running, skipping...');
     return;
@@ -28,72 +24,97 @@ async function runSync() {
   syncCount++;
   const syncStartTime = Date.now();
 
+  console.log('\n' + '='.repeat(60));
+  console.log(`🔄 Starting automatic sync #${syncCount}`);
+  console.log('='.repeat(60));
+
   try {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🔄 [Sync #${syncCount}] Starting Notion synchronization`);
-    console.log(`⏰ Time: ${new Date().toISOString()}`);
-    console.log('='.repeat(60));
-
-    // Importar y ejecutar la función de sincronización
-    const { syncAllInitiatives } = await import('./sync-notion-all-initiatives.js');
-    
-    // Ejecutar sincronización
     await syncAllInitiatives();
-
-    const duration = ((Date.now() - syncStartTime) / 1000).toFixed(1);
+    
     lastSyncTime = new Date();
-
-    console.log(`\n✅ Sync #${syncCount} completed in ${duration}s`);
-    console.log(`📅 Next sync in ${SYNC_INTERVAL_MINUTES} minutes\n`);
-
+    const duration = ((Date.now() - syncStartTime) / 1000).toFixed(1);
+    
+    console.log('\n✅ Sync completed successfully');
+    console.log(`⏱️  Duration: ${duration}s`);
+    console.log(`🕐 Completed at: ${lastSyncTime.toISOString()}`);
+    
   } catch (error) {
-    console.error(`\n❌ Error in sync #${syncCount}:`, error);
+    console.error('\n❌ Sync failed:', error.message);
     console.error('Stack:', error.stack);
   } finally {
     isRunning = false;
+    console.log('='.repeat(60) + '\n');
   }
 }
 
-// Configurar cron job
-const cronExpression = `*/${SYNC_INTERVAL_MINUTES} * * * *`;
-console.log('🚀 Starting Notion Sync Service');
-console.log(`📅 Cron schedule: ${cronExpression} (every ${SYNC_INTERVAL_MINUTES} minutes)`);
-console.log(`🔄 Run on start: ${RUN_ON_START ? 'Yes' : 'No'}`);
-
-// Ejecutar al iniciar si está configurado
-if (RUN_ON_START) {
-  console.log('\n🆕 Running initial sync...');
-  runSync().catch(error => {
-    console.error('❌ Error in initial sync:', error);
-  });
+/**
+ * Función wrapper para ejecutar sync
+ */
+async function runSync() {
+  try {
+    await performSync();
+  } catch (error) {
+    console.error('Fatal error in sync:', error);
+  }
 }
 
-// Programar ejecuciones periódicas
+// Configurar cron job: cada 30 minutos
+// Formato: minuto hora día mes día-semana
+const cronExpression = '*/30 * * * *'; // Cada 30 minutos
+
+console.log('🚀 Notion Sync Service Starting...');
+console.log(`📅 Schedule: Every 30 minutes (${cronExpression})`);
+console.log('⏰ Initial sync will run in 5 seconds...\n');
+
+// Ejecutar sincronización inicial después de 5 segundos
+setTimeout(() => {
+  runSync();
+}, 5000);
+
+// Programar sincronización automática cada 30 minutos
 cron.schedule(cronExpression, () => {
-  runSync().catch(error => {
-    console.error('❌ Error in scheduled sync:', error);
-  });
+  runSync();
 });
 
-// Manejar señales de terminación
+// Manejar cierre graceful
 process.on('SIGINT', () => {
   console.log('\n\n🛑 Received SIGINT, shutting down gracefully...');
-  console.log(`📊 Total syncs performed: ${syncCount}`);
-  if (lastSyncTime) {
-    console.log(`📅 Last sync: ${lastSyncTime.toISOString()}`);
+  if (isRunning) {
+    console.log('⏳ Waiting for current sync to complete...');
+    // Esperar hasta 60 segundos para que termine la sincronización
+    setTimeout(() => {
+      console.log('✅ Shutdown complete');
+      process.exit(0);
+    }, 60000);
+  } else {
+    console.log('✅ Shutdown complete');
+    process.exit(0);
   }
-  process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n\n🛑 Received SIGTERM, shutting down gracefully...');
-  console.log(`📊 Total syncs performed: ${syncCount}`);
-  if (lastSyncTime) {
-    console.log(`📅 Last sync: ${lastSyncTime.toISOString()}`);
+  if (isRunning) {
+    console.log('⏳ Waiting for current sync to complete...');
+    setTimeout(() => {
+      console.log('✅ Shutdown complete');
+      process.exit(0);
+    }, 60000);
+  } else {
+    console.log('✅ Shutdown complete');
+    process.exit(0);
   }
-  process.exit(0);
 });
 
-// Mantener el proceso vivo
-console.log('\n✅ Notion Sync Service is running...');
-console.log('💡 Press Ctrl+C to stop\n');
+// Mostrar estado cada hora
+setInterval(() => {
+  if (lastSyncTime) {
+    const timeSinceLastSync = Math.floor((Date.now() - lastSyncTime.getTime()) / 1000 / 60);
+    console.log(`\n📊 Service Status:`);
+    console.log(`   - Total syncs: ${syncCount}`);
+    console.log(`   - Last sync: ${lastSyncTime.toISOString()} (${timeSinceLastSync} minutes ago)`);
+    console.log(`   - Currently running: ${isRunning ? 'Yes' : 'No'}\n`);
+  }
+}, 3600000); // Cada hora
+
+console.log('✅ Service started. Press Ctrl+C to stop.\n');

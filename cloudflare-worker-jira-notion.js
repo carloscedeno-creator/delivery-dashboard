@@ -175,10 +175,10 @@ async function handleJiraRequest(request, url) {
 async function handleNotionRequest(request, url) {
     // Obtener credenciales de las variables de entorno del Worker
     const NOTION_API_TOKEN = NOTION_API_TOKEN_ENV || ''
-    const NOTION_DATABASE_ID = NOTION_DATABASE_ID_ENV || ''
+    const NOTION_DATABASE_ID = NOTION_DATABASE_ID_ENV || '' // Opcional - si no está, busca en todas
 
-    if (!NOTION_API_TOKEN || !NOTION_DATABASE_ID) {
-        return new Response(JSON.stringify({ error: 'Notion credentials not configured' }), {
+    if (!NOTION_API_TOKEN) {
+        return new Response(JSON.stringify({ error: 'NOTION_API_TOKEN not configured' }), {
             status: 500,
             headers: {
                 'Content-Type': 'application/json',
@@ -195,7 +195,17 @@ async function handleNotionRequest(request, url) {
 
         switch (action) {
             case 'getDatabasePages':
-                notionUrl = `https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`
+                const databaseId = url.searchParams.get('databaseId') || NOTION_DATABASE_ID
+                if (!databaseId) {
+                    return new Response(JSON.stringify({ error: 'Missing databaseId parameter or NOTION_DATABASE_ID secret' }), {
+                        status: 400,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    })
+                }
+                notionUrl = `https://api.notion.com/v1/databases/${databaseId}/query`
                 const filter = request.method === 'POST' ? await request.json() : null
                 response = await fetch(notionUrl, {
                     method: 'POST',
@@ -210,23 +220,100 @@ async function handleNotionRequest(request, url) {
 
             case 'searchPages':
                 const initiativeName = url.searchParams.get('initiativeName')
+                if (!initiativeName) {
+                    return new Response(JSON.stringify({ error: 'Missing initiativeName parameter' }), {
+                        status: 400,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        }
+                    })
+                }
+
+                // Si no hay databaseId, buscar en todas las bases de datos usando búsqueda global
+                if (!NOTION_DATABASE_ID) {
+                    // PRIMERO: Búsqueda global de Notion
+                    const globalSearchUrl = 'https://api.notion.com/v1/search'
+                    const globalSearchBody = {
+                        query: initiativeName,
+                        filter: {
+                            value: 'page',
+                            property: 'object'
+                        },
+                        page_size: 100
+                    }
+                    
+                    const globalResponse = await fetch(globalSearchUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                            'Notion-Version': '2022-06-28',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(globalSearchBody)
+                    })
+
+                    if (!globalResponse.ok) {
+                        throw new Error(`Notion API error: ${globalResponse.statusText}`)
+                    }
+
+                    const globalData = await globalResponse.json()
+                    const globalPages = globalData.results || []
+                    
+                    // Filtrar páginas que coincidan con el nombre de la iniciativa
+                    const matchingPages = globalPages.filter(page => {
+                        const pageTitle = page.properties?.Name?.title?.[0]?.plain_text ||
+                                         page.properties?.Title?.title?.[0]?.plain_text ||
+                                         page.properties?.Initiative?.title?.[0]?.plain_text ||
+                                         page.properties?.Nombre?.title?.[0]?.plain_text ||
+                                         ''
+                        return pageTitle.toLowerCase().includes(initiativeName.toLowerCase()) ||
+                               initiativeName.toLowerCase().includes(pageTitle.toLowerCase())
+                    })
+                    
+                    return new Response(JSON.stringify({ results: matchingPages }), {
+                        status: 200,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*',
+                            'Cache-Control': 'public, max-age=300'
+                        }
+                    })
+                }
+
+                // Si hay databaseId, buscar en esa base de datos específica
                 notionUrl = `https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`
-                // Buscar páginas que contengan el nombre de la iniciativa
-                const searchFilter = {
-                    property: 'Initiative', // Ajustar según tu base de datos
-                    title: {
-                        contains: initiativeName
+                // Intentar diferentes propiedades comunes
+                const possibleProperties = ['Initiative', 'Name', 'Title', 'Nombre', 'Iniciativa']
+                
+                for (const propName of possibleProperties) {
+                    try {
+                        const searchFilter = {
+                            property: propName,
+                            title: {
+                                contains: initiativeName
+                            }
+                        }
+                        response = await fetch(notionUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${NOTION_API_TOKEN}`,
+                                'Notion-Version': '2022-06-28',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ filter: searchFilter })
+                        })
+                        
+                        if (response.ok) {
+                            const data = await response.json()
+                            if (data.results && data.results.length > 0) {
+                                break // Si encontramos resultados, usar esta propiedad
+                            }
+                        }
+                    } catch (e) {
+                        continue
                     }
                 }
-                response = await fetch(notionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${NOTION_API_TOKEN}`,
-                        'Notion-Version': '2022-06-28',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ filter: searchFilter })
-                })
                 break
 
             case 'getPageBlocks':
@@ -240,7 +327,8 @@ async function handleNotionRequest(request, url) {
                         }
                     })
                 }
-                // Obtener bloques de la página (con paginación)
+
+                // Obtener bloques con paginación
                 const allBlocks = []
                 let startCursor = null
                 let hasMore = true
@@ -270,7 +358,6 @@ async function handleNotionRequest(request, url) {
                     startCursor = blockData.next_cursor || null
                 }
 
-                // Retornar todos los bloques
                 return new Response(JSON.stringify({ results: allBlocks }), {
                     status: 200,
                     headers: {
@@ -281,7 +368,7 @@ async function handleNotionRequest(request, url) {
                 })
 
             default:
-                return new Response(JSON.stringify({ error: 'Invalid action' }), {
+                return new Response(JSON.stringify({ error: 'Invalid action. Supported: getDatabasePages, searchPages, getPageBlocks' }), {
                     status: 400,
                     headers: {
                         'Content-Type': 'application/json',
@@ -291,7 +378,8 @@ async function handleNotionRequest(request, url) {
         }
 
         if (!response.ok) {
-            throw new Error(`Notion API error: ${response.statusText}`)
+            const errorText = await response.text()
+            throw new Error(`Notion API error: ${response.statusText} - ${errorText}`)
         }
 
         const data = await response.json()

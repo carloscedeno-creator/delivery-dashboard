@@ -26,6 +26,11 @@ export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+// Asignar a window para compatibilidad con componentes que usan window.supabaseClient
+if (typeof window !== 'undefined') {
+  window.supabaseClient = supabase;
+}
+
 // Log para debugging (solo en desarrollo)
 if (import.meta.env.DEV) {
   if (supabase) {

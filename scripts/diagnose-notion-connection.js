@@ -5,9 +5,14 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+// Para Edge Functions, usar anon key está bien (solo lectura)
+// Para scripts de sincronización, usar service_role key (lectura + escritura)
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const NOTION_PROXY_URL = process.env.VITE_NOTION_PROXY_URL || 
-  (process.env.VITE_SUPABASE_URL 
-    ? `${process.env.VITE_SUPABASE_URL}/functions/v1/notion-proxy`
+  (SUPABASE_URL 
+    ? `${SUPABASE_URL}/functions/v1/notion-proxy`
     : 'https://sywkskwkexwwdzrbwinp.supabase.co/functions/v1/notion-proxy');
 
 async function diagnose() {
@@ -18,13 +23,32 @@ async function diagnose() {
   // Test 1: Verificar que la Edge Function responde
   console.log('1️⃣ Testing Edge Function availability...');
   try {
-    const testUrl = `${NOTION_PROXY_URL}?action=listDatabases`;
-    const testResponse = await fetch(testUrl, {
+    // Probar primero con POST y body JSON
+    let testResponse = await fetch(NOTION_PROXY_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      },
+      body: JSON.stringify({
+        action: 'searchPages',
+        initiativeName: 'Test'
+      })
     });
+    
+    // Si falla, probar con GET y query params
+    if (!testResponse.ok) {
+      const url = new URL(NOTION_PROXY_URL);
+      url.searchParams.set('action', 'searchPages');
+      url.searchParams.set('initiativeName', 'Test');
+      
+      testResponse = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      });
+    }
 
     const testText = await testResponse.text();
     console.log(`   Status: ${testResponse.status}`);
@@ -59,7 +83,11 @@ async function diagnose() {
     if (testResponse.ok) {
       try {
         const data = JSON.parse(testText);
-        console.log(`   ✅ Success! Found ${data.results?.length || 0} databases`);
+        console.log(`   ✅ Success! Edge Function is working`);
+        console.log(`   Found ${data.results?.length || 0} pages for "Test"`);
+        if (data.results && data.results.length > 0) {
+          console.log(`   Sample page: ${data.results[0].properties?.Name?.title?.[0]?.plain_text || 'Unknown'}`);
+        }
         return;
       } catch (e) {
         console.log(`   ⚠️  Response is not valid JSON`);

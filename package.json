@@ -10,7 +10,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist",
-    "sync:notion": "node scripts/sync-notion-all-initiatives.js",
+    "sync:notion": "node scripts/sync-notion-initiatives.js",
     "sync:notion:service": "node scripts/notion-sync-service.js"
   },
   "dependencies": {

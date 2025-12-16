@@ -1,175 +1,148 @@
-# 🚀 Guía de Despliegue: Notion Edge Function
+# 🚀 Desplegar Supabase Edge Function para Notion
 
 ## 📋 Prerequisitos
 
-1. **Supabase CLI instalado:**
-   ```bash
-   npm install -g supabase
-   ```
+1. Supabase CLI instalado
+2. Autenticado en Supabase
+3. Proyecto vinculado
 
-2. **Autenticado en Supabase:**
-   ```bash
-   supabase login
-   ```
+## 🔧 Pasos para Desplegar
 
-3. **Linkeado a tu proyecto:**
-   ```bash
-   supabase link --project-ref tu-project-ref
-   ```
-   (El project-ref se encuentra en la URL de tu proyecto: `https://supabase.com/dashboard/project/[project-ref]`)
-
-## 🔧 Pasos de Despliegue
-
-### 1. Verificar Estructura
-
-Asegúrate de que existe la carpeta:
-```
-supabase/functions/notion-proxy/index.ts
-```
-
-### 2. Configurar Secrets en Supabase
-
-**Opción A: Desde Dashboard (Recomendado)**
-
-1. Ir a: https://supabase.com/dashboard/project/[tu-project-ref]/settings/functions
-2. Ir a la sección "Secrets"
-3. Agregar los siguientes secrets:
-   - `NOTION_API_TOKEN` = Tu token de API de Notion
-   - `NOTION_DATABASE_ID` = ID de tu base de datos de Notion
-
-**Opción B: Desde CLI**
+### 1. Instalar Supabase CLI (si no lo tienes)
 
 ```bash
-supabase secrets set NOTION_API_TOKEN=tu-token-aqui
-supabase secrets set NOTION_DATABASE_ID=tu-database-id-aqui
+npm install -g supabase
 ```
 
-### 3. Obtener Credenciales de Notion
-
-Si no las tienes:
-
-1. **Crear integración en Notion:**
-   - Ir a: https://www.notion.so/my-integrations
-   - Click en "New integration"
-   - Nombre: "Delivery Dashboard"
-   - Tipo: Internal
-   - Click "Submit"
-   - **Copiar el "Internal Integration Token"** (esto es `NOTION_API_TOKEN`)
-
-2. **Obtener Database ID:**
-   - Abrir tu base de datos en Notion
-   - La URL será algo como: `https://www.notion.so/workspace/[DATABASE_ID]?v=...`
-   - El `DATABASE_ID` es la parte larga antes del `?v=`
-   - También puedes copiar el link y extraer el ID (32 caracteres hexadecimales)
-
-3. **Compartir base de datos con la integración:**
-   - En tu base de datos de Notion
-   - Click en "..." (tres puntos) > "Connections"
-   - Buscar tu integración "Delivery Dashboard"
-   - Agregarla
-
-### 4. Desplegar la Función
+### 2. Login en Supabase
 
 ```bash
-cd "d:\Agile Dream Team\Antigravity\delivery-dashboard"
+supabase login
+```
+
+### 3. Vincular Proyecto
+
+```bash
+supabase link --project-ref tu-project-ref
+```
+
+Obtén el `project-ref` de la URL de tu proyecto Supabase:
+- URL: `https://xxxxx.supabase.co`
+- Project ref: `xxxxx`
+
+### 4. Desplegar Edge Function
+
+```bash
 supabase functions deploy notion-proxy
 ```
 
-### 5. Verificar Despliegue
+### 5. Configurar Secret
 
-La función estará disponible en:
-```
-https://[tu-project-ref].supabase.co/functions/v1/notion-proxy
-```
-
-Puedes probarla con:
 ```bash
-curl "https://[tu-project-ref].supabase.co/functions/v1/notion-proxy?action=getDatabasePages" \
-  -X POST \
+supabase secrets set NOTION_API_TOKEN=tu-token-de-notion
+```
+
+**Obtener token de Notion:**
+1. Ve a https://www.notion.so/my-integrations
+2. Crea o selecciona una integración
+3. Copia el **Internal Integration Token**
+4. Úsalo en el comando anterior
+
+## 🧪 Verificar Despliegue
+
+### Opción 1: Desde Supabase Dashboard
+
+1. Ve a **Edge Functions** en el dashboard
+2. Deberías ver `notion-proxy` listada
+3. Haz clic para ver logs y detalles
+
+### Opción 2: Probar con curl
+
+```bash
+curl -X POST \
+  "https://tu-proyecto.supabase.co/functions/v1/notion-proxy" \
+  -H "Authorization: Bearer tu-anon-key" \
   -H "Content-Type: application/json" \
-  -d "{}"
+  -d '{"action":"searchPages","initiativeName":"Test"}'
 ```
 
-### 6. Actualizar Configuración del Proyecto
-
-Actualizar `src/config/notionConfig.js`:
-
-```javascript
-proxyUrl: process.env.VITE_SUPABASE_URL + '/functions/v1/notion-proxy'
-```
-
-O directamente en el código:
-```javascript
-proxyUrl: 'https://[tu-project-ref].supabase.co/functions/v1/notion-proxy'
-```
-
-## 🧪 Probar la Función
-
-### Desde el navegador (consola):
-
-```javascript
-// Probar getDatabasePages
-fetch('https://[tu-project-ref].supabase.co/functions/v1/notion-proxy?action=getDatabasePages', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({})
-})
-.then(r => r.json())
-.then(console.log)
-
-// Probar searchPages
-fetch('https://[tu-project-ref].supabase.co/functions/v1/notion-proxy?action=searchPages&initiativeName=Strata', {
-  method: 'GET'
-})
-.then(r => r.json())
-.then(console.log)
-```
-
-### Desde Node.js:
+### Opción 3: Usar Script de Diagnóstico
 
 ```bash
-node scripts/test-notion-worker.js
+node scripts/diagnose-notion-connection.js
 ```
 
-(Actualizar la URL en el script primero)
+## 📝 Estructura de Archivos
 
-## ⚠️ Troubleshooting
+```
+supabase/
+└── functions/
+    └── notion-proxy/
+        └── index.ts  ← Código de la Edge Function
+```
 
-### Error: "Notion credentials not configured"
-- Verificar que los secrets estén configurados en Supabase
-- Verificar que los nombres sean exactos: `NOTION_API_TOKEN` y `NOTION_DATABASE_ID`
+## 🔑 Acciones Soportadas
 
-### Error: "Notion API error: 401"
-- Verificar que el token de Notion sea correcto
-- Verificar que la integración tenga acceso a la base de datos
+La Edge Function soporta las siguientes acciones:
 
-### Error: "Notion API error: 404"
-- Verificar que el Database ID sea correcto
-- Verificar que la base de datos esté compartida con la integración
+1. **listDatabases** - Lista todas las bases de datos accesibles
+2. **getDatabasePages** - Obtiene páginas de una base de datos específica
+3. **searchPages** - Busca páginas por nombre de iniciativa (búsqueda global)
+4. **getPageBlocks** - Obtiene bloques de contenido de una página
+
+## 📤 Formato de Petición
+
+### POST con Body JSON (Recomendado)
+
+```javascript
+fetch('https://tu-proyecto.supabase.co/functions/v1/notion-proxy', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer tu-anon-key'
+  },
+  body: JSON.stringify({
+    action: 'searchPages',
+    initiativeName: 'Nombre de Iniciativa'
+  })
+})
+```
+
+### GET con Query Params (Alternativo)
+
+```javascript
+fetch('https://tu-proyecto.supabase.co/functions/v1/notion-proxy?action=searchPages&initiativeName=Nombre', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer tu-anon-key'
+  }
+})
+```
+
+## 🐛 Troubleshooting
+
+### Error: "Function not found"
+- Verifica que la función esté desplegada: `supabase functions list`
+- Verifica que el nombre sea exactamente `notion-proxy`
+
+### Error: "NOTION_API_TOKEN not configured"
+- Configura el secret: `supabase secrets set NOTION_API_TOKEN=tu-token`
+- Verifica en Dashboard → Edge Functions → Secrets
 
 ### Error: "Invalid action"
-- Verificar que el parámetro `action` sea uno de: `getDatabasePages`, `searchPages`, `getPageBlocks`
+- Verifica que el action sea uno de los soportados
+- Verifica que el formato del body sea JSON válido
+- Revisa los logs de la Edge Function en Supabase Dashboard
 
-## 📝 Notas Importantes
+### Error: "Unauthorized"
+- Verifica que el `Authorization` header tenga el anon key correcto
+- Verifica que el anon key sea válido en Supabase
 
-1. **Propiedad "Initiative"**: El código busca en una propiedad llamada `'Initiative'`. Si tu base de datos usa otro nombre, actualiza la línea 70 en `index.ts`:
-   ```typescript
-   property: 'Initiative', // Cambiar por el nombre real de tu propiedad
-   ```
+## 📚 Referencias
 
-2. **CORS**: La función ya tiene CORS configurado para permitir peticiones desde cualquier origen. Si necesitas restringirlo, actualiza los headers.
+- [Supabase Edge Functions Docs](https://supabase.com/docs/guides/functions)
+- [Notion API Docs](https://developers.notion.com/)
 
-3. **Cache**: Las respuestas tienen cache de 5 minutos. Puedes ajustarlo en el header `Cache-Control`.
+---
 
-## ✅ Checklist de Despliegue
-
-- [ ] Supabase CLI instalado y autenticado
-- [ ] Proyecto linkeado con `supabase link`
-- [ ] Secrets configurados en Supabase Dashboard
-- [ ] Integración de Notion creada y token obtenido
-- [ ] Base de datos compartida con la integración
-- [ ] Database ID obtenido
-- [ ] Función desplegada con `supabase functions deploy`
-- [ ] Función probada y funcionando
-- [ ] Configuración actualizada en `notionConfig.js`
-- [ ] Scripts de prueba ejecutados exitosamente
+**Una vez desplegada, la sincronización debería funcionar correctamente.**
