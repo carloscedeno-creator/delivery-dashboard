@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AlertCircle } from 'lucide-react';
 import Navbar from './components/Navbar';
 import OverallView from './components/OverallView';
 import ProductRoadmapView from './components/ProductRoadmapView';
 import DeliveryRoadmapView from './components/DeliveryRoadmapView';
+import DataSourceSelector from './components/DataSourceSelector';
 import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
 import { getDeliveryRoadmapData, getDeveloperAllocationData } from './utils/supabaseApi';
@@ -41,61 +42,68 @@ function App() {
     const [productBugRelease, setProductBugRelease] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [dataSource, setDataSource] = useState('csv'); // 'supabase' o 'csv'
+    const [dataSource, setDataSource] = useState('csv'); // 'db' (Supabase) o 'csv'
 
-    useEffect(() => {
-        const fetchWithFallback = async (url) => {
-            try {
-                const fullUrl = buildProxiedUrl(url);
-                const response = await fetch(fullUrl);
-                if (response.ok) return await response.text();
-                throw new Error('Network response was not ok');
-            } catch (err) {
-                console.error("Fetch failed:", err);
-                throw err;
-            }
-        };
+    const fetchWithFallback = useCallback(async (url) => {
+        try {
+            const fullUrl = buildProxiedUrl(url);
+            const response = await fetch(fullUrl);
+            if (response.ok) return await response.text();
+            throw new Error('Network response was not ok');
+        } catch (err) {
+            console.error("Fetch failed:", err);
+            throw err;
+        }
+    }, []);
 
-        const loadData = async () => {
+    const loadData = useCallback(async (source) => {
             try {
                 setLoading(true);
+                setError(null);
                 
-                // Intentar cargar desde Supabase primero (delivery roadmap)
-                try {
-                    console.log('[APP] 🔄 Intentando cargar datos desde Supabase...');
-                    const [deliveryData, allocationData] = await Promise.all([
-                        getDeliveryRoadmapData(),
-                        getDeveloperAllocationData()
-                    ]);
-                    
-                    // Validar que realmente hay datos
-                    if (!deliveryData || deliveryData.length === 0) {
-                        throw new Error('Supabase retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
-                    }
-                    
-                    setProjectData(deliveryData);
-                    setDevAllocationData(allocationData);
-                    setDataSource('supabase'); // Marcar que estamos usando Supabase
-                    console.log('[APP] ✅ Datos de delivery cargados desde Supabase:', {
-                        projects: deliveryData.length,
-                        allocations: allocationData.length,
-                        sampleProject: deliveryData[0]?.initiative || 'N/A'
-                    });
-                } catch (supabaseError) {
-                    console.error('[APP] ❌ Error cargando desde Supabase:', supabaseError);
-                    console.warn('[APP] ⚠️ Usando CSV como fallback (datos pueden estar desactualizados)');
-                    // Fallback a CSV para delivery
+                if (source === 'db') {
+                    // Cargar desde Supabase (Base de Datos)
                     try {
+                        console.log('[APP] 🔄 Cargando datos desde Base de Datos (Supabase)...');
+                        const [deliveryData, allocationData] = await Promise.all([
+                            getDeliveryRoadmapData(),
+                            getDeveloperAllocationData()
+                        ]);
+                        
+                        // Validar que realmente hay datos
+                        if (!deliveryData || deliveryData.length === 0) {
+                            throw new Error('Base de datos retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
+                        }
+                        
+                        setProjectData(deliveryData);
+                        setDevAllocationData(allocationData);
+                        setDataSource('db');
+                        console.log('[APP] ✅ Datos de delivery cargados desde Base de Datos:', {
+                            projects: deliveryData.length,
+                            allocations: allocationData.length,
+                            sampleProject: deliveryData[0]?.initiative || 'N/A'
+                        });
+                    } catch (dbError) {
+                        console.error('[APP] ❌ Error cargando desde Base de Datos:', dbError);
+                        setError(`Error cargando desde Base de Datos: ${dbError.message}`);
+                        // Si falla la BD, no hacer fallback automático, dejar que el usuario elija CSV
+                        throw dbError;
+                    }
+                } else {
+                    // Cargar desde CSV
+                    try {
+                        console.log('[APP] 🔄 Cargando datos desde CSV...');
                         const [projText, allocText] = await Promise.all([
                             fetchWithFallback(SHEET_URLS.project),
                             fetchWithFallback(SHEET_URLS.allocation)
                         ]);
                         setProjectData(parseCSV(projText, 'project'));
                         setDevAllocationData(parseCSV(allocText, 'allocation'));
-                        setDataSource('csv'); // Marcar que estamos usando CSV
-                        console.warn('[APP] ⚠️ Usando datos de CSV. Los datos pueden no estar actualizados.');
+                        setDataSource('csv');
+                        console.log('[APP] ✅ Datos de delivery cargados desde CSV');
                     } catch (csvError) {
-                        console.error('[APP] ❌ Error también cargando CSV:', csvError);
+                        console.error('[APP] ❌ Error cargando CSV:', csvError);
+                        setError(`Error cargando CSV: ${csvError.message}`);
                         throw csvError;
                     }
                 }
@@ -116,18 +124,39 @@ function App() {
 
                 setLoading(false);
             } catch (err) {
-                console.error("[APP] Error general, usando mock data:", err);
-                setProjectData(MOCK_PROJECT_DATA);
-                setDevAllocationData(MOCK_ALLOCATION_DATA);
-                setProductInitiatives([]);
-                setProductBugRelease([]);
-                setDataSource('csv'); // Mock data = CSV
-                setError(null);
+                console.error("[APP] Error cargando datos:", err);
+                setError(`Error: ${err.message}`);
                 setLoading(false);
+                // No usar mock data automáticamente, dejar que el usuario intente otra fuente
+            }
+    }, [fetchWithFallback]);
+
+    useEffect(() => {
+        // Carga inicial: intentar desde BD primero, si falla usar CSV
+        const initialLoad = async () => {
+            try {
+                await loadData('db');
+            } catch (dbError) {
+                console.warn('[APP] ⚠️ No se pudo cargar desde BD, intentando CSV...');
+                try {
+                    await loadData('csv');
+                } catch (csvError) {
+                    // loadData ya maneja el fallback a mock data
+                }
             }
         };
-        loadData();
-    }, []);
+        
+        initialLoad();
+    }, [loadData]);
+
+    // Función para manejar el cambio de fuente de datos
+    const handleDataSourceChange = useCallback((newSource) => {
+        if (newSource !== dataSource) {
+            console.log(`[APP] 🔄 Cambiando fuente de datos de ${dataSource} a ${newSource}`);
+            setDataSource(newSource);
+            loadData(newSource);
+        }
+    }, [dataSource, loadData]);
 
     if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div></div>;
     if (error) return <div className="min-h-screen flex items-center justify-center text-rose-400"><div className="text-center"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div></div>;
@@ -145,16 +174,21 @@ function App() {
                             {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : 'Execution & Resource Allocation'}
                         </p>
                     </div>
-                    <div className="flex gap-4">
-                        {dataSource === 'supabase' ? (
+                    <div className="flex gap-3 items-center flex-wrap">
+                        <DataSourceSelector 
+                            dataSource={dataSource} 
+                            onSourceChange={handleDataSourceChange}
+                            disabled={loading}
+                        />
+                        {dataSource === 'db' ? (
                             <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                Live Data
+                                <span>Base de Datos</span>
                             </div>
                         ) : (
                             <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
-                                <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                                Not Connected
+                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                <span>CSV</span>
                             </div>
                         )}
                     </div>

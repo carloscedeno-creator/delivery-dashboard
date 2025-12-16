@@ -247,6 +247,12 @@
                 ArrowLeft: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
                 ),
+                Database: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                ),
+                FileSpreadsheet: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M16 13H8"></path><path d="M16 17H8"></path><path d="M10 9H8"></path></svg>
+                ),
                 CheckCircle: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 )
@@ -4190,6 +4196,86 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [dataSource, setDataSource] = useState('csv'); // 'supabase' o 'csv'
+
+            // Componente DataSourceSelector
+            const DataSourceSelector = ({ dataSource, onSourceChange, disabled = false }) => {
+                const [isOpen, setIsOpen] = useState(false);
+
+                const sources = [
+                    { value: 'csv', label: 'CSV', icon: Icons.FileSpreadsheet },
+                    { value: 'supabase', label: 'Base de Datos', icon: Icons.Database }
+                ];
+
+                const currentSource = sources.find(s => s.value === dataSource) || sources[0];
+                const CurrentIcon = currentSource.icon;
+
+                // Debug: verificar que el componente se renderiza
+                console.log('[DataSourceSelector] Rendering with:', { dataSource, disabled, currentSource: currentSource.label });
+
+                return (
+                    <div className="relative z-50" style={{ minWidth: '120px', display: 'block' }}>
+                        <button
+                            onClick={() => !disabled && setIsOpen(!isOpen)}
+                            disabled={disabled}
+                            className={`glass rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm transition-colors border border-slate-700/50 bg-slate-800/90 backdrop-blur-sm ${
+                                disabled 
+                                    ? 'text-slate-500 cursor-not-allowed opacity-50' 
+                                    : 'text-slate-200 hover:bg-slate-700/70 cursor-pointer hover:border-cyan-500/50 active:scale-95'
+                            }`}
+                            title={`Fuente de datos: ${currentSource.label}`}
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.5rem',
+                                width: '100%',
+                                minWidth: '120px'
+                            }}
+                        >
+                            <CurrentIcon size={16} className="flex-shrink-0" />
+                            <span className="whitespace-nowrap font-medium">{currentSource.label}</span>
+                            <Icons.ChevronDown 
+                                size={16}
+                                className={`flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                            />
+                        </button>
+
+                        {isOpen && (
+                            <>
+                                <div 
+                                    className="fixed inset-0 z-10" 
+                                    onClick={() => setIsOpen(false)}
+                                />
+                                <div className="absolute right-0 mt-2 w-48 glass rounded-lg shadow-xl z-50 overflow-hidden border border-slate-700/50">
+                                    {sources.map((source) => {
+                                        const Icon = source.icon;
+                                        const isSelected = source.value === dataSource;
+                                        return (
+                                            <button
+                                                key={source.value}
+                                                onClick={() => {
+                                                    onSourceChange(source.value);
+                                                    setIsOpen(false);
+                                                }}
+                                                className={`w-full px-4 py-3 flex items-center gap-3 text-sm transition-colors ${
+                                                    isSelected
+                                                        ? 'bg-cyan-500/20 text-cyan-400'
+                                                        : 'text-slate-300 hover:bg-slate-700/50'
+                                                }`}
+                                            >
+                                                <Icon size={16} />
+                                                <span>{source.label}</span>
+                                                {isSelected && (
+                                                    <span className="ml-auto text-cyan-400">✓</span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                );
+            };
             const [currentUser, setCurrentUser] = useState(null);
             const [authLoading, setAuthLoading] = useState(true);
 
@@ -4288,14 +4374,8 @@
                 }
             };
 
-            useEffect(() => {
-                    const loadData = async () => {
-                        setLoading(true);
-                        let hasErrors = false;
-                        let errorMessages = [];
-                        
-                        // Función para cargar desde Supabase
-                        const loadFromSupabase = async () => {
+            // Función para cargar desde Supabase (extraída para reutilización)
+            const loadFromSupabase = async () => {
                             if (!supabaseClient) {
                                 throw new Error('Supabase is not configured');
                             }
@@ -4618,7 +4698,13 @@
                             
                             console.log('[SUPABASE] Roadmap data generado:', roadmapData.length, 'items');
                             return { projects: roadmapData, allocation: allocations };
-                        };
+            };
+
+            useEffect(() => {
+                    const loadData = async () => {
+                        setLoading(true);
+                        let hasErrors = false;
+                        let errorMessages = [];
                         
                         try {
                             // Intentar cargar desde Supabase primero
@@ -4685,6 +4771,44 @@
                 loadData();
             }, []);
 
+            // Función para manejar el cambio de fuente de datos
+            const handleDataSourceChange = (newSource) => {
+                if (newSource !== dataSource) {
+                    console.log(`[APP] 🔄 Cambiando fuente de datos de ${dataSource} a ${newSource}`);
+                    setDataSource(newSource);
+                    setLoading(true);
+                    setError(null);
+                    
+                    // Recargar datos con la nueva fuente
+                    (async () => {
+                        try {
+                            if (newSource === 'supabase') {
+                                const supabaseData = await loadFromSupabase();
+                                setProjectData(supabaseData.projects);
+                                setDevAllocationData(supabaseData.allocation);
+                                setStrataMappingData([]);
+                                console.log('[APP] ✅ Datos cargados desde Base de Datos:', {
+                                    projects: supabaseData.projects.length,
+                                    allocation: supabaseData.allocation.length
+                                });
+                            } else {
+                                const deliveryData = await DeliveryRoadmapData.load(CORS_PROXY);
+                                setProjectData(deliveryData.projects);
+                                setDevAllocationData(deliveryData.allocation);
+                                setStrataMappingData(deliveryData.strataMapping || []);
+                                console.log('[APP] ✅ Datos cargados desde CSV');
+                            }
+                            
+                            setLoading(false);
+                        } catch (err) {
+                            console.error("[APP] Error cargando datos:", err);
+                            setError(`Error: ${err.message}`);
+                            setLoading(false);
+                        }
+                    })();
+                }
+            };
+
             // Mostrar loading de autenticación
             if (authLoading) {
                 return (
@@ -4715,16 +4839,21 @@
                                     {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : activeView === 'delivery' ? 'Execution & Resource Allocation' : activeView === 'strata' ? 'Strata Mapping & Analysis' : 'Manage users, roles, and access'}
                                 </p>
                             </div>
-                            <div className="flex gap-4">
+                            <div className="flex gap-3 items-center flex-wrap">
+                                <DataSourceSelector 
+                                    dataSource={dataSource} 
+                                    onSourceChange={handleDataSourceChange}
+                                    disabled={loading}
+                                />
                                 {dataSource === 'supabase' ? (
                                     <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                        Live Data
+                                        <span>Base de Datos</span>
                                     </div>
                                 ) : (
                                     <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
-                                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                                        Not Connected
+                                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                        <span>CSV</span>
                                     </div>
                                 )}
                             </div>
