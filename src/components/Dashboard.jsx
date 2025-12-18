@@ -50,7 +50,7 @@ const Dashboard = () => {
                 <KPICard
                     title="Schedule Performance"
                     value={metrics.avgSPI.toFixed(2)}
-                    label="Avg SPI"
+                    label="avg. SPI!"
                     icon={Activity}
                     trend={metrics.avgSPI >= 0.9 ? 'positive' : 'negative'}
                     color="blue"

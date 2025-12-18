@@ -3509,7 +3509,7 @@
                     {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <KPICard title="Active Initiatives" value={stats.total} label="Projects in flight" trend="positive" color="blue" icon={Icons.Activity} />
-                        <KPICard title="Avg. SPI" value={stats.avgSPI} label="Schedule Performance" trend={stats.avgSPI >= 0.9 ? 'positive' : 'negative'} color="purple" icon={Icons.Calendar} explanation="SPI > 1.0 means ahead of schedule." />
+                        <KPICard title="avg. SPI!" value={stats.avgSPI} label="Schedule Performance" trend={stats.avgSPI >= 0.9 ? 'positive' : 'negative'} color="purple" icon={Icons.Calendar} explanation="SPI > 1.0 means ahead of schedule." />
                         <KPICard title="Avg. Completion" value={`${stats.avgProgress}%`} label="Overall Progress" trend="positive" color="emerald" icon={Icons.Layout} />
                         <KPICard title="At Risk" value={stats.atRisk.length} label="Requires Attention" trend={stats.atRisk.length === 0 ? 'positive' : 'negative'} color="rose" icon={Icons.AlertCircle} tooltip={stats.atRisk} />
                     </div>
@@ -4396,7 +4396,7 @@
                             // Obtener initiatives
                             const { data: initiatives, error: initiativesError } = await supabaseClient
                                 .from('initiatives')
-                                .select('id, squad_id, initiative_key, initiative_name, created_at')
+                                .select('id, squad_id, initiative_key, initiative_name, created_at, start_date, end_date')
                                 .order('initiative_name', { ascending: true });
                             
                             if (initiativesError) throw initiativesError;
@@ -4552,16 +4552,36 @@
                                 )];
                                 const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
                                 
+                                // Obtener fechas de la épica (prioridad) o estimar
+                                let startDate = null;
+                                let endDate = null;
+                                
+                                // Prioridad 1: usar start_date y end_date de la iniciativa (épica)
+                                if (initiative.start_date) {
+                                    startDate = new Date(initiative.start_date).toISOString().split('T')[0];
+                                } else if (latestSprint?.start_date) {
+                                    startDate = new Date(latestSprint.start_date).toISOString().split('T')[0];
+                                } else {
+                                    startDate = new Date(initiative.created_at).toISOString().split('T')[0];
+                                }
+                                
+                                if (initiative.end_date) {
+                                    endDate = new Date(initiative.end_date).toISOString().split('T')[0];
+                                } else if (latestSprint?.end_date) {
+                                    endDate = new Date(latestSprint.end_date).toISOString().split('T')[0];
+                                } else {
+                                    // Estimar 3 meses después de start_date
+                                    const estimatedEnd = new Date(startDate);
+                                    estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
+                                    endDate = estimatedEnd.toISOString().split('T')[0];
+                                }
+                                
                                 roadmapData.push({
                                     squad: squad.squad_name || squad.squad_key,
                                     initiative: initiative.initiative_name || initiative.initiative_key,
-                                    start: latestSprint?.start_date 
-                                        ? new Date(latestSprint.start_date).toISOString().split('T')[0]
-                                        : new Date(initiative.created_at).toISOString().split('T')[0],
+                                    start: startDate,
                                     status: completionPercentage,
-                                    delivery: latestSprint?.end_date
-                                        ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-                                        : null,
+                                    delivery: endDate,
                                     spi: parseFloat(spi.toFixed(2)),
                                     allocation: devNames.length,
                                     comments: `${initiativeIssues.length} issues, ${totalSP} SP total`,
@@ -4635,16 +4655,24 @@
                                 )];
                                 const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
                                 
+                                // Para "Otros", usar fechas del sprint o estimar
+                                let otrosStartDate = latestSprint?.start_date 
+                                    ? new Date(latestSprint.start_date).toISOString().split('T')[0]
+                                    : new Date().toISOString().split('T')[0];
+                                let otrosEndDate = latestSprint?.end_date
+                                    ? new Date(latestSprint.end_date).toISOString().split('T')[0]
+                                    : (() => {
+                                        const estimated = new Date(otrosStartDate);
+                                        estimated.setMonth(estimated.getMonth() + 3);
+                                        return estimated.toISOString().split('T')[0];
+                                    })();
+                                
                                 roadmapData.push({
                                     squad: squad.squad_name || squad.squad_key,
                                     initiative: 'Otros',
-                                    start: latestSprint?.start_date 
-                                        ? new Date(latestSprint.start_date).toISOString().split('T')[0]
-                                        : new Date().toISOString().split('T')[0],
+                                    start: otrosStartDate,
                                     status: completionPercentage,
-                                    delivery: latestSprint?.end_date
-                                        ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-                                        : null,
+                                    delivery: otrosEndDate,
                                     spi: parseFloat(spi.toFixed(2)),
                                     allocation: devNames.length,
                                     comments: `${unassignedIssues.length} issues, ${totalSP} SP total`,

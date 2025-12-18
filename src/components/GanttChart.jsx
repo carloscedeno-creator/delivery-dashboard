@@ -3,6 +3,13 @@ import { format, differenceInDays, addDays, parseISO, startOfMonth, endOfMonth, 
 import { motion } from 'framer-motion';
 
 const GanttChart = ({ data }) => {
+    // Debug: Verificar si el componente se está renderizando
+    console.log('🟢 [GANTT] ====== COMPONENTE RENDERIZADO ======');
+    console.log('🟢 [GANTT] hasData:', !!data);
+    console.log('🟢 [GANTT] dataLength:', data?.length || 0);
+    console.log('🟢 [GANTT] dataType:', Array.isArray(data) ? 'array' : typeof data);
+    console.log('🟢 [GANTT] Primeros 2 items:', data?.slice(0, 2));
+
     // Helper to parse dates in multiple formats (DD/MM/YYYY, YYYY-MM-DD, etc.)
     const parseDate = (dateStr) => {
         if (!dateStr || !dateStr.trim()) return null;
@@ -17,15 +24,23 @@ const GanttChart = ({ data }) => {
             // Continue to try other formats
         }
 
-        // Try DD/MM/YYYY format
-        const parts = dateStr.split('/');
-        if (parts.length === 3) {
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10);
-            const year = parseInt(parts[2], 10);
+        // Try YYYY/MM/DD format (CSV format)
+        const slashParts = dateStr.split('/');
+        if (slashParts.length === 3) {
+            const part1 = parseInt(slashParts[0], 10);
+            const part2 = parseInt(slashParts[1], 10);
+            const part3 = parseInt(slashParts[2], 10);
             
-            if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                const date = new Date(year, month - 1, day);
+            // Si el primer número es > 31, es YYYY/MM/DD
+            if (part1 > 31 && !isNaN(part1) && !isNaN(part2) && !isNaN(part3)) {
+                const date = new Date(part1, part2 - 1, part3);
+                if (isValid(date)) {
+                    return date;
+                }
+            }
+            // Si no, es DD/MM/YYYY
+            else if (!isNaN(part1) && !isNaN(part2) && !isNaN(part3)) {
+                const date = new Date(part3, part2 - 1, part1);
                 if (isValid(date)) {
                     return date;
                 }

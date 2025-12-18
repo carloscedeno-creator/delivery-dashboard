@@ -408,14 +408,21 @@ export const getDeliveryRoadmapData = async () => {
       if (initiative.end_date) {
         endDate = new Date(initiative.end_date).toISOString().split('T')[0];
       } else {
-        // Fallback: usar sprint más reciente
-        const squadMetrics = (sprintMetrics || []).filter(
-          m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
-        );
-        const latestSprint = squadMetrics[0];
-        endDate = latestSprint?.end_date
-          ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-          : null;
+        // Si no hay end_date, estimar basado en start_date o created_at
+        const baseDate = initiative.start_date || initiative.created_at;
+        const estimatedEnd = new Date(baseDate);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3); // 3 meses después
+        endDate = estimatedEnd.toISOString().split('T')[0];
+      }
+
+      // Asegurar que ambas fechas estén presentes (última validación)
+      if (!startDate) {
+        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
+      }
+      if (!endDate) {
+        const estimatedEnd = new Date(startDate);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
+        endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
       // Obtener asignaciones de desarrolladores
@@ -436,6 +443,18 @@ export const getDeliveryRoadmapData = async () => {
         endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
+      // Validar que las fechas sean strings válidos (no null, no undefined)
+      if (!startDate || typeof startDate !== 'string') {
+        console.warn(`[SUPABASE] ⚠️ startDate inválido para ${initiative.initiative_name}:`, startDate);
+        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
+      }
+      if (!endDate || typeof endDate !== 'string') {
+        console.warn(`[SUPABASE] ⚠️ endDate inválido para ${initiative.initiative_name}:`, endDate);
+        const estimatedEnd = new Date(startDate);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
+        endDate = estimatedEnd.toISOString().split('T')[0];
+      }
+
       const roadmapItem = {
         squad: squad.squad_name || squad.squad_key,
         initiative: initiative.initiative_name || initiative.initiative_key,
@@ -449,17 +468,6 @@ export const getDeliveryRoadmapData = async () => {
         dev: devNames.join(', ') || 'Unassigned',
         percentage: completionPercentage
       };
-
-      // Debug: Log primeros 3 items para verificar formato de fechas
-      if (roadmapData.length < 3) {
-        console.log(`[SUPABASE] Roadmap item ${roadmapData.length + 1}:`, {
-          initiative: roadmapItem.initiative,
-          start: roadmapItem.start,
-          delivery: roadmapItem.delivery,
-          startType: typeof roadmapItem.start,
-          deliveryType: typeof roadmapItem.delivery
-        });
-      }
 
       roadmapData.push(roadmapItem);
     }

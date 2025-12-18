@@ -38,6 +38,16 @@ function App() {
     const [activeView, setActiveView] = useState('overall');
     const [projectData, setProjectData] = useState([]);
     const [devAllocationData, setDevAllocationData] = useState([]);
+    
+    // Debug: Log cuando projectData cambia
+    useEffect(() => {
+        console.log('🟡 [APP] projectData CAMBIÓ:', {
+            length: projectData?.length || 0,
+            isArray: Array.isArray(projectData),
+            activeView,
+            sample: projectData?.slice(0, 2)
+        });
+    }, [projectData, activeView]);
     const [productInitiatives, setProductInitiatives] = useState([]);
     const [productBugRelease, setProductBugRelease] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -75,13 +85,20 @@ function App() {
                             throw new Error('Base de datos retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
                         }
                         
+                        console.log('[APP] 🔵 ANTES de setProjectData:', {
+                            deliveryDataLength: deliveryData?.length || 0,
+                            deliveryDataType: Array.isArray(deliveryData) ? 'array' : typeof deliveryData,
+                            firstItem: deliveryData?.[0]
+                        });
                         setProjectData(deliveryData);
                         setDevAllocationData(allocationData);
                         setDataSource('db');
                         console.log('[APP] ✅ Datos de delivery cargados desde Base de Datos:', {
                             projects: deliveryData.length,
                             allocations: allocationData.length,
-                            sampleProject: deliveryData[0]?.initiative || 'N/A'
+                            sampleProject: deliveryData[0]?.initiative || 'N/A',
+                            sampleStart: deliveryData[0]?.start || 'N/A',
+                            sampleDelivery: deliveryData[0]?.delivery || 'N/A'
                         });
                     } catch (dbError) {
                         console.error('[APP] ❌ Error cargando desde Base de Datos:', dbError);
@@ -197,7 +214,14 @@ function App() {
                 <main className="max-w-7xl mx-auto">
                     {activeView === 'overall' && <OverallView />}
                     {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
-                    {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
+                    {activeView === 'delivery' && (() => {
+                        console.log('🔴 [APP] ====== RENDERIZANDO DELIVERY ROADMAP VIEW ======');
+                        console.log('🔴 [APP] activeView:', activeView);
+                        console.log('🔴 [APP] projectData.length:', projectData?.length || 0);
+                        console.log('🔴 [APP] projectData es array?', Array.isArray(projectData));
+                        console.log('🔴 [APP] Primeros 2 items:', projectData?.slice(0, 2));
+                        return <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />;
+                    })()}
                     {/* Supabase integration - En desarrollo (próximamente) */}
                     {/* {activeView === 'supabase-test' && <SupabaseTest />} */}
                 </main>
