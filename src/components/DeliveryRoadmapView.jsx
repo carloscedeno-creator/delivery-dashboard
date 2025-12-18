@@ -107,6 +107,12 @@ const DetailView = ({ item, devData }) => {
 };
 
 const DeliveryRoadmapView = ({ projectData, devAllocationData }) => {
+    console.log('[ROADMAP] Componente renderizado:', {
+        projectDataLength: projectData?.length || 0,
+        hasProjectData: !!projectData,
+        sample: projectData?.slice(0, 2)
+    });
+
     const [selectedSquad, setSelectedSquad] = useState('All');
     const [selectedInitiative, setSelectedInitiative] = useState('All');
 
@@ -128,8 +134,15 @@ const DeliveryRoadmapView = ({ projectData, devAllocationData }) => {
 
     const selectedItem = useMemo(() => {
         if (selectedInitiative !== 'All') {
-            return projectData.find(d => d.initiative === selectedInitiative);
+            const item = projectData.find(d => d.initiative === selectedInitiative);
+            console.log('[ROADMAP] selectedItem encontrado:', { 
+                selectedInitiative, 
+                found: !!item,
+                item 
+            });
+            return item;
         }
+        console.log('[ROADMAP] selectedItem es null (mostrando Gantt)');
         return null;
     }, [projectData, selectedInitiative]);
 
@@ -171,12 +184,17 @@ const DeliveryRoadmapView = ({ projectData, devAllocationData }) => {
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <KPICard title="Active Initiatives" value={stats.total} label="Projects in flight" trend="positive" color="blue" icon={Activity} />
-                <KPICard title="Avg. SPI" value={stats.avgSPI} label="Schedule Performance" trend={stats.avgSPI >= 0.9 ? 'positive' : 'negative'} color="purple" icon={Calendar} explanation="SPI > 1.0 means ahead of schedule." />
+                <KPICard title="avg. SPI!" value={stats.avgSPI} label="Schedule Performance" trend={stats.avgSPI >= 0.9 ? 'positive' : 'negative'} color="purple" icon={Calendar} explanation="SPI > 1.0 means ahead of schedule." />
                 <KPICard title="Avg. Completion" value={`${stats.avgProgress}%`} label="Overall Progress" trend="positive" color="emerald" icon={Layout} />
                 <KPICard title="At Risk" value={stats.atRisk.length} label="Requires Attention" trend={stats.atRisk.length === 0 ? 'positive' : 'negative'} color="rose" icon={AlertCircle} tooltip={stats.atRisk} />
             </div>
 
             {/* Main Content Area */}
+            {console.log('[ROADMAP] Renderizando contenido:', { 
+                hasSelectedItem: !!selectedItem, 
+                selectedInitiative,
+                filteredDataLength: filteredData.length 
+            })}
             {selectedItem ? (
                 <DetailView item={selectedItem} devData={devAllocationData} />
             ) : (
@@ -184,6 +202,18 @@ const DeliveryRoadmapView = ({ projectData, devAllocationData }) => {
                     {/* Roadmap / Timeline - Full Width */}
                     <div className="glass rounded-2xl p-6">
                         <h3 className="text-slate-400 text-sm font-medium mb-6">Timeline Overview (Roadmap)</h3>
+                        {(() => {
+                            console.log('🔵 [ROADMAP] ====== RENDERIZANDO GANTT ======');
+                            console.log('🔵 [ROADMAP] filteredData.length:', filteredData.length);
+                            console.log('🔵 [ROADMAP] Primeros 3 items:', filteredData.slice(0, 3).map(d => ({
+                                initiative: d.initiative,
+                                start: d.start,
+                                delivery: d.delivery,
+                                startType: typeof d.start,
+                                deliveryType: typeof d.delivery
+                            })));
+                            return null;
+                        })()}
                         <GanttChart data={filteredData} />
                     </div>
 

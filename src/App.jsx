@@ -4,10 +4,15 @@ import Navbar from './components/Navbar';
 import OverallView from './components/OverallView';
 import ProductRoadmapView from './components/ProductRoadmapView';
 import DeliveryRoadmapView from './components/DeliveryRoadmapView';
+import ProjectsMetrics from './components/ProjectsMetrics';
+import DeveloperMetrics from './components/DeveloperMetrics';
+import UserAdministration from './components/UserAdministration';
 import DataSourceSelector from './components/DataSourceSelector';
 import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
 import { getDeliveryRoadmapData, getDeveloperAllocationData } from './utils/supabaseApi';
+import { canAccessModule, getModulesForRole } from './config/permissions';
+import { getCurrentUser } from './utils/authService';
 
 // URLs de las hojas usando la configuración centralizada
 const SHEET_URLS = {
@@ -38,6 +43,38 @@ function App() {
     const [activeView, setActiveView] = useState('overall');
     const [projectData, setProjectData] = useState([]);
     const [devAllocationData, setDevAllocationData] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+    
+    // Obtener usuario actual y verificar permisos
+    useEffect(() => {
+        const user = getCurrentUser();
+        setCurrentUser(user);
+        
+        // Si no hay usuario, redirigir a login o usar rol por defecto
+        if (!user) {
+            console.warn('[APP] No hay usuario autenticado, usando rol por defecto: regular');
+        }
+        
+        // Verificar que el activeView sea accesible para el rol del usuario
+        const userRole = user?.role || 'regular';
+        const allowedModules = getModulesForRole(userRole);
+        
+        if (!allowedModules.includes(activeView)) {
+            // Si el módulo actual no está permitido, redirigir al primer módulo permitido
+            console.warn(`[APP] Módulo ${activeView} no permitido para rol ${userRole}, redirigiendo a ${allowedModules[0]}`);
+            setActiveView(allowedModules[0] || 'overall');
+        }
+    }, []);
+    
+    // Debug: Log cuando projectData cambia
+    useEffect(() => {
+        console.log('🟡 [APP] projectData CAMBIÓ:', {
+            length: projectData?.length || 0,
+            isArray: Array.isArray(projectData),
+            activeView,
+            sample: projectData?.slice(0, 2)
+        });
+    }, [projectData, activeView]);
     const [productInitiatives, setProductInitiatives] = useState([]);
     const [productBugRelease, setProductBugRelease] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -75,13 +112,20 @@ function App() {
                             throw new Error('Base de datos retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
                         }
                         
+                        console.log('[APP] 🔵 ANTES de setProjectData:', {
+                            deliveryDataLength: deliveryData?.length || 0,
+                            deliveryDataType: Array.isArray(deliveryData) ? 'array' : typeof deliveryData,
+                            firstItem: deliveryData?.[0]
+                        });
                         setProjectData(deliveryData);
                         setDevAllocationData(allocationData);
                         setDataSource('db');
                         console.log('[APP] ✅ Datos de delivery cargados desde Base de Datos:', {
                             projects: deliveryData.length,
                             allocations: allocationData.length,
-                            sampleProject: deliveryData[0]?.initiative || 'N/A'
+                            sampleProject: deliveryData[0]?.initiative || 'N/A',
+                            sampleStart: deliveryData[0]?.start || 'N/A',
+                            sampleDelivery: deliveryData[0]?.delivery || 'N/A'
                         });
                     } catch (dbError) {
                         console.error('[APP] ❌ Error cargando desde Base de Datos:', dbError);
@@ -168,10 +212,22 @@ function App() {
                 <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
                     <div>
                         <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-                            {activeView === 'overall' ? 'Overall Dashboard' : activeView === 'product' ? 'Product Roadmap' : 'Delivery Roadmap'}
+                            {activeView === 'overall' ? 'Overall Dashboard' : 
+                             activeView === 'product' ? 'Product Roadmap' : 
+                             activeView === 'delivery' ? 'Delivery Roadmap' :
+                             activeView === 'projects-metrics' ? 'Projects Metrics' :
+                             activeView === 'developer-metrics' ? 'Developer Metrics' :
+                             activeView === 'user-admin' ? 'User Administration' :
+                             'Dashboard'}
                         </h1>
                         <p className="text-slate-400 mt-2">
-                            {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : 'Execution & Resource Allocation'}
+                            {activeView === 'overall' ? 'Strategic Overview & Combined Status' : 
+                             activeView === 'product' ? 'Product Initiatives & Milestones' : 
+                             activeView === 'delivery' ? 'Execution & Resource Allocation' :
+                             activeView === 'projects-metrics' ? 'Comprehensive project performance analytics' :
+                             activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
+                             activeView === 'user-admin' ? 'User management and administration' :
+                             'Dashboard'}
                         </p>
                     </div>
                     <div className="flex gap-3 items-center flex-wrap">
@@ -197,9 +253,47 @@ function App() {
                 <main className="max-w-7xl mx-auto">
                     {activeView === 'overall' && <OverallView />}
                     {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
-                    {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
-                    {/* Supabase integration - En desarrollo (próximamente) */}
-                    {/* {activeView === 'supabase-test' && <SupabaseTest />} */}
+                    {activeView === 'delivery' && (() => {
+                        console.log('🔴 [APP] ====== RENDERIZANDO DELIVERY ROADMAP VIEW ======');
+                        console.log('🔴 [APP] activeView:', activeView);
+                        console.log('🔴 [APP] projectData.length:', projectData?.length || 0);
+                        console.log('🔴 [APP] projectData es array?', Array.isArray(projectData));
+                        console.log('🔴 [APP] Primeros 2 items:', projectData?.slice(0, 2));
+                        return <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />;
+                    })()}
+                    {activeView === 'projects-metrics' && canAccessModule(currentUser?.role || 'regular', 'projects-metrics') && (
+                        <ProjectsMetrics />
+                    )}
+                    {activeView === 'developer-metrics' && (() => {
+                        const hasAccess = canAccessModule(currentUser?.role || 'regular', 'developer-metrics');
+                        console.log('🔵 [APP] Developer Metrics check:', {
+                            activeView,
+                            currentUserRole: currentUser?.role || 'regular',
+                            hasAccess,
+                            shouldRender: hasAccess
+                        });
+                        if (!hasAccess) {
+                            console.warn('🔴 [APP] No tiene acceso a Developer Metrics');
+                            return null;
+                        }
+                        console.log('🟢 [APP] Renderizando DeveloperMetrics');
+                        return <DeveloperMetrics />;
+                    })()}
+                    {activeView === 'user-admin' && canAccessModule(currentUser?.role || 'regular', 'user-admin') && (
+                        <UserAdministration currentUser={currentUser} />
+                    )}
+                    {/* Verificar si el usuario intenta acceder a un módulo no permitido */}
+                    {!canAccessModule(currentUser?.role || 'regular', activeView) && (
+                        <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                            <AlertCircle size={48} className="text-rose-400" />
+                            <div>
+                                <h2 className="text-3xl font-bold text-white mb-2">Access Denied</h2>
+                                <p className="text-slate-400 max-w-md mx-auto">
+                                    You don't have permission to access this module.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </main>
             </div>
         </div>

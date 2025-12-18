@@ -109,13 +109,14 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
     }
 
     // Preparar datos del issue
+    const jiraStatus = fields.status?.name || 'Unknown';
     const issueData = {
       key: jiraIssue.key,
       issueType: fields.issuetype?.name || 'Unknown',
       summary: fields.summary || '',
       assigneeId,
       priority: fields.priority?.name || null,
-      status: fields.status?.name || 'Unknown',
+      status: jiraStatus,
       storyPoints: fields[config.jira.storyPointsFieldId] || 0,
       resolution: fields.resolution?.name || null,
       createdDate: fields.created ? new Date(fields.created) : null,
@@ -127,8 +128,30 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       rawData: jiraIssue,
     };
 
+    // Log del estatus para debugging
+    if (jiraIssue.key === 'ODSO-297' || jiraIssue.key === 'ODSO-313') {
+      logger.info(`🔍 [${jiraIssue.key}] Estatus en Jira: "${jiraStatus}"`);
+      logger.info(`🔍 [${jiraIssue.key}] Status object completo:`, JSON.stringify(fields.status, null, 2));
+    }
+
     // Upsert issue
     const issueId = await supabaseClient.upsertIssue(squadId, issueData);
+    
+    // Verificar que se actualizó correctamente
+    if (jiraIssue.key === 'ODSO-297' || jiraIssue.key === 'ODSO-313') {
+      const { data: updatedIssue } = await supabaseClient.client
+        .from('issues')
+        .select('current_status, updated_date')
+        .eq('issue_key', jiraIssue.key)
+        .single();
+      
+      if (updatedIssue) {
+        logger.info(`✅ [${jiraIssue.key}] Estatus guardado en Supabase: "${updatedIssue.current_status}"`);
+        if (jiraStatus !== updatedIssue.current_status) {
+          logger.warn(`⚠️ [${jiraIssue.key}] DISCREPANCIA: Jira="${jiraStatus}" vs Supabase="${updatedIssue.current_status}"`);
+        }
+      }
+    }
 
     // Guardar relación issue-sprints
     if (sprintIds.length > 0) {

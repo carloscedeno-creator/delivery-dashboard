@@ -31,6 +31,7 @@ class JiraClient {
    */
   async fetchAllIssues(jqlQuery = null) {
     const query = jqlQuery || config.sync.jqlQuery;
+    logger.info(`🔍 JQL Query: ${query}`);
     const fieldsToFetch = [
       'summary',
       'issuetype',
@@ -56,20 +57,51 @@ class JiraClient {
         pageCount++;
         logger.info(`📥 Obteniendo página ${pageCount} de issues...`);
 
-        let url = `/rest/api/3/search/jql?jql=${encodeURIComponent(query)}&maxResults=100&fields=${fieldsToFetch}&expand=changelog`;
+        // Intentar primero con el endpoint estándar de búsqueda
+        let url = `/rest/api/3/search?jql=${encodeURIComponent(query)}&maxResults=100&fields=${fieldsToFetch}&expand=changelog`;
+        logger.debug(`🔗 URL completa: ${this.baseUrl}${url}`);
         
         if (nextPageToken) {
-          url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
+          url += `&startAt=${nextPageToken}`;
+        } else {
+          url += `&startAt=0`;
         }
 
-        const response = await this.client.get(url);
+        let response;
+        try {
+          response = await this.client.get(url);
+        } catch (error) {
+          // Si falla, intentar con el endpoint JQL
+          logger.warn(`⚠️ Error con endpoint estándar, intentando con /search/jql...`);
+          url = `/rest/api/3/search/jql?jql=${encodeURIComponent(query)}&maxResults=100&fields=${fieldsToFetch}&expand=changelog`;
+          if (nextPageToken) {
+            url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
+          }
+          response = await this.client.get(url);
+        }
+        
+        logger.debug(`📊 Respuesta de Jira: total=${response.data.total || 0}, issues.length=${response.data.issues?.length || 0}, startAt=${response.data.startAt || 0}, maxResults=${response.data.maxResults || 0}`);
         
         if (response.data.issues && Array.isArray(response.data.issues)) {
           allIssues = allIssues.concat(response.data.issues);
           logger.success(`✅ Página ${pageCount}: ${response.data.issues.length} issues obtenidos (Total: ${allIssues.length})`);
+        } else {
+          logger.warn(`⚠️ Respuesta inesperada de Jira:`, {
+            hasIssues: !!response.data.issues,
+            issuesType: typeof response.data.issues,
+            total: response.data.total,
+            responseKeys: Object.keys(response.data || {})
+          });
         }
 
-        nextPageToken = response.data.nextPageToken || null;
+        // Manejar paginación para ambos endpoints
+        if (response.data.nextPageToken) {
+          nextPageToken = response.data.nextPageToken;
+        } else if (response.data.startAt !== undefined && response.data.total > (response.data.startAt + response.data.issues.length)) {
+          nextPageToken = (response.data.startAt || 0) + (response.data.issues?.length || 0);
+        } else {
+          nextPageToken = null;
+        }
 
         // Pequeño delay para evitar rate limits
         if (nextPageToken) {
@@ -123,7 +155,13 @@ class JiraClient {
       const response = await this.client.get(`/rest/api/3/issue/${issueKey}?fields=*all&expand=names`);
       return response.data;
     } catch (error) {
-      logger.warn(`⚠️ Error obteniendo detalles de ${issueKey}:`, error.message);
+      logger.error(`❌ Error obteniendo detalles de ${issueKey}:`, {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url
+      });
       return null;
     }
   }

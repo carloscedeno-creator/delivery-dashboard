@@ -408,14 +408,21 @@ export const getDeliveryRoadmapData = async () => {
       if (initiative.end_date) {
         endDate = new Date(initiative.end_date).toISOString().split('T')[0];
       } else {
-        // Fallback: usar sprint más reciente
-        const squadMetrics = (sprintMetrics || []).filter(
-          m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
-        );
-        const latestSprint = squadMetrics[0];
-        endDate = latestSprint?.end_date
-          ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-          : null;
+        // Si no hay end_date, estimar basado en start_date o created_at
+        const baseDate = initiative.start_date || initiative.created_at;
+        const estimatedEnd = new Date(baseDate);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3); // 3 meses después
+        endDate = estimatedEnd.toISOString().split('T')[0];
+      }
+
+      // Asegurar que ambas fechas estén presentes (última validación)
+      if (!startDate) {
+        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
+      }
+      if (!endDate) {
+        const estimatedEnd = new Date(startDate);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
+        endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
       // Obtener asignaciones de desarrolladores
@@ -426,30 +433,18 @@ export const getDeliveryRoadmapData = async () => {
       )];
       const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
 
-<<<<<<< HEAD
-      // Validar que al menos una fecha esté presente
-      if (!startDate && !endDate) {
-        console.warn(`[SUPABASE] Iniciativa ${initiative.initiative_name} no tiene fechas. Usando created_at como fallback.`);
-        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
-        // Si no hay end_date, usar 3 meses después del start como estimación
-        const estimatedEnd = new Date(initiative.created_at);
-=======
       // Asegurar que ambas fechas estén presentes
       if (!startDate) {
         startDate = new Date(initiative.created_at).toISOString().split('T')[0];
       }
       if (!endDate) {
         const estimatedEnd = new Date(startDate);
->>>>>>> V1.02
         estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
         endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
-<<<<<<< HEAD
-      roadmapData.push({
-=======
       const roadmapItem = {
->>>>>>> V1.02
+
         squad: squad.squad_name || squad.squad_key,
         initiative: initiative.initiative_name || initiative.initiative_key,
         start: startDate,
@@ -462,17 +457,6 @@ export const getDeliveryRoadmapData = async () => {
         dev: devNames.join(', ') || 'Unassigned',
         percentage: completionPercentage
       };
-
-      // Debug: Log primeros 3 items para verificar formato de fechas
-      if (roadmapData.length < 3) {
-        console.log(`[SUPABASE] Roadmap item ${roadmapData.length + 1}:`, {
-          initiative: roadmapItem.initiative,
-          start: roadmapItem.start,
-          delivery: roadmapItem.delivery,
-          startType: typeof roadmapItem.start,
-          deliveryType: typeof roadmapItem.delivery
-        });
-      }
 
       roadmapData.push(roadmapItem);
     }

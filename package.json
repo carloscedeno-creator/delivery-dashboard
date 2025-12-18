@@ -5,6 +5,7 @@
   "type": "module",
   "homepage": "https://carloscedeno-creator.github.io/delivery-dashboard",
   "scripts": {
+    "check-epic-dates": "node scripts/check-epic-dates-in-db.js",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
@@ -13,7 +14,12 @@
     "calculate-metrics": "node scripts/calculate-metrics.js",
     "test-metrics": "node scripts/test-metrics-calculation.js",
     "analyze": "node scripts/analyze-supabase.js",
-    "query": "node scripts/query-example.js"
+    "query": "node scripts/query-example.js",
+    "compare-formats": "node scripts/compare-csv-vs-supabase.js",
+    "check-sprint": "node scripts/check-sprint-issues.js",
+    "check-status": "node scripts/check-issue-status.js",
+    "force-sync-issues": "node scripts/force-sync-issues.js",
+    "update-status": "node scripts/update-issue-status.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",

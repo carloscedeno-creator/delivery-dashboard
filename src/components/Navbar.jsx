@@ -1,14 +1,26 @@
 import React from 'react';
-import { Layout, Box, Truck, AlertCircle } from 'lucide-react';
+import { Layout, Box, Truck, AlertCircle, Map, Users, BarChart, Activity } from 'lucide-react';
+import { getNavbarModules } from '../config/permissions';
+import { getCurrentUser } from '../utils/authService';
+
+// Mapeo de iconos
+const iconMap = {
+    Layout,
+    Box,
+    Truck,
+    Map,
+    Users,
+    BarChart,
+    Activity
+};
 
 const Navbar = ({ activeView, setActiveView }) => {
-    const navItems = [
-        { id: 'overall', label: 'Overall', icon: Layout },
-        { id: 'product', label: 'Product Roadmap', icon: Box },
-        { id: 'delivery', label: 'Delivery Roadmap', icon: Truck },
-        // Supabase integration - En desarrollo (próximamente)
-        // { id: 'supabase-test', label: 'Supabase Test', icon: Database },
-    ];
+    // Obtener usuario actual y sus módulos permitidos
+    const currentUser = getCurrentUser();
+    const navItems = getNavbarModules(currentUser?.role || 'regular').map(module => ({
+        ...module,
+        icon: iconMap[module.icon] || Layout
+    }));
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-8 py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
@@ -21,7 +33,10 @@ const Navbar = ({ activeView, setActiveView }) => {
                 {navItems.map(item => (
                     <button
                         key={item.id}
-                        onClick={() => setActiveView(item.id)}
+                        onClick={() => {
+                            console.log('🟢 [Navbar] Click en:', item.id, item.label);
+                            setActiveView(item.id);
+                        }}
                         className={`text-sm font-medium transition-colors flex items-center gap-2 ${activeView === item.id ? 'text-cyan-400 border-b-2 border-cyan-400 pb-1' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         <item.icon size={20} />
