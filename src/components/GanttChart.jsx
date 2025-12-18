@@ -168,6 +168,16 @@ const GanttChart = ({ data }) => {
                         const endDateObj = parseDate(item.delivery);
                         const { left, width } = getPosition(item.start, item.delivery);
                         
+                        // Debug: Log si las fechas no se pueden parsear
+                        if (!startDateObj || !endDateObj) {
+                            console.warn(`[GANTT] Fechas inválidas para ${item.initiative}:`, {
+                                start: item.start,
+                                delivery: item.delivery,
+                                startParsed: startDateObj,
+                                endParsed: endDateObj
+                            });
+                        }
+                        
                         // Format dates for tooltip
                         const formatDateForTooltip = (dateObj) => {
                             if (!dateObj || !isValid(dateObj)) return 'N/A';
