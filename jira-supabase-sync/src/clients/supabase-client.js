@@ -225,7 +225,7 @@ class SupabaseClient {
         updated_date: issueData.updatedDate,
         dev_start_date: issueData.devStartDate,
         dev_close_date: issueData.devCloseDate,
-        epic_id: issueData.epicId,
+        initiative_id: issueData.epicId,
         epic_name: issueData.epicName || null,
         sprint_history: issueData.sprintHistory || null,
         status_by_sprint: issueData.statusBySprint || {},

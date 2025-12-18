@@ -25,5 +25,5 @@ CREATE INDEX IF NOT EXISTS idx_issues_epic_name ON public.issues USING btree (ep
 UPDATE public.issues i
 SET epic_name = e.initiative_name
 FROM public.initiatives e
-WHERE i.epic_id = e.id
+WHERE i.initiative_id = e.id
   AND i.epic_name IS NULL;
