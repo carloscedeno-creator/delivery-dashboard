@@ -20,10 +20,37 @@ function getProjectsFromEnv() {
   
   if (projectsEnv) {
     try {
-      return JSON.parse(projectsEnv);
+      // Limpiar el JSON: remover comentarios y espacios extra
+      let cleanedJson = projectsEnv.trim();
+      
+      // Remover comentarios de línea (// ...) si existen
+      cleanedJson = cleanedJson.replace(/\/\/.*$/gm, '');
+      
+      // Remover comentarios de bloque (/* ... */) si existen
+      cleanedJson = cleanedJson.replace(/\/\*[\s\S]*?\*\//g, '');
+      
+      // Intentar parsear
+      const parsed = JSON.parse(cleanedJson);
+      
+      if (!Array.isArray(parsed)) {
+        throw new Error('PROJECTS_CONFIG debe ser un array de proyectos');
+      }
+      
+      return parsed;
     } catch (error) {
-      console.error('❌ Error parseando PROJECTS_CONFIG:', error);
-      return null;
+      console.error('❌ Error parseando PROJECTS_CONFIG:');
+      console.error('   Error:', error.message);
+      console.error('   Longitud del JSON:', projectsEnv.length);
+      console.error('   Primeros 200 caracteres:', projectsEnv.substring(0, 200));
+      console.error('   Últimos 200 caracteres:', projectsEnv.substring(Math.max(0, projectsEnv.length - 200)));
+      console.error('   Posición del error:', error.message.match(/position (\d+)/)?.[1] || 'N/A');
+      if (error.message.includes('position')) {
+        const pos = parseInt(error.message.match(/position (\d+)/)?.[1] || '0');
+        const start = Math.max(0, pos - 50);
+        const end = Math.min(projectsEnv.length, pos + 50);
+        console.error('   Contexto del error:', projectsEnv.substring(start, end));
+      }
+      throw new Error(`Error parseando PROJECTS_CONFIG: ${error.message}`);
     }
   }
   
