@@ -27,6 +27,8 @@ jobs:
       
       - name: Run sync
         working-directory: jira-supabase-sync
+        id: sync
+        continue-on-error: true
         env:
           # Configuración de proyectos (JSON con todos los proyectos)
           PROJECTS_CONFIG: ${{ secrets.PROJECTS_CONFIG }}
@@ -41,13 +43,21 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SYNC_INTERVAL_MINUTES: '30'
-        run: npm run sync
+        run: |
+          npm run sync 2>&1 | tee sync-output.log || true
       
-      - name: Upload logs (if error)
-        if: failure()
+      - name: Upload sync output
+        if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          name: sync-logs
+          name: sync-output
           path: |
-            *.log
-            logs/
+            jira-supabase-sync/sync-output.log
+          retention-days: 7
+      
+      - name: Check sync result
+        if: steps.sync.outcome == 'failure'
+        run: |
+          echo "❌ Sync failed. Check the logs above for details."
+          exit 1
