@@ -25,6 +25,17 @@ jobs:
         working-directory: jira-supabase-sync
         run: npm ci
       
+      - name: Verify configuration
+        working-directory: jira-supabase-sync
+        continue-on-error: true
+        env:
+          PROJECTS_CONFIG: ${{ secrets.PROJECTS_CONFIG }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "🔍 Verificando configuración..."
+          npm run verify-config || echo "⚠️ Verificación falló, pero continuando..."
+      
       - name: Run sync
         working-directory: jira-supabase-sync
         id: sync
