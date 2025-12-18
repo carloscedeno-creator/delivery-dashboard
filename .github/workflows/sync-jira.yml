@@ -22,9 +22,11 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
+        working-directory: jira-supabase-sync
         run: npm ci
       
       - name: Run sync
+        working-directory: jira-supabase-sync
         env:
           # Configuración de proyectos (JSON con todos los proyectos)
           PROJECTS_CONFIG: ${{ secrets.PROJECTS_CONFIG }}
