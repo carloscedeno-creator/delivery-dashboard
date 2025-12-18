@@ -101,6 +101,7 @@ export async function fullSyncForProject(project, squadId, jiraClient) {
 
 /**
  * Sincronización incremental para un proyecto específico
+ * También sincroniza issues de sprints activos para mantener estados actualizados
  */
 export async function incrementalSyncForProject(project, squadId, jiraClient) {
   const startTime = Date.now();
@@ -119,15 +120,94 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
     // 3. Obtener issues actualizados
     const jqlQuery = `project = "${project.projectKey.toUpperCase()}" AND updated >= "${sinceDate.toISOString().split('T')[0]}" AND issuetype != "Sub-task" ORDER BY updated DESC`;
     const jiraIssues = await jiraClient.fetchAllIssues(jqlQuery);
+    
+    logger.info(`📥 Issues actualizados encontrados: ${jiraIssues.length}`);
 
-    if (jiraIssues.length === 0) {
+    // 4. Obtener issues de sprints activos para sincronizar sus estados
+    // Esto asegura que los estados de issues en sprints activos siempre estén actualizados
+    const activeSprintIssues = [];
+    try {
+      const now = new Date().toISOString();
+      // Obtener sprints activos: sin fecha de fin o con fecha de fin >= hoy
+      const { data: activeSprints, error: sprintsError } = await supabaseClient.client
+        .from('sprints')
+        .select('id, sprint_key, sprint_name, end_date')
+        .eq('squad_id', squadId)
+        .or(`end_date.is.null,end_date.gte.${now.split('T')[0]}`); // Sprints activos o sin fecha de fin
+      
+      if (!sprintsError && activeSprints && activeSprints.length > 0) {
+        logger.info(`🏃 Encontrados ${activeSprints.length} sprints activos, sincronizando sus issues...`);
+        
+        for (const sprint of activeSprints) {
+          const { data: sprintIssues, error: sprintIssuesError } = await supabaseClient.client
+            .from('issue_sprints')
+            .select('issue_id')
+            .eq('sprint_id', sprint.id);
+          
+          if (!sprintIssuesError && sprintIssues && sprintIssues.length > 0) {
+            const issueIds = sprintIssues.map(si => si.issue_id);
+            
+            // Obtener issue_keys
+            const { data: issues, error: issuesError } = await supabaseClient.client
+              .from('issues')
+              .select('issue_key')
+              .in('id', issueIds);
+            
+            if (!issuesError && issues) {
+              const issueKeys = issues.map(i => i.issue_key).filter(Boolean);
+              
+              logger.info(`   📋 Sprint ${sprint.sprint_name}: ${issueKeys.length} issues`);
+              
+              // Obtener detalles de cada issue desde Jira
+              for (const issueKey of issueKeys) {
+                try {
+                  const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
+                  if (issueDetails) {
+                    // Verificar si ya está en la lista de issues actualizados
+                    const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
+                    if (!alreadyIncluded) {
+                      activeSprintIssues.push(issueDetails);
+                      logger.debug(`   ✅ Agregado issue de sprint activo: ${issueKey}`);
+                    }
+                  }
+                } catch (error) {
+                  // Ignorar errores 404 (issues que no existen o sin permisos)
+                  if (error.status !== 404) {
+                    logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        logger.info(`📊 Issues de sprints activos a sincronizar: ${activeSprintIssues.length}`);
+      }
+    } catch (error) {
+      logger.warn(`⚠️ Error obteniendo issues de sprints activos: ${error.message}`);
+    }
+
+    // Combinar issues actualizados con issues de sprints activos
+    const allIssues = [...jiraIssues];
+    const existingKeys = new Set(jiraIssues.map(ji => ji.key));
+    
+    for (const sprintIssue of activeSprintIssues) {
+      if (!existingKeys.has(sprintIssue.key)) {
+        allIssues.push(sprintIssue);
+        existingKeys.add(sprintIssue.key);
+      }
+    }
+
+    if (allIssues.length === 0) {
       logger.info(`✅ No hay cambios desde la última sincronización para ${project.projectKey}`);
       await supabaseClient.logSync(squadId, 'incremental', 'completed', 0);
       return { success: true, issuesProcessed: 0 };
     }
+    
+    logger.info(`📊 Total de issues a procesar: ${allIssues.length} (${jiraIssues.length} actualizados + ${activeSprintIssues.length} de sprints activos)`);
 
-    // 4. Procesar épicas actualizadas
-    const updatedEpics = jiraIssues.filter(issue => 
+    // 5. Procesar épicas actualizadas
+    const updatedEpics = allIssues.filter(issue => 
       issue.fields.issuetype?.name === 'Epic'
     );
     
@@ -158,10 +238,10 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
       }
     }
 
-    // 5. Procesar issues
-    const { successCount, errorCount } = await processIssuesWithClient(squadId, jiraIssues, jiraClient);
+    // 6. Procesar issues (incluyendo los de sprints activos)
+    const { successCount, errorCount } = await processIssuesWithClient(squadId, allIssues, jiraClient);
 
-    // 6. Registrar finalización
+    // 7. Registrar finalización
     await supabaseClient.logSync(squadId, 'incremental', 'completed', successCount);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);

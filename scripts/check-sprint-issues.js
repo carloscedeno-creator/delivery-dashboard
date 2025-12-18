@@ -158,3 +158,4 @@ async function checkSprintIssues(sprintName = 'ODSO Sprint 11') {
 // Ejecutar
 const sprintName = process.argv[2] || 'ODSO Sprint 11';
 checkSprintIssues(sprintName);
+

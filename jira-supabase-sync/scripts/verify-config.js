@@ -180,3 +180,4 @@ if (envErrors.length === 0) {
   console.log('\n💡 Revisa la configuración y vuelve a intentar.');
   process.exit(1);
 }
+

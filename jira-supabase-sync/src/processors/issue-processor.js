@@ -9,6 +9,72 @@ import jiraClientDefault from '../clients/jira-client.js';
 import { config } from '../config.js';
 
 /**
+ * Normaliza el nombre del estado para que coincida con el formato de Jira
+ * Convierte a mayúsculas y maneja variaciones comunes
+ */
+function normalizeStatus(status) {
+  if (!status || status === 'Unknown') return 'Unknown';
+  
+  // Mapeo de estados comunes a su formato estándar en Jira
+  const statusMap = {
+    'to do': 'TO DO',
+    'todo': 'TO DO',
+    'to-do': 'TO DO',
+    'in progress': 'IN PROGRESS',
+    'in-progress': 'IN PROGRESS',
+    'en progreso': 'IN PROGRESS',
+    'done': 'DONE',
+    'testing': 'TESTING',
+    'test': 'TESTING',
+    'blocked': 'BLOCKED',
+    'security review': 'SECURITY REVIEW',
+    'security-review': 'SECURITY REVIEW',
+    'reopen': 'REOPEN',
+    're-opened': 'REOPEN',
+    'reopen': 'REOPEN',
+    'compliance check': 'COMPLIANCE CHECK',
+    'compliance-check': 'COMPLIANCE CHECK',
+    'development done': 'DEVELOPMENT DONE',
+    'development-done': 'DEVELOPMENT DONE',
+    'qa': 'QA',
+    'qa external': 'QA EXTERNAL',
+    'qa-external': 'QA EXTERNAL',
+    'staging': 'STAGING',
+    'ready to release': 'READY TO RELEASE',
+    'ready-to-release': 'READY TO RELEASE',
+    'in review': 'IN REVIEW',
+    'in-review': 'IN REVIEW',
+    'open': 'OPEN',
+    'hold': 'HOLD',
+    'requisitions': 'REQUISITIONS',
+  };
+
+  const normalized = status.trim();
+  const lowerStatus = normalized.toLowerCase();
+  
+  // Si está en el mapa, usar el valor mapeado
+  if (statusMap[lowerStatus]) {
+    return statusMap[lowerStatus];
+  }
+  
+  // Si ya está completamente en mayúsculas, verificar si es un estado válido
+  if (normalized === normalized.toUpperCase()) {
+    // Estados válidos que ya están en mayúsculas
+    const validUpperStates = ['QA', 'BLOCKED', 'DONE', 'TO DO', 'IN PROGRESS', 'TESTING', 
+                              'SECURITY REVIEW', 'REOPEN', 'STAGING', 'OPEN', 'HOLD', 
+                              'IN REVIEW', 'REQUISITIONS', 'DEVELOPMENT DONE', 'QA EXTERNAL', 
+                              'READY TO RELEASE', 'COMPLIANCE CHECK'];
+    
+    if (validUpperStates.includes(normalized)) {
+      return normalized;
+    }
+  }
+  
+  // Convertir a mayúsculas por defecto
+  return normalized.toUpperCase();
+}
+
+/**
  * Procesa un issue de Jira y lo guarda en Supabase
  */
 export async function processIssue(squadId, jiraIssue, jiraClient = null) {
@@ -110,13 +176,20 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
 
     // Preparar datos del issue
     const jiraStatus = fields.status?.name || 'Unknown';
+    const normalizedStatus = normalizeStatus(jiraStatus);
+    
+    // Log si hay diferencia entre el estado original y el normalizado
+    if (jiraStatus !== normalizedStatus) {
+      logger.debug(`🔄 [${jiraIssue.key}] Normalizando estado: "${jiraStatus}" -> "${normalizedStatus}"`);
+    }
+    
     const issueData = {
       key: jiraIssue.key,
       issueType: fields.issuetype?.name || 'Unknown',
       summary: fields.summary || '',
       assigneeId,
       priority: fields.priority?.name || null,
-      status: jiraStatus,
+      status: normalizedStatus,
       storyPoints: fields[config.jira.storyPointsFieldId] || 0,
       resolution: fields.resolution?.name || null,
       createdDate: fields.created ? new Date(fields.created) : null,
@@ -131,6 +204,7 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
     // Log del estatus para debugging
     if (jiraIssue.key === 'ODSO-297' || jiraIssue.key === 'ODSO-313') {
       logger.info(`🔍 [${jiraIssue.key}] Estatus en Jira: "${jiraStatus}"`);
+      logger.info(`🔍 [${jiraIssue.key}] Estatus normalizado: "${normalizedStatus}"`);
       logger.info(`🔍 [${jiraIssue.key}] Status object completo:`, JSON.stringify(fields.status, null, 2));
     }
 
@@ -147,8 +221,8 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       
       if (updatedIssue) {
         logger.info(`✅ [${jiraIssue.key}] Estatus guardado en Supabase: "${updatedIssue.current_status}"`);
-        if (jiraStatus !== updatedIssue.current_status) {
-          logger.warn(`⚠️ [${jiraIssue.key}] DISCREPANCIA: Jira="${jiraStatus}" vs Supabase="${updatedIssue.current_status}"`);
+        if (normalizedStatus !== updatedIssue.current_status) {
+          logger.warn(`⚠️ [${jiraIssue.key}] DISCREPANCIA: Normalizado="${normalizedStatus}" vs Supabase="${updatedIssue.current_status}"`);
         }
       }
     }
@@ -177,7 +251,7 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
           .upsert({
             issue_id: issueId,
             sprint_id: sprintId,
-            status_at_sprint_close: statusAtSprintClose || fields.status?.name,
+            status_at_sprint_close: statusAtSprintClose ? normalizeStatus(statusAtSprintClose) : normalizedStatus,
             story_points_at_start: issueData.storyPoints, // TODO: calcular SP inicial del sprint
             story_points_at_close: issueData.storyPoints,
           }, {

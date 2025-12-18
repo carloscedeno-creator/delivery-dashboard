@@ -37,3 +37,4 @@ npm run dev
 
 ## Verificación Rápida
 Si cambiaste "Avg. SPI" a "avg. SPI!" y lo ves, entonces el código SÍ se está actualizando. Si otros cambios no se ven, probablemente es caché o el servidor necesita reiniciarse.
+

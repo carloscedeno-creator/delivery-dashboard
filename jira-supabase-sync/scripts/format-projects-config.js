@@ -59,3 +59,4 @@ try {
   console.error('❌ Error parseando JSON:', error.message);
   process.exit(1);
 }
+

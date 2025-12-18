@@ -108,3 +108,4 @@ export const getNavbarModules = (role) => {
   
   return modules.map(module => moduleInfo[module]).filter(Boolean);
 };
+

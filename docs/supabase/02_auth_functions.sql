@@ -209,3 +209,4 @@ $$;
 
 -- Otorgar permisos para RPC
 GRANT EXECUTE ON FUNCTION get_user_by_id TO anon, authenticated, service_role;
+

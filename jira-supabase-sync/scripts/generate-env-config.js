@@ -47,3 +47,4 @@ try {
   console.error('\n💡 Asegúrate de que PROJECTS_CONFIG_LOCAL.json existe y es válido');
   process.exit(1);
 }
+

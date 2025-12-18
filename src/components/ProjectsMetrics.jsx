@@ -20,18 +20,21 @@ const ProjectsMetrics = () => {
   const [sprintInfo, setSprintInfo] = useState(null);
 
   // Colores para los Board States (basados en la imagen)
+  // Nota: Los estados ahora están normalizados a mayúsculas
   const statusColors = {
     'QA': '#fef3c7',           // Light yellow
-    'QA External': '#fb923c',   // Orange
-    'Development Done': '#86efac', // Light green
-    'Staging': '#4ade80',       // Medium green
-    'Ready To Release': '#16a34a', // Dark green
-    'To Do': '#1f2937',        // Black/Dark gray
-    'Reopen': '#ef4444',        // Red
-    'In Progress': '#d1d5db',   // Light gray
-    'Blocked': '#f9a8d4',       // Pink
-    'Done': '#10b981',         // Green
-    'Security Review': '#3b82f6', // Blue
+    'QA EXTERNAL': '#fb923c',   // Orange
+    'DEVELOPMENT DONE': '#86efac', // Light green
+    'STAGING': '#4ade80',       // Medium green
+    'READY TO RELEASE': '#16a34a', // Dark green
+    'TO DO': '#1f2937',        // Black/Dark gray
+    'REOPEN': '#ef4444',        // Red
+    'IN PROGRESS': '#d1d5db',   // Light gray
+    'BLOCKED': '#f9a8d4',       // Pink
+    'DONE': '#10b981',         // Green
+    'SECURITY REVIEW': '#3b82f6', // Blue
+    'TESTING': '#fbbf24',      // Yellow/Amber
+    'COMPLIANCE CHECK': '#a78bfa', // Purple
     'Unknown': '#6b7280'        // Gray
   };
 
@@ -323,3 +326,4 @@ const ProjectsMetrics = () => {
 };
 
 export default ProjectsMetrics;
+
