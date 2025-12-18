@@ -9,6 +9,113 @@ import jiraClientDefault from '../clients/jira-client.js';
 import { config } from '../config.js';
 
 /**
+ * Encuentra el valor de un campo en el changelog en una fecha específica
+ * @param {Object} changelog - Changelog del issue de Jira
+ * @param {Array<string>} fieldNames - Nombres de campos a buscar
+ * @param {Date|string} targetDate - Fecha objetivo
+ * @param {any} fallbackValue - Valor por defecto si no se encuentra
+ * @returns {any} Valor encontrado o fallbackValue
+ */
+function findHistoryValueAtDate(changelog, fieldNames, targetDate, fallbackValue) {
+  if (!changelog || !changelog.histories || !targetDate) return fallbackValue;
+  
+  const normalizedFields = fieldNames.map(n => n.toLowerCase());
+  const targetTime = new Date(targetDate).getTime();
+  
+  if (isNaN(targetTime)) return fallbackValue;
+  
+  const changes = changelog.histories
+    .flatMap(history => (history.items || []).map(item => ({ 
+      ...item, 
+      created: new Date(history.created).getTime() 
+    })))
+    .filter(item => item.field && normalizedFields.includes(item.field.toLowerCase()))
+    .sort((a, b) => a.created - b.created);
+
+  if (changes.length === 0) return fallbackValue;
+
+  let lastChangeBefore = null;
+  for (const change of changes) {
+    if (change.created <= targetTime) {
+      lastChangeBefore = change;
+    } else {
+      break;
+    }
+  }
+
+  if (lastChangeBefore) return lastChangeBefore.toString || fallbackValue;
+
+  const firstChange = changes[0];
+  if (firstChange && firstChange.created > targetTime) {
+    return firstChange.fromString || fallbackValue;
+  }
+
+  return fallbackValue;
+}
+
+/**
+ * Calcula el tiempo en cada estado basado en el changelog
+ * @param {Object} changelog - Changelog del issue
+ * @param {string} createdDateISO - Fecha de creación en ISO
+ * @param {string} resolvedDateISO - Fecha de resolución en ISO (opcional)
+ * @param {string} currentStatus - Estado actual
+ * @returns {string} String con tiempo en cada estado (ej: "To Do: 2.5d; In Progress: 5.0d")
+ */
+function calculateTimeInStatus(changelog, createdDateISO, resolvedDateISO, currentStatus) {
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const now = new Date();
+  const createdDate = new Date(createdDateISO);
+  if (isNaN(createdDate.getTime())) return 'N/A';
+
+  const statusTimes = {};
+  
+  function addStatusTime(statusName, days) {
+    if (!statusName || days <= 0) return;
+    const normalizedStatus = statusName.trim().toLowerCase();
+    if (!statusTimes[normalizedStatus]) {
+      statusTimes[normalizedStatus] = { totalDays: 0, displayName: statusName.trim() };
+    }
+    statusTimes[normalizedStatus].totalDays += days;
+  }
+
+  let statusChanges = [];
+  if (changelog && changelog.histories && changelog.histories.length > 0) {
+    statusChanges = changelog.histories
+      .flatMap(history => (history.items || []).map(item => ({ ...item, created: new Date(history.created) })))
+      .filter(item => (item.field || '').trim().toLowerCase() === 'status' && item.fromString)
+      .sort((a, b) => a.created - b.created);
+  }
+
+  let lastStatusDate = createdDate;
+  const endDate = resolvedDateISO ? new Date(resolvedDateISO) : now;
+  
+  if (statusChanges.length > 0) {
+    for (const change of statusChanges) {
+      const statusName = change.fromString;
+      const changeDate = change.created;
+      if (isNaN(changeDate.getTime())) continue;
+      
+      const daysInStatus = (changeDate - lastStatusDate) / MS_PER_DAY;
+      addStatusTime(statusName, daysInStatus);
+      lastStatusDate = changeDate;
+    }
+  }
+
+  // Agregar tiempo en el estado actual
+  if (currentStatus && lastStatusDate) {
+    const daysInCurrentStatus = (endDate - lastStatusDate) / MS_PER_DAY;
+    addStatusTime(currentStatus, daysInCurrentStatus);
+  }
+
+  // Formatear resultado
+  const result = Object.values(statusTimes)
+    .map(st => `${st.displayName}: ${st.totalDays.toFixed(1)}d`)
+    .join('; ');
+
+  return result || 'N/A';
+}
+
+/**
  * Normaliza el nombre del estado para que coincida con el formato de Jira
  * Convierte a mayúsculas y maneja variaciones comunes
  */
@@ -174,9 +281,96 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       }
     }
 
-    // Preparar datos del issue
+    // Preparar datos del issue - normalizar estado primero
     const jiraStatus = fields.status?.name || 'Unknown';
     const normalizedStatus = normalizeStatus(jiraStatus);
+
+    // Calcular campos históricos adicionales
+    let sprintHistory = 'N/A';
+    const statusBySprint = {};
+    const storyPointsBySprint = {};
+    let statusHistoryDays = 'N/A';
+    let epicName = null;
+
+    // 1. Sprint History (todos los sprints separados por "; ")
+    if (Array.isArray(sprintData) && sprintData.length > 0) {
+      sprintHistory = sprintData.map(sprint => sprint.name).join('; ');
+    }
+
+    // 2. Epic Name
+    if (fields.parent && fields.parent.fields?.issuetype?.name === 'Epic') {
+      epicName = fields.parent.fields.summary || null;
+    }
+
+    // 3. Status by Sprint y Story Points by Sprint
+    if (jiraIssue.changelog && sprintData && Array.isArray(sprintData) && sprintData.length > 0) {
+      const currentSP = fields[config.jira.storyPointsFieldId] || 0;
+      const issueCreated = fields.created ? new Date(fields.created) : null;
+
+      for (const sprint of sprintData) {
+        const sprintName = sprint.name;
+        let fotoDate = null;
+
+        // Determinar fecha de "foto" del sprint
+        if (sprint.completeDate) {
+          fotoDate = sprint.completeDate;
+        } else if (sprint.state === 'closed' && sprint.endDate) {
+          fotoDate = sprint.endDate;
+        } else if (sprint.endDate && new Date(sprint.endDate) < new Date()) {
+          fotoDate = sprint.endDate;
+        }
+
+        // Status by Sprint: estado al momento del cierre o estado actual si está activo
+        if (fotoDate) {
+          const statusAtClose = findHistoryValueAtDate(
+            jiraIssue.changelog,
+            ['status'],
+            fotoDate,
+            null
+          );
+          if (statusAtClose) {
+            statusBySprint[sprintName] = normalizeStatus(statusAtClose);
+          } else {
+            statusBySprint[sprintName] = 'N/A (Sin Historial)';
+          }
+        } else if (sprint.state === 'active') {
+          // Sprint activo: usar estado actual normalizado
+          statusBySprint[sprintName] = normalizedStatus;
+        }
+
+        // Story Points by Sprint: SP al inicio del sprint
+        if (sprint.startDate) {
+          const sprintStart = new Date(sprint.startDate);
+          let spAtStart = 0;
+
+          if (issueCreated && issueCreated.getTime() > sprintStart.getTime()) {
+            // Ticket creado después del inicio del sprint = 0 SP iniciales
+            spAtStart = 0;
+          } else {
+            // Buscar SP al inicio del sprint en el changelog
+            const spFieldNames = ['Story Points', 'Story point estimate', 'Puntos de historia', 'customfield_10016'];
+            const foundSP = findHistoryValueAtDate(
+              jiraIssue.changelog,
+              spFieldNames,
+              sprint.startDate,
+              currentSP
+            );
+            spAtStart = foundSP ? Number(foundSP) : (issueCreated && issueCreated.getTime() <= sprintStart.getTime() ? currentSP : 0);
+          }
+          storyPointsBySprint[sprintName] = spAtStart;
+        }
+      }
+    }
+
+    // 4. Status History Days (tiempo en cada estado)
+    if (jiraIssue.changelog && fields.created) {
+      statusHistoryDays = calculateTimeInStatus(
+        jiraIssue.changelog,
+        fields.created,
+        fields.resolutiondate || null,
+        normalizedStatus
+      );
+    }
     
     // Log si hay diferencia entre el estado original y el normalizado
     if (jiraStatus !== normalizedStatus) {
@@ -198,6 +392,11 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       devStartDate,
       devCloseDate,
       epicId,
+      epicName,
+      sprintHistory,
+      statusBySprint: Object.keys(statusBySprint).length > 0 ? statusBySprint : null,
+      storyPointsBySprint: Object.keys(storyPointsBySprint).length > 0 ? storyPointsBySprint : null,
+      statusHistoryDays,
       rawData: jiraIssue,
     };
 
