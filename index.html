@@ -4942,12 +4942,400 @@
                             {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
                             {activeView === 'strata' && <StrataMappingView productInitiatives={productInitiatives} deliveryProjects={projectData} devAllocationData={devAllocationData} strataMappingData={strataMappingData} />}
                             {activeView === 'projects-metrics' && getModulesForRole(currentUser?.role || 'regular').includes('projects-metrics') && (() => {
-                                console.log('🟢 [INDEX] Renderizando ProjectsMetrics');
-                                return React.createElement('div', { className: 'space-y-6' }, 
-                                    React.createElement('div', { className: 'text-center text-slate-400 py-12' }, 
-                                        'Projects Metrics component - Please use the React component version'
-                                    )
-                                );
+                                console.log('🟢 [INDEX] Renderizando ProjectsMetrics inline');
+                                // Componente ProjectsMetrics inline (versión completa)
+                                const ProjectsMetricsInline = () => {
+                                    const [squads, setSquads] = useState([]);
+                                    const [sprints, setSprints] = useState([]);
+                                    const [selectedSquad, setSelectedSquad] = useState(null);
+                                    const [selectedSprint, setSelectedSprint] = useState(null);
+                                    const [metricsData, setMetricsData] = useState(null);
+                                    const [loading, setLoading] = useState(true);
+                                    const [squadInfo, setSquadInfo] = useState(null);
+                                    const [sprintInfo, setSprintInfo] = useState(null);
+
+                                    // Colores para los Board States
+                                    const statusColors = {
+                                        'QA': '#fef3c7',
+                                        'QA External': '#fb923c',
+                                        'Development Done': '#86efac',
+                                        'Staging': '#4ade80',
+                                        'Ready To Release': '#16a34a',
+                                        'To Do': '#1f2937',
+                                        'Reopen': '#ef4444',
+                                        'In Progress': '#d1d5db',
+                                        'Blocked': '#f9a8d4',
+                                        'Done': '#10b981',
+                                        'Security Review': '#3b82f6',
+                                        'Unknown': '#6b7280'
+                                    };
+
+                                    // Cargar squads al montar
+                                    useEffect(() => {
+                                        const loadSquads = async () => {
+                                            try {
+                                                if (!window.supabaseClient) {
+                                                    console.error('🔴 [ProjectsMetricsInline] Supabase no está configurado');
+                                                    return;
+                                                }
+                                                const { data, error } = await window.supabaseClient
+                                                    .from('squads')
+                                                    .select('id, squad_key, squad_name')
+                                                    .order('squad_name', { ascending: true });
+                                                if (error) throw error;
+                                                setSquads(data || []);
+                                                if (data && data.length > 0) {
+                                                    setSelectedSquad(String(data[0].id));
+                                                }
+                                            } catch (error) {
+                                                console.error('🔴 [ProjectsMetricsInline] Error cargando squads:', error);
+                                            }
+                                        };
+                                        loadSquads();
+                                    }, []);
+
+                                    // Cargar sprints cuando se selecciona un squad
+                                    useEffect(() => {
+                                        if (selectedSquad) {
+                                            const loadSprints = async () => {
+                                                try {
+                                                    const { data, error } = await window.supabaseClient
+                                                        .from('sprints')
+                                                        .select('id, sprint_key, sprint_name, start_date, end_date, squad_id')
+                                                        .eq('squad_id', selectedSquad)
+                                                        .order('start_date', { ascending: false });
+                                                    if (error) throw error;
+                                                    const now = new Date();
+                                                    const sprintsWithCurrent = (data || []).map(sprint => {
+                                                        const endDate = sprint.end_date ? new Date(sprint.end_date) : null;
+                                                        const isActive = endDate ? endDate >= now : false;
+                                                        return { ...sprint, is_active: isActive };
+                                                    });
+                                                    setSprints(sprintsWithCurrent);
+                                                    const currentSprint = sprintsWithCurrent.find(s => s.is_active) || sprintsWithCurrent[0];
+                                                    if (currentSprint) {
+                                                        setSelectedSprint(String(currentSprint.id));
+                                                    }
+                                                } catch (error) {
+                                                    console.error('🔴 [ProjectsMetricsInline] Error cargando sprints:', error);
+                                                }
+                                            };
+                                            loadSprints();
+                                            
+                                            // Cargar info del squad
+                                            const loadSquadInfo = async () => {
+                                                try {
+                                                    const { data, error } = await window.supabaseClient
+                                                        .from('squads')
+                                                        .select('id, squad_key, squad_name')
+                                                        .eq('id', selectedSquad)
+                                                        .single();
+                                                    if (error) throw error;
+                                                    setSquadInfo(data);
+                                                } catch (error) {
+                                                    console.error('🔴 [ProjectsMetricsInline] Error cargando info del squad:', error);
+                                                }
+                                            };
+                                            loadSquadInfo();
+                                        } else {
+                                            setSprints([]);
+                                            setSelectedSprint(null);
+                                        }
+                                    }, [selectedSquad]);
+
+                                    // Cargar info del sprint
+                                    useEffect(() => {
+                                        if (selectedSprint) {
+                                            const loadSprintInfo = async () => {
+                                                try {
+                                                    const { data, error } = await window.supabaseClient
+                                                        .from('sprints')
+                                                        .select('id, sprint_key, sprint_name, start_date, end_date')
+                                                        .eq('id', selectedSprint)
+                                                        .single();
+                                                    if (error) throw error;
+                                                    setSprintInfo(data);
+                                                } catch (error) {
+                                                    console.error('🔴 [ProjectsMetricsInline] Error cargando info del sprint:', error);
+                                                }
+                                            };
+                                            loadSprintInfo();
+                                        }
+                                    }, [selectedSprint]);
+
+                                    // Cargar métricas cuando cambian los filtros
+                                    useEffect(() => {
+                                        if (selectedSquad) {
+                                            const loadMetrics = async () => {
+                                                try {
+                                                    setLoading(true);
+                                                    
+                                                    // Obtener initiative_ids del squad
+                                                    let initiativeIds = null;
+                                                    const { data: initiatives, error: initiativesError } = await window.supabaseClient
+                                                        .from('initiatives')
+                                                        .select('id')
+                                                        .eq('squad_id', selectedSquad);
+                                                    if (initiativesError) throw initiativesError;
+                                                    initiativeIds = (initiatives || []).map(i => i.id);
+                                                    
+                                                    if (initiativeIds.length === 0) {
+                                                        setMetricsData({
+                                                            tickets: [],
+                                                            statusBreakdown: {},
+                                                            statusData: [],
+                                                            totalTickets: 0,
+                                                            totalSP: 0
+                                                        });
+                                                        setLoading(false);
+                                                        return;
+                                                    }
+
+                                                    // Obtener issue_ids del sprint si está seleccionado
+                                                    let sprintIssueIds = null;
+                                                    if (selectedSprint) {
+                                                        const { data: sprintIssues, error: sprintError } = await window.supabaseClient
+                                                            .from('issue_sprints')
+                                                            .select('issue_id')
+                                                            .eq('sprint_id', selectedSprint);
+                                                        if (sprintError) throw sprintError;
+                                                        sprintIssueIds = (sprintIssues || []).map(si => si.issue_id);
+                                                        
+                                                        if (sprintIssueIds.length === 0) {
+                                                            setMetricsData({
+                                                                tickets: [],
+                                                                statusBreakdown: {},
+                                                                statusData: [],
+                                                                totalTickets: 0,
+                                                                totalSP: 0
+                                                            });
+                                                            setLoading(false);
+                                                            return;
+                                                        }
+                                                    }
+
+                                                    // Construir query
+                                                    let query = window.supabaseClient
+                                                        .from('issues')
+                                                        .select(`
+                                                            id,
+                                                            issue_key,
+                                                            summary,
+                                                            current_status,
+                                                            current_story_points,
+                                                            initiative_id
+                                                        `);
+
+                                                    if (initiativeIds) {
+                                                        query = query.in('initiative_id', initiativeIds);
+                                                    }
+                                                    if (sprintIssueIds) {
+                                                        query = query.in('id', sprintIssueIds);
+                                                    }
+
+                                                    const { data: issues, error } = await query;
+                                                    if (error) throw error;
+
+                                                    // Agrupar por Board State
+                                                    const statusBreakdown = {};
+                                                    let totalSP = 0;
+                                                    (issues || []).forEach(issue => {
+                                                        const status = issue.current_status || 'Unknown';
+                                                        if (!statusBreakdown[status]) {
+                                                            statusBreakdown[status] = { name: status, count: 0, sp: 0 };
+                                                        }
+                                                        statusBreakdown[status].count++;
+                                                        const sp = issue.current_story_points || 0;
+                                                        statusBreakdown[status].sp += sp;
+                                                        totalSP += sp;
+                                                    });
+
+                                                    // Convertir a array
+                                                    const statusData = Object.values(statusBreakdown).map(status => ({
+                                                        name: status.name,
+                                                        value: status.count,
+                                                        sp: status.sp,
+                                                        percentage: 0
+                                                    }));
+
+                                                    const totalTickets = issues?.length || 0;
+                                                    statusData.forEach(status => {
+                                                        status.percentage = totalTickets > 0 ? (status.value / totalTickets) * 100 : 0;
+                                                    });
+
+                                                    statusData.sort((a, b) => b.value - a.value);
+
+                                                    setMetricsData({
+                                                        tickets: issues || [],
+                                                        statusBreakdown: statusBreakdown,
+                                                        statusData: statusData,
+                                                        totalTickets: totalTickets,
+                                                        totalSP: totalSP
+                                                    });
+                                                } catch (error) {
+                                                    console.error('🔴 [ProjectsMetricsInline] Error cargando métricas:', error);
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            };
+                                            loadMetrics();
+                                        }
+                                    }, [selectedSquad, selectedSprint]);
+
+                                    // Preparar datos para gráficos
+                                    const chartData = useMemo(() => {
+                                        if (!metricsData || !metricsData.statusData) return [];
+                                        return metricsData.statusData.map(status => ({
+                                            name: status.name,
+                                            value: status.value,
+                                            percentage: status.percentage,
+                                            color: statusColors[status.name] || statusColors['Unknown']
+                                        }));
+                                    }, [metricsData]);
+
+                                    // Título dinámico
+                                    const title = useMemo(() => {
+                                        if (!squadInfo) return 'Dev Team Metrics';
+                                        if (sprintInfo) {
+                                            return `Dev Team Metrics - ${squadInfo.squad_name} - ${sprintInfo.sprint_name}`;
+                                        }
+                                        return `Dev Team Metrics - ${squadInfo.squad_name}`;
+                                    }, [squadInfo, sprintInfo]);
+
+                                    if (loading && !metricsData) {
+                                        return React.createElement('div', { className: 'min-h-screen flex items-center justify-center' },
+                                            React.createElement('div', { className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500' })
+                                        );
+                                    }
+
+                                    return React.createElement('div', { className: 'space-y-8' },
+                                        // Header
+                                        React.createElement('div', { className: 'flex justify-between items-center' },
+                                            React.createElement('div', null,
+                                                React.createElement('h1', { className: 'text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500' }, title),
+                                                React.createElement('p', { className: 'text-slate-400 mt-2' }, 'Project metrics by squad and sprint')
+                                            )
+                                        ),
+                                        // Filtros
+                                        React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                            React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+                                                React.createElement('div', null,
+                                                    React.createElement('label', { className: 'block text-sm font-medium text-slate-300 mb-2' }, 'Squad'),
+                                                    React.createElement('div', { className: 'relative' },
+                                                        React.createElement('select', {
+                                                            value: selectedSquad || '',
+                                                            onChange: (e) => setSelectedSquad(e.target.value ? String(e.target.value) : null),
+                                                            className: 'w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white appearance-none focus:outline-none focus:ring-2 focus:ring-cyan-500'
+                                                        },
+                                                            React.createElement('option', { value: '' }, 'Select Squad'),
+                                                            squads.map((squad) => React.createElement('option', { key: squad.id, value: squad.id }, squad.squad_name))
+                                                        ),
+                                                        React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none', size: 20 })
+                                                    )
+                                                ),
+                                                React.createElement('div', null,
+                                                    React.createElement('label', { className: 'block text-sm font-medium text-slate-300 mb-2' }, 'Sprint'),
+                                                    React.createElement('div', { className: 'relative' },
+                                                        React.createElement('select', {
+                                                            value: selectedSprint || '',
+                                                            onChange: (e) => setSelectedSprint(e.target.value ? String(e.target.value) : null),
+                                                            className: 'w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white appearance-none focus:outline-none focus:ring-2 focus:ring-cyan-500',
+                                                            disabled: !selectedSquad || sprints.length === 0
+                                                        },
+                                                            React.createElement('option', { value: '' }, 'Select Sprint'),
+                                                            sprints.map((sprint) => React.createElement('option', { key: sprint.id, value: sprint.id }, 
+                                                                sprint.sprint_name + (sprint.is_active ? ' ⭐ Current' : '')
+                                                            ))
+                                                        ),
+                                                        React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none', size: 20 })
+                                                    )
+                                                )
+                                            )
+                                        ),
+                                        // Gráficos
+                                        metricsData && metricsData.totalTickets > 0 ? React.createElement('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-6' },
+                                            // Pie Chart
+                                            React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, 'Board State Distribution'),
+                                                React.createElement(window.Recharts.ResponsiveContainer, { width: '100%', height: 400 },
+                                                    React.createElement(window.Recharts.PieChart, null,
+                                                        React.createElement(window.Recharts.Pie, {
+                                                            data: chartData,
+                                                            cx: '50%',
+                                                            cy: '50%',
+                                                            labelLine: false,
+                                                            label: ({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`,
+                                                            outerRadius: 120,
+                                                            fill: '#8884d8',
+                                                            dataKey: 'value'
+                                                        },
+                                                            chartData.map((entry, index) => React.createElement(window.Recharts.Cell, { key: `cell-${index}`, fill: entry.color }))
+                                                        ),
+                                                        React.createElement(window.Recharts.Tooltip, {
+                                                            contentStyle: { backgroundColor: '#1e293b', border: '1px solid #374151', borderRadius: '8px', color: '#fff' },
+                                                            formatter: (value, name, props) => [`${value} (${props.payload.percentage.toFixed(1)}%)`, 'Count']
+                                                        }),
+                                                        React.createElement(window.Recharts.Legend, {
+                                                            formatter: (value, entry) => `${value}: ${entry.payload.value} (${entry.payload.percentage.toFixed(1)}%)`
+                                                        })
+                                                    )
+                                                )
+                                            ),
+                                            // Bar Chart
+                                            React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, 'Board State Counts'),
+                                                React.createElement(window.Recharts.ResponsiveContainer, { width: '100%', height: 400 },
+                                                    React.createElement(window.Recharts.BarChart, { data: chartData, layout: 'vertical' },
+                                                        React.createElement(window.Recharts.CartesianGrid, { strokeDasharray: '3 3', stroke: '#374151' }),
+                                                        React.createElement(window.Recharts.XAxis, { type: 'number', stroke: '#9ca3af' }),
+                                                        React.createElement(window.Recharts.YAxis, { 
+                                                            type: 'category', 
+                                                            dataKey: 'name', 
+                                                            stroke: '#9ca3af',
+                                                            width: 120,
+                                                            tick: { fontSize: 12 }
+                                                        }),
+                                                        React.createElement(window.Recharts.Tooltip, {
+                                                            contentStyle: { backgroundColor: '#1e293b', border: '1px solid #374151', borderRadius: '8px', color: '#fff' },
+                                                            formatter: (value) => [`${value} tickets`, 'Count']
+                                                        }),
+                                                        React.createElement(window.Recharts.Legend),
+                                                        React.createElement(window.Recharts.Bar, { dataKey: 'value', fill: '#3b82f6', name: 'Tickets' },
+                                                            chartData.map((entry, index) => React.createElement(window.Recharts.Cell, { key: `cell-${index}`, fill: entry.color }))
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        ) : React.createElement('div', { className: 'glass rounded-2xl p-12 text-center' },
+                                            React.createElement('p', { className: 'text-slate-400 text-lg' },
+                                                !selectedSquad ? 'Please select a squad to view metrics' :
+                                                metricsData?.totalTickets === 0 ? 'No tickets found for the selected squad and sprint' :
+                                                'Loading metrics...'
+                                            )
+                                        ),
+                                        // Resumen
+                                        metricsData && metricsData.totalTickets > 0 && React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                            React.createElement('h3', { className: 'text-xl font-semibold text-white mb-4' }, 'Summary'),
+                                            React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-4' },
+                                                React.createElement('div', null,
+                                                    React.createElement('div', { className: 'text-2xl font-bold text-white' }, metricsData.totalTickets),
+                                                    React.createElement('div', { className: 'text-sm text-slate-400' }, 'Total Tickets')
+                                                ),
+                                                React.createElement('div', null,
+                                                    React.createElement('div', { className: 'text-2xl font-bold text-white' }, metricsData.totalSP),
+                                                    React.createElement('div', { className: 'text-sm text-slate-400' }, 'Total Story Points')
+                                                ),
+                                                React.createElement('div', null,
+                                                    React.createElement('div', { className: 'text-2xl font-bold text-white' },
+                                                        metricsData.totalTickets > 0 ? (metricsData.totalSP / metricsData.totalTickets).toFixed(1) : 0
+                                                    ),
+                                                    React.createElement('div', { className: 'text-sm text-slate-400' }, 'Avg. Story Points')
+                                                )
+                                            )
+                                        )
+                                    );
+                                };
+                                return React.createElement(ProjectsMetricsInline);
                             })()}
                             {activeView === 'developer-metrics' && getModulesForRole(currentUser?.role || 'regular').includes('developer-metrics') && (() => {
                                 console.log('🟢 [INDEX] Renderizando DeveloperMetrics inline');
