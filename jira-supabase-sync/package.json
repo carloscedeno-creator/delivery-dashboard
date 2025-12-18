@@ -11,7 +11,11 @@
     "test": "node --test",
     "list-projects": "node scripts/list-jira-projects.js",
     "verify-config": "node scripts/verify-config.js",
-    "generate-env-config": "node scripts/generate-env-config.js"
+    "generate-env-config": "node scripts/generate-env-config.js",
+    "force-sync-issues": "node scripts/force-sync-specific-issues.js",
+    "force-full-sync": "node scripts/force-full-sync.js",
+    "test-jira": "node scripts/test-jira-query.js",
+    "test-access": "node scripts/test-jira-access.js"
   },
   "keywords": [
     "jira",

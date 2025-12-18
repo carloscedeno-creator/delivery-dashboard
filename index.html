@@ -160,7 +160,7 @@
             if (!RechartsObj) {
                 throw new Error("Recharts library failed to load. Please check your internet connection.");
             }
-            const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Sector } = RechartsObj;
+            const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Sector, CartesianGrid, Legend } = RechartsObj;
 
             const Icons = {
                 AlertCircle: ({ size = 24, className = "" }) => (
@@ -246,6 +246,9 @@
                 ),
                 ArrowLeft: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+                ),
+                Star: ({ size = 24, className = "", fill = "none" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                 ),
                 Database: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
@@ -4938,6 +4941,706 @@
                             {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                             {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
                             {activeView === 'strata' && <StrataMappingView productInitiatives={productInitiatives} deliveryProjects={projectData} devAllocationData={devAllocationData} strataMappingData={strataMappingData} />}
+                            {activeView === 'projects-metrics' && getModulesForRole(currentUser?.role || 'regular').includes('projects-metrics') && (() => {
+                                console.log('🟢 [INDEX] Renderizando ProjectsMetrics');
+                                return React.createElement('div', { className: 'space-y-6' }, 
+                                    React.createElement('div', { className: 'text-center text-slate-400 py-12' }, 
+                                        'Projects Metrics component - Please use the React component version'
+                                    )
+                                );
+                            })()}
+                            {activeView === 'developer-metrics' && getModulesForRole(currentUser?.role || 'regular').includes('developer-metrics') && (() => {
+                                console.log('🟢 [INDEX] Renderizando DeveloperMetrics inline');
+                                // Componente DeveloperMetrics inline (versión completa)
+                                const DeveloperMetricsInline = () => {
+                                    const [squads, setSquads] = useState([]);
+                                    const [sprints, setSprints] = useState([]);
+                                    const [developers, setDevelopers] = useState([]);
+                                    const [selectedSquad, setSelectedSquad] = useState(null);
+                                    const [selectedSprint, setSelectedSprint] = useState(null);
+                                    const [selectedDeveloper, setSelectedDeveloper] = useState(null);
+                                    const [metricsData, setMetricsData] = useState(null);
+                                    const [developerInfo, setDeveloperInfo] = useState(null);
+                                    const [loading, setLoading] = useState(true);
+                                    
+                                    console.log('🔵 [DeveloperMetricsInline] Componente renderizado');
+                                    
+                                    // Cargar squads al inicio
+                                    useEffect(() => {
+                                        console.log('🟢 [DeveloperMetricsInline] Cargando squads...');
+                                        if (window.supabaseClient) {
+                                            window.supabaseClient.from('squads')
+                                                .select('id, squad_key, squad_name')
+                                                .order('squad_name', { ascending: true })
+                                                .then(({ data, error }) => {
+                                                    if (error) {
+                                                        console.error('🔴 [DeveloperMetricsInline] Error cargando squads:', error);
+                                                        setLoading(false);
+                                                        return;
+                                                    }
+                                                    console.log('🟢 [DeveloperMetricsInline] Squads cargados:', data);
+                                                    setSquads(data || []);
+                                                    if (data && data.length > 0) {
+                                                        setSelectedSquad(String(data[0].id));
+                                                        console.log('🟢 [DeveloperMetricsInline] Squad seleccionado:', String(data[0].id), data[0].squad_name);
+                                                    }
+                                                    setLoading(false);
+                                                });
+                                        } else {
+                                            console.error('🔴 [DeveloperMetricsInline] Supabase no está configurado');
+                                            setLoading(false);
+                                        }
+                                    }, []);
+                                    
+                                    // Cargar sprints cuando se selecciona un squad
+                                    useEffect(() => {
+                                        if (!selectedSquad) {
+                                            setSprints([]);
+                                            setSelectedSprint(null);
+                                            return;
+                                        }
+                                        
+                                        console.log('🟢 [DeveloperMetricsInline] Cargando sprints para squad:', selectedSquad);
+                                        if (window.supabaseClient) {
+                                            window.supabaseClient.from('sprints')
+                                                .select('id, sprint_key, sprint_name, start_date, end_date, squad_id')
+                                                .eq('squad_id', selectedSquad)
+                                                .order('start_date', { ascending: false })
+                                                .then(({ data, error }) => {
+                                                    if (error) {
+                                                        console.error('🔴 [DeveloperMetricsInline] Error cargando sprints:', error);
+                                                        setSprints([]);
+                                                        return;
+                                                    }
+                                                    
+                                                    // Determinar sprint actual
+                                                    const now = new Date();
+                                                    const sprintsWithCurrent = (data || []).map(sprint => {
+                                                        const endDate = sprint.end_date ? new Date(sprint.end_date) : null;
+                                                        const isActive = endDate ? endDate >= now : false;
+                                                        return { ...sprint, is_active: isActive };
+                                                    });
+                                                    
+                                                    console.log('🟢 [DeveloperMetricsInline] Sprints cargados:', sprintsWithCurrent);
+                                                    setSprints(sprintsWithCurrent);
+                                                    
+                                                    // Seleccionar sprint actual si existe
+                                                    const currentSprint = sprintsWithCurrent.find(s => s.is_active);
+                                                    if (currentSprint) {
+                                                        setSelectedSprint(String(currentSprint.id));
+                                                        console.log('🟢 [DeveloperMetricsInline] Sprint actual seleccionado:', String(currentSprint.id), currentSprint.sprint_name);
+                                                    } else if (sprintsWithCurrent.length > 0) {
+                                                        setSelectedSprint(String(sprintsWithCurrent[0].id));
+                                                        console.log('🟢 [DeveloperMetricsInline] Primer sprint seleccionado:', String(sprintsWithCurrent[0].id), sprintsWithCurrent[0].sprint_name);
+                                                    }
+                                                });
+                                        }
+                                    }, [selectedSquad]);
+                                    
+                                    // Cargar developers cuando se selecciona un squad
+                                    useEffect(() => {
+                                        if (!selectedSquad) {
+                                            setDevelopers([]);
+                                            setSelectedDeveloper(null);
+                                            return;
+                                        }
+                                        
+                                        console.log('🟢 [DeveloperMetricsInline] Cargando developers para squad:', selectedSquad, 'tipo:', typeof selectedSquad);
+                                        if (window.supabaseClient) {
+                                            // Obtener initiatives del squad
+                                            window.supabaseClient.from('initiatives')
+                                                .select('id')
+                                                .eq('squad_id', String(selectedSquad))
+                                                .then(({ data: initiatives, error: initiativesError }) => {
+                                                    if (initiativesError) {
+                                                        console.error('🔴 [DeveloperMetricsInline] Error cargando initiatives:', initiativesError);
+                                                        setDevelopers([]);
+                                                        return;
+                                                    }
+                                                    
+                                                    const initiativeIds = (initiatives || []).map(i => i.id);
+                                                    if (initiativeIds.length === 0) {
+                                                        setDevelopers([]);
+                                                        return;
+                                                    }
+                                                    
+                                                    // Obtener issues con assignee_id en esas initiatives
+                                                    window.supabaseClient.from('issues')
+                                                        .select('assignee_id')
+                                                        .in('initiative_id', initiativeIds)
+                                                        .not('assignee_id', 'is', null)
+                                                        .then(({ data: issues, error: issuesError }) => {
+                                                            if (issuesError) {
+                                                                console.error('🔴 [DeveloperMetricsInline] Error cargando issues:', issuesError);
+                                                                setDevelopers([]);
+                                                                return;
+                                                            }
+                                                            
+                                                            const assigneeIds = [...new Set((issues || []).map(i => i.assignee_id).filter(Boolean))];
+                                                            if (assigneeIds.length === 0) {
+                                                                setDevelopers([]);
+                                                                return;
+                                                            }
+                                                            
+                                                            // Obtener información de developers
+                                                            window.supabaseClient.from('developers')
+                                                                .select('id, display_name, email')
+                                                                .in('id', assigneeIds)
+                                                                .eq('active', true)
+                                                                .order('display_name', { ascending: true })
+                                                                .then(({ data: devs, error: devsError }) => {
+                                                                    if (devsError) {
+                                                                        console.error('🔴 [DeveloperMetricsInline] Error cargando developers:', devsError);
+                                                                        setDevelopers([]);
+                                                                        return;
+                                                                    }
+                                                                    
+                                                                    console.log('🟢 [DeveloperMetricsInline] Developers cargados:', devs);
+                                                                    setDevelopers(devs || []);
+                                                                    if (devs && devs.length > 0 && !selectedDeveloper) {
+                                                                        setSelectedDeveloper(String(devs[0].id));
+                                                                        console.log('🟢 [DeveloperMetricsInline] Developer seleccionado:', String(devs[0].id), devs[0].display_name);
+                                                                    }
+                                                                });
+                                                        });
+                                                });
+                                        }
+                                    }, [selectedSquad]);
+                                    
+                                    // Cargar métricas cuando cambian los filtros
+                                    useEffect(() => {
+                                        if (!selectedDeveloper) {
+                                            setMetricsData(null);
+                                            setDeveloperInfo(null);
+                                            return;
+                                        }
+                                        
+                                        const loadMetrics = async () => {
+                                            try {
+                                                console.log('🟢 [DeveloperMetricsInline] Cargando métricas para developer:', selectedDeveloper, 'squad:', selectedSquad, 'sprint:', selectedSprint);
+                                                
+                                                // Obtener info del developer
+                                                if (window.supabaseClient) {
+                                                    const { data: devInfo, error: devError } = await window.supabaseClient
+                                                        .from('developers')
+                                                        .select('id, display_name, email')
+                                                        .eq('id', selectedDeveloper)
+                                                        .single();
+                                                    
+                                                    if (devError) throw devError;
+                                                    console.log('🟢 [DeveloperMetricsInline] Developer info:', devInfo);
+                                                    setDeveloperInfo(devInfo);
+                                                    
+                                                    // Obtener issue_ids del sprint si se especifica
+                                                    let issueIds = null;
+                                                    if (selectedSprint) {
+                                                        console.log('🟢 [DeveloperMetricsInline] Obteniendo issues del sprint:', selectedSprint);
+                                                        const { data: sprintIssues, error: sprintIssuesError } = await window.supabaseClient
+                                                            .from('issue_sprints')
+                                                            .select('issue_id')
+                                                            .eq('sprint_id', String(selectedSprint));
+                                                        
+                                                        if (sprintIssuesError) {
+                                                            console.error('🔴 [DeveloperMetricsInline] Error obteniendo issues del sprint:', sprintIssuesError);
+                                                            throw sprintIssuesError;
+                                                        }
+                                                        issueIds = (sprintIssues || []).map(si => si.issue_id);
+                                                        console.log('🟢 [DeveloperMetricsInline] Issues en el sprint:', issueIds.length, 'IDs:', issueIds.slice(0, 5));
+                                                        
+                                                        if (issueIds.length === 0) {
+                                                            console.warn('⚠️ [DeveloperMetricsInline] No hay issues en el sprint seleccionado');
+                                                            setMetricsData({
+                                                                tickets: [],
+                                                                metrics: { totalTickets: 0, withSP: 0, noSP: 0, totalSP: 0, devDone: 0, devDoneSP: 0, totalSPAssigned: 0, devDoneRate: 0, spDevDoneRate: 0 },
+                                                                statusBreakdown: {}
+                                                            });
+                                                            return;
+                                                        }
+                                                    }
+                                                    
+                                                    // Construir query base
+                                                    console.log('🟢 [DeveloperMetricsInline] Buscando issues para developer:', selectedDeveloper);
+                                                    let query = window.supabaseClient
+                                                        .from('issues')
+                                                        .select(`
+                                                            id,
+                                                            issue_key,
+                                                            summary,
+                                                            current_status,
+                                                            current_story_points,
+                                                            assignee_id,
+                                                            initiative_id,
+                                                            initiatives(
+                                                                id,
+                                                                squad_id,
+                                                                squads(
+                                                                    id,
+                                                                    squad_key,
+                                                                    squad_name
+                                                                )
+                                                            )
+                                                        `)
+                                                        .eq('assignee_id', String(selectedDeveloper));
+                                                    
+                                                    // Filtrar por sprint si se especifica
+                                                    if (issueIds && issueIds.length > 0) {
+                                                        console.log('🟢 [DeveloperMetricsInline] Filtrando por', issueIds.length, 'issue IDs del sprint');
+                                                        query = query.in('id', issueIds);
+                                                    } else if (selectedSprint) {
+                                                        console.warn('⚠️ [DeveloperMetricsInline] Sprint seleccionado pero no hay issueIds');
+                                                    }
+                                                    
+                                                    const { data: issues, error: issuesError } = await query;
+                                                    if (issuesError) {
+                                                        console.error('🔴 [DeveloperMetricsInline] Error obteniendo issues:', issuesError);
+                                                        throw issuesError;
+                                                    }
+                                                    console.log('🟢 [DeveloperMetricsInline] Issues encontrados (antes de filtrar por squad):', issues?.length || 0);
+                                                    if (issues && issues.length > 0) {
+                                                        console.log('🟢 [DeveloperMetricsInline] Primeros 3 issues:', issues.slice(0, 3).map(i => ({
+                                                            key: i.issue_key,
+                                                            status: i.current_status,
+                                                            sp: i.current_story_points,
+                                                            assignee: i.assignee_id
+                                                        })));
+                                                    }
+                                                    
+                                                    // Filtrar por squad si se especifica
+                                                    let filteredIssues = issues || [];
+                                                    if (selectedSquad) {
+                                                        const beforeFilter = filteredIssues.length;
+                                                        // Debug: ver qué squad_ids tienen los issues
+                                                        const squadIdsFound = [...new Set(filteredIssues.map(i => String(i.initiatives?.squad_id)).filter(Boolean))];
+                                                        const issuesWithoutInitiative = filteredIssues.filter(i => !i.initiative_id || !i.initiatives);
+                                                        console.log('🔵 [DeveloperMetricsInline] Squad IDs encontrados en issues:', squadIdsFound);
+                                                        console.log('🔵 [DeveloperMetricsInline] Squad ID seleccionado:', String(selectedSquad));
+                                                        console.log('🔵 [DeveloperMetricsInline] Issues sin iniciativa:', issuesWithoutInitiative.length);
+                                                        
+                                                        filteredIssues = filteredIssues.filter(issue => {
+                                                            // Si el issue no tiene iniciativa, no podemos filtrarlo por squad
+                                                            // En este caso, lo incluimos si está en el sprint (ya filtrado antes)
+                                                            if (!issue.initiative_id || !issue.initiatives) {
+                                                                console.log('🔵 [DeveloperMetricsInline] Issue', issue.issue_key, 'sin iniciativa - incluido porque está en el sprint');
+                                                                return true;
+                                                            }
+                                                            
+                                                            const issueSquadId = issue.initiatives?.squad_id ? String(issue.initiatives.squad_id) : null;
+                                                            const selectedSquadId = String(selectedSquad);
+                                                            const squadMatch = issueSquadId === selectedSquadId;
+                                                            
+                                                            if (!squadMatch && issue.issue_key) {
+                                                                console.log('🔵 [DeveloperMetricsInline] Issue', issue.issue_key, 'excluido - squad_id:', issueSquadId, 'vs selected:', selectedSquadId);
+                                                            }
+                                                            return squadMatch;
+                                                        });
+                                                        console.log('🟢 [DeveloperMetricsInline] Issues después de filtrar por squad:', filteredIssues.length, 'de', beforeFilter);
+                                                    }
+                                                    
+                                                    console.log('🟢 [DeveloperMetricsInline] Total tickets finales:', filteredIssues.length);
+                                                    
+                                                    // Calcular métricas
+                                                    const tickets = filteredIssues.map(issue => ({
+                                                        id: issue.id,
+                                                        key: issue.issue_key,
+                                                        summary: issue.summary,
+                                                        status: issue.current_status,
+                                                        storyPoints: issue.current_story_points || 0,
+                                                        hasSP: (issue.current_story_points || 0) > 0,
+                                                        squad: issue.initiatives?.squads?.squad_name || 'Unknown'
+                                                    }));
+                                                    
+                                                    // Estados considerados como "Dev Done"
+                                                    // Un ticket está "Done" si su status es "Done" o "Development Done"
+                                                    const isDevDone = (status) => {
+                                                        if (!status) return false;
+                                                        const statusUpper = status.trim().toUpperCase();
+                                                        return statusUpper === 'DONE' || 
+                                                               statusUpper === 'DEVELOPMENT DONE';
+                                                    };
+                                                    
+                                                    const totalTickets = tickets.length;
+                                                    const withSP = tickets.filter(t => t.hasSP).length;
+                                                    const noSP = tickets.filter(t => !t.hasSP).length;
+                                                    const totalSP = tickets.reduce((sum, t) => sum + t.storyPoints, 0);
+                                                    const devDone = tickets.filter(t => isDevDone(t.status)).length;
+                                                    const devDoneSP = tickets
+                                                        .filter(t => isDevDone(t.status) && t.hasSP)
+                                                        .reduce((sum, t) => sum + t.storyPoints, 0);
+                                                    const totalSPAssigned = tickets
+                                                        .filter(t => t.hasSP)
+                                                        .reduce((sum, t) => sum + t.storyPoints, 0);
+                                                    
+                                                    // Breakdown por status
+                                                    const statusBreakdown = {};
+                                                    tickets.forEach(ticket => {
+                                                        const status = ticket.status || 'Unknown';
+                                                        if (!statusBreakdown[status]) {
+                                                            statusBreakdown[status] = { count: 0, percentage: 0 };
+                                                        }
+                                                        statusBreakdown[status].count++;
+                                                    });
+                                                    
+                                                    // Calcular porcentajes
+                                                    Object.keys(statusBreakdown).forEach(status => {
+                                                        statusBreakdown[status].percentage = totalTickets > 0 
+                                                            ? Math.round((statusBreakdown[status].count / totalTickets) * 100) 
+                                                            : 0;
+                                                    });
+                                                    
+                                                    const metrics = {
+                                                        totalTickets,
+                                                        withSP,
+                                                        noSP,
+                                                        totalSP,
+                                                        devDone,
+                                                        devDoneSP,
+                                                        totalSPAssigned,
+                                                        devDoneRate: totalTickets > 0 ? Math.round((devDone / totalTickets) * 100) : 0,
+                                                        spDevDoneRate: totalSPAssigned > 0 ? Math.round((devDoneSP / totalSPAssigned) * 100) : 0
+                                                    };
+                                                    
+                                                    console.log('🟢 [DeveloperMetricsInline] Métricas cargadas:', { 
+                                                        metrics, 
+                                                        statusBreakdown,
+                                                        ticketsCount: tickets.length,
+                                                        sampleTickets: tickets.slice(0, 3).map(t => ({
+                                                            key: t.key,
+                                                            status: t.status,
+                                                            sp: t.storyPoints,
+                                                            isDone: isDevDone(t.status)
+                                                        }))
+                                                    });
+                                                    setMetricsData({ tickets, metrics, statusBreakdown });
+                                                }
+                                            } catch (error) {
+                                                console.error('🔴 [DeveloperMetricsInline] Error cargando métricas:', error);
+                                                setMetricsData(null);
+                                            }
+                                        };
+                                        
+                                        loadMetrics();
+                                    }, [selectedDeveloper, selectedSquad, selectedSprint]);
+                                    
+                                    // Obtener nombres para mostrar
+                                    const selectedSquadName = squads.find(s => String(s.id) === String(selectedSquad))?.squad_name || 'Global';
+                                    const selectedSprintIsCurrent = sprints.find(s => String(s.id) === String(selectedSprint))?.is_active || false;
+                                    const selectedDeveloperName = developerInfo?.display_name || '';
+                                    
+                                    // Función para determinar si un ticket está "Dev Done"
+                                    // Un ticket está "Done" si su status es "Done" o "Development Done"
+                                    const isDevDone = (status) => {
+                                        if (!status) return false;
+                                        const statusUpper = status.trim().toUpperCase();
+                                        return statusUpper === 'DONE' || statusUpper === 'DEVELOPMENT DONE';
+                                    };
+                                    
+                                    // Preparar datos para gráficos
+                                    const statusChartData = useMemo(() => {
+                                        if (!metricsData?.statusBreakdown) return [];
+                                        return Object.entries(metricsData.statusBreakdown).map(([status, data]) => ({
+                                            name: status,
+                                            value: data.count,
+                                            percentage: data.percentage
+                                        }));
+                                    }, [metricsData]);
+                                    
+                                    const spVsNoSPData = useMemo(() => {
+                                        if (!metricsData) return [];
+                                        return [
+                                            { name: 'With SP', value: metricsData.metrics.withSP, color: '#3b82f6' },
+                                            { name: 'No SP', value: metricsData.metrics.noSP, color: '#8b5cf6' }
+                                        ];
+                                    }, [metricsData]);
+                                    
+                                    const devDoneRate = metricsData?.metrics.devDoneRate || 0;
+                                    const spDevDoneRate = metricsData?.metrics.spDevDoneRate || 0;
+                                    
+                                    const devDoneChartData = [
+                                        { name: 'Done', value: metricsData?.metrics.devDone || 0, color: '#10b981' },
+                                        { name: 'Remaining', value: (metricsData?.metrics.totalTickets || 0) - (metricsData?.metrics.devDone || 0), color: '#1e293b' }
+                                    ];
+                                    
+                                    const spDevDoneChartData = [
+                                        { name: 'Done', value: metricsData?.metrics.devDoneSP || 0, color: '#10b981' },
+                                        { name: 'Remaining', value: (metricsData?.metrics.totalSPAssigned || 0) - (metricsData?.metrics.devDoneSP || 0), color: '#1e293b' }
+                                    ];
+                                    
+                                    if (loading && !squads.length) {
+                                        return React.createElement('div', { className: 'flex items-center justify-center py-12' },
+                                            React.createElement('div', { className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500' })
+                                        );
+                                    }
+                                    
+                                    return React.createElement('div', { className: 'space-y-6' },
+                                        // Filtros
+                                        React.createElement('div', { className: 'flex flex-wrap gap-4 items-center' },
+                                            // Squad Selector
+                                            React.createElement('div', { className: 'relative group' },
+                                                React.createElement('select', {
+                                                    className: 'appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[180px]',
+                                                    value: selectedSquad || '',
+                                                    onChange: (e) => {
+                                                        const newSquadId = e.target.value || null;
+                                                        console.log('🟢 [DeveloperMetricsInline] Cambiando squad a:', newSquadId);
+                                                        setSelectedSquad(newSquadId);
+                                                        setSelectedSprint(null);
+                                                        setSelectedDeveloper(null);
+                                                    }
+                                                },
+                                                    React.createElement('option', { value: '' }, 'Global'),
+                                                    ...squads.map(squad => React.createElement('option', { key: squad.id, value: squad.id }, squad.squad_name))
+                                                ),
+                                                React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none', size: 16 })
+                                            ),
+                                            // Sprint Selector
+                                            React.createElement('div', { className: 'relative group' },
+                                                React.createElement('select', {
+                                                    className: 'appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[200px]',
+                                                    value: selectedSprint || '',
+                                                    onChange: (e) => {
+                                                        const newSprintId = e.target.value || null;
+                                                        console.log('🟢 [DeveloperMetricsInline] Cambiando sprint a:', newSprintId);
+                                                        setSelectedSprint(newSprintId);
+                                                    },
+                                                    disabled: !selectedSquad || sprints.length === 0
+                                                },
+                                                    React.createElement('option', { value: '' }, 'All Sprints'),
+                                                    ...sprints.map(sprint => React.createElement('option', { key: sprint.id, value: String(sprint.id) }, `${sprint.sprint_name} ${sprint.is_active ? '(Current)' : ''}`))
+                                                ),
+                                                selectedSprintIsCurrent && React.createElement(Icons.Star, { className: 'absolute right-8 top-1/2 -translate-y-1/2 text-yellow-400', style: { fill: '#facc15' }, size: 14 }),
+                                                React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none', size: 16 })
+                                            ),
+                                            // Developer Selector
+                                            React.createElement('div', { className: 'relative group' },
+                                                React.createElement('select', {
+                                                    className: 'appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[200px]',
+                                                    value: selectedDeveloper || '',
+                                                    onChange: (e) => {
+                                                        const newDeveloperId = e.target.value || null;
+                                                        console.log('🟢 [DeveloperMetricsInline] Cambiando developer a:', newDeveloperId);
+                                                        setSelectedDeveloper(newDeveloperId);
+                                                    },
+                                                    disabled: !selectedSquad || developers.length === 0
+                                                },
+                                                    React.createElement('option', { value: '' }, 'Select Developer'),
+                                                    ...developers.map(dev => React.createElement('option', { key: dev.id, value: String(dev.id) }, dev.display_name))
+                                                ),
+                                                React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none', size: 16 })
+                                            )
+                                        ),
+                                        // Título dinámico
+                                        selectedDeveloper && React.createElement('div', {},
+                                            React.createElement('h2', { className: 'text-2xl font-semibold text-white' },
+                                                `Metrics for ${selectedSquadName}${selectedDeveloperName ? ` - ${selectedDeveloperName}` : ''}`
+                                            )
+                                        ),
+                                        // Contenido
+                                        !selectedDeveloper ? React.createElement('div', { className: 'text-center text-slate-400 py-12' }, 'Please select a Squad and Developer to view metrics') :
+                                        !metricsData || metricsData.metrics.totalTickets === 0 ? React.createElement('div', { className: 'text-center text-slate-400 py-12' }, 'No tickets found for the selected filters') :
+                                        React.createElement(React.Fragment, {},
+                                            // KPI Cards
+                                            React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-6' },
+                                                // Dev Done Rate
+                                                React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                    React.createElement('h3', { className: 'text-sm font-medium text-slate-400 mb-4' }, 'Dev Done Rate'),
+                                                    React.createElement('div', { className: 'relative h-[200px] flex items-center justify-center' },
+                                                        React.createElement(ResponsiveContainer, { width: '100%', height: '100%' },
+                                                            React.createElement(PieChart, {},
+                                                                React.createElement(Pie, {
+                                                                    data: devDoneChartData,
+                                                                    cx: '50%',
+                                                                    cy: '50%',
+                                                                    innerRadius: 60,
+                                                                    outerRadius: 80,
+                                                                    startAngle: 90,
+                                                                    endAngle: -270,
+                                                                    dataKey: 'value',
+                                                                    stroke: 'none'
+                                                                },
+                                                                    devDoneChartData.map((entry, index) => React.createElement(Cell, { key: `cell-${index}`, fill: entry.color }))
+                                                                )
+                                                            )
+                                                        ),
+                                                        React.createElement('div', { className: 'absolute inset-0 flex flex-col items-center justify-center pointer-events-none' },
+                                                            React.createElement('div', { className: 'text-3xl font-bold text-white' }, `${devDoneRate.toFixed(1)}%`),
+                                                            React.createElement('div', { className: 'text-sm text-slate-400 mt-1' },
+                                                                `Dev Done: ${metricsData.metrics.devDone}/${metricsData.metrics.totalTickets}`
+                                                            )
+                                                        )
+                                                    )
+                                                ),
+                                                // SP Dev Done
+                                                React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                    React.createElement('h3', { className: 'text-sm font-medium text-slate-400 mb-4' }, 'SP Dev Done'),
+                                                    React.createElement('div', { className: 'relative h-[200px] flex items-center justify-center' },
+                                                        React.createElement(ResponsiveContainer, { width: '100%', height: '100%' },
+                                                            React.createElement(PieChart, {},
+                                                                React.createElement(Pie, {
+                                                                    data: spDevDoneChartData,
+                                                                    cx: '50%',
+                                                                    cy: '50%',
+                                                                    innerRadius: 60,
+                                                                    outerRadius: 80,
+                                                                    startAngle: 90,
+                                                                    endAngle: -270,
+                                                                    dataKey: 'value',
+                                                                    stroke: 'none'
+                                                                },
+                                                                    spDevDoneChartData.map((entry, index) => React.createElement(Cell, { key: `cell-${index}`, fill: entry.color }))
+                                                                )
+                                                            )
+                                                        ),
+                                                        React.createElement('div', { className: 'absolute inset-0 flex flex-col items-center justify-center pointer-events-none' },
+                                                            React.createElement('div', { className: 'text-3xl font-bold text-white' }, `${spDevDoneRate.toFixed(1)}%`),
+                                                            React.createElement('div', { className: 'text-sm text-slate-400 mt-1' },
+                                                                `Dev Done SP: ${metricsData.metrics.devDoneSP}/${metricsData.metrics.totalSPAssigned}`
+                                                            )
+                                                        )
+                                                    )
+                                                ),
+                                                // Key Metrics
+                                                React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                    React.createElement('h3', { className: 'text-sm font-medium text-slate-400 mb-4' }, 'Key Metrics'),
+                                                    React.createElement('div', { className: 'space-y-3' },
+                                                        React.createElement('div', { className: 'flex justify-between items-center' },
+                                                            React.createElement('span', { className: 'text-slate-400' }, 'Total Tickets:'),
+                                                            React.createElement('span', { className: 'text-white font-semibold' }, metricsData.metrics.totalTickets)
+                                                        ),
+                                                        React.createElement('div', { className: 'flex justify-between items-center' },
+                                                            React.createElement('span', { className: 'text-slate-400' }, 'With SP:'),
+                                                            React.createElement('span', { className: 'text-white font-semibold' }, metricsData.metrics.withSP)
+                                                        ),
+                                                        React.createElement('div', { className: 'flex justify-between items-center' },
+                                                            React.createElement('span', { className: 'text-slate-400' }, 'No SP:'),
+                                                            React.createElement('span', { className: 'text-white font-semibold' }, metricsData.metrics.noSP)
+                                                        ),
+                                                        React.createElement('div', { className: 'flex justify-between items-center pt-2 border-t border-white/10' },
+                                                            React.createElement('span', { className: 'text-slate-400' }, 'Total SP:'),
+                                                            React.createElement('span', { className: 'text-white font-semibold' }, metricsData.metrics.totalSP)
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            // Charts
+                                            React.createElement('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-6' },
+                                                // Tickets by Status
+                                                React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                    React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, 'Tickets by Status'),
+                                                    React.createElement(ResponsiveContainer, { width: '100%', height: 300 },
+                                                        React.createElement(PieChart, {},
+                                                            React.createElement(Pie, {
+                                                                data: statusChartData,
+                                                                cx: '50%',
+                                                                cy: '50%',
+                                                                labelLine: false,
+                                                                label: ({ value, percentage }) => `${value}: ${percentage}%`,
+                                                                outerRadius: 100,
+                                                                fill: '#8884d8',
+                                                                dataKey: 'value'
+                                                            },
+                                                                statusChartData.map((entry, index) => React.createElement(Cell, { key: `cell-${index}`, fill: `hsl(${index * 60}, 70%, 50%)` }))
+                                                            ),
+                                                            React.createElement(Tooltip, {
+                                                                contentStyle: {
+                                                                    backgroundColor: '#1e293b',
+                                                                    border: '1px solid #374151',
+                                                                    borderRadius: '8px'
+                                                                }
+                                                            }),
+                                                            React.createElement(Legend, {
+                                                                verticalAlign: 'bottom',
+                                                                height: 36,
+                                                                formatter: (value, entry) => {
+                                                                    const data = statusChartData.find(d => d.name === value);
+                                                                    return `${value} (${data?.value || 0})`;
+                                                                },
+                                                                wrapperStyle: {
+                                                                    color: '#e2e8f0',
+                                                                    fontSize: '12px',
+                                                                    paddingTop: '20px'
+                                                                },
+                                                                iconType: 'circle'
+                                                            })
+                                                        )
+                                                    )
+                                                ),
+                                                // Tickets: SP vs No SP
+                                                React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                    React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, 'Tickets: SP vs No SP'),
+                                                    React.createElement(ResponsiveContainer, { width: '100%', height: 300 },
+                                                        React.createElement(BarChart, { data: spVsNoSPData },
+                                                            React.createElement(CartesianGrid, { strokeDasharray: '3 3', stroke: '#374151' }),
+                                                            React.createElement(XAxis, { dataKey: 'name', stroke: '#9ca3af' }),
+                                                            React.createElement(YAxis, { stroke: '#9ca3af' }),
+                                                            React.createElement(Tooltip, {
+                                                                contentStyle: {
+                                                                    backgroundColor: '#1e293b',
+                                                                    border: '1px solid #374151',
+                                                                    borderRadius: '8px'
+                                                                }
+                                                            }),
+                                                            React.createElement(Bar, { dataKey: 'value', name: 'Tickets' },
+                                                                spVsNoSPData.map((entry, index) => React.createElement(Cell, { key: `cell-${index}`, fill: entry.color }))
+                                                            )
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            // Tabla de detalle de tickets
+                                            React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                                React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, 'Tickets Detail'),
+                                                React.createElement('div', { className: 'overflow-x-auto' },
+                                                    React.createElement('table', { className: 'w-full' },
+                                                        React.createElement('thead', {},
+                                                            React.createElement('tr', { className: 'border-b border-white/10' },
+                                                                React.createElement('th', { className: 'text-left py-3 px-4 text-slate-400 font-medium text-sm' }, 'Key'),
+                                                                React.createElement('th', { className: 'text-left py-3 px-4 text-slate-400 font-medium text-sm' }, 'Summary'),
+                                                                React.createElement('th', { className: 'text-left py-3 px-4 text-slate-400 font-medium text-sm' }, 'Status'),
+                                                                React.createElement('th', { className: 'text-center py-3 px-4 text-slate-400 font-medium text-sm' }, 'SP'),
+                                                                React.createElement('th', { className: 'text-center py-3 px-4 text-slate-400 font-medium text-sm' }, 'Dev Done')
+                                                            )
+                                                        ),
+                                                        React.createElement('tbody', {},
+                                                            metricsData.tickets.length === 0 ? 
+                                                                React.createElement('tr', {},
+                                                                    React.createElement('td', { colSpan: 5, className: 'text-center py-8 text-slate-400' }, 'No tickets found')
+                                                                ) :
+                                                                metricsData.tickets.map((ticket, index) => {
+                                                                    const isDone = isDevDone(ticket.status);
+                                                                    return React.createElement('tr', { 
+                                                                        key: ticket.id || index,
+                                                                        className: 'border-b border-white/5 hover:bg-white/5 transition-colors'
+                                                                    },
+                                                                        React.createElement('td', { className: 'py-3 px-4 text-cyan-400 font-mono text-sm' }, ticket.key || 'N/A'),
+                                                                        React.createElement('td', { className: 'py-3 px-4 text-slate-300 text-sm' }, ticket.summary || 'No summary'),
+                                                                        React.createElement('td', { className: 'py-3 px-4' },
+                                                                            React.createElement('span', {
+                                                                                className: `px-2 py-1 rounded text-xs font-medium ${
+                                                                                    isDone 
+                                                                                        ? 'bg-green-500/20 text-green-400' 
+                                                                                        : 'bg-slate-700/50 text-slate-400'
+                                                                                }`
+                                                                            }, ticket.status || 'Unknown')
+                                                                        ),
+                                                                        React.createElement('td', { className: 'py-3 px-4 text-center text-slate-300 text-sm' },
+                                                                            ticket.hasSP ? ticket.storyPoints : React.createElement('span', { className: 'text-slate-500' }, '-')
+                                                                        ),
+                                                                        React.createElement('td', { className: 'py-3 px-4 text-center' },
+                                                                            isDone ? 
+                                                                                React.createElement('span', { className: 'px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400' }, '✓') :
+                                                                                React.createElement('span', { className: 'px-2 py-1 rounded text-xs font-medium bg-slate-700/50 text-slate-500' }, '-')
+                                                                        )
+                                                                    );
+                                                                })
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    );
+                                };
+                                return React.createElement(DeveloperMetricsInline);
+                            })()}
                             {activeView === 'user-admin' && currentUser && getModulesForRole(currentUser.role).includes('user-admin') && (() => {
                                 // Componente UserAdministration inline
                                 const UserAdministration = ({ currentUser }) => {

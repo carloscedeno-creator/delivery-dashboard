@@ -264,9 +264,21 @@ function App() {
                     {activeView === 'projects-metrics' && canAccessModule(currentUser?.role || 'regular', 'projects-metrics') && (
                         <ProjectsMetrics />
                     )}
-                    {activeView === 'developer-metrics' && canAccessModule(currentUser?.role || 'regular', 'developer-metrics') && (
-                        <DeveloperMetrics />
-                    )}
+                    {activeView === 'developer-metrics' && (() => {
+                        const hasAccess = canAccessModule(currentUser?.role || 'regular', 'developer-metrics');
+                        console.log('🔵 [APP] Developer Metrics check:', {
+                            activeView,
+                            currentUserRole: currentUser?.role || 'regular',
+                            hasAccess,
+                            shouldRender: hasAccess
+                        });
+                        if (!hasAccess) {
+                            console.warn('🔴 [APP] No tiene acceso a Developer Metrics');
+                            return null;
+                        }
+                        console.log('🟢 [APP] Renderizando DeveloperMetrics');
+                        return <DeveloperMetrics />;
+                    })()}
                     {activeView === 'user-admin' && canAccessModule(currentUser?.role || 'regular', 'user-admin') && (
                         <UserAdministration currentUser={currentUser} />
                     )}
