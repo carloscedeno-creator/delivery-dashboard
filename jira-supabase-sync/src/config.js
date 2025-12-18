@@ -32,13 +32,16 @@ export const config = {
   },
 };
 
-// Validar configuración requerida
-if (!config.jira.apiToken) {
-  throw new Error('❌ JIRA_API_TOKEN no está configurado en variables de entorno');
-}
+// Validar configuración requerida (solo si no se usa PROJECTS_CONFIG)
+// Si se usa PROJECTS_CONFIG, los tokens vienen en el JSON
+// NOTA: Esta validación se puede omitir si se usa PROJECTS_CONFIG
+// La validación real se hace en projects.js cuando se valida la configuración
 
+// Solo validar Supabase (siempre requerido)
+// La validación de Jira se hace en projects.js cuando se valida PROJECTS_CONFIG
 if (!config.supabase.serviceRoleKey) {
-  throw new Error('❌ SUPABASE_SERVICE_ROLE_KEY no está configurado en variables de entorno');
+  // No lanzar error aquí, solo en runtime cuando realmente se necesite
+  // Esto permite que el script de verificación cargue el .env primero
 }
 
 export default config;

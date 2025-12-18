@@ -9,7 +9,9 @@
     "sync": "node src/run-sync-once.js",
     "dev": "node --watch src/index.js",
     "test": "node --test",
-    "list-projects": "node scripts/list-jira-projects.js"
+    "list-projects": "node scripts/list-jira-projects.js",
+    "verify-config": "node scripts/verify-config.js",
+    "generate-env-config": "node scripts/generate-env-config.js"
   },
   "keywords": [
     "jira",
