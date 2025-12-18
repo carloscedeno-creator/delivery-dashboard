@@ -426,7 +426,17 @@ export const getDeliveryRoadmapData = async () => {
       )];
       const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
 
-      roadmapData.push({
+      // Asegurar que ambas fechas estén presentes
+      if (!startDate) {
+        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
+      }
+      if (!endDate) {
+        const estimatedEnd = new Date(startDate);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
+        endDate = estimatedEnd.toISOString().split('T')[0];
+      }
+
+      const roadmapItem = {
         squad: squad.squad_name || squad.squad_key,
         initiative: initiative.initiative_name || initiative.initiative_key,
         start: startDate,
@@ -438,7 +448,20 @@ export const getDeliveryRoadmapData = async () => {
         scope: initiative.initiative_name || '',
         dev: devNames.join(', ') || 'Unassigned',
         percentage: completionPercentage
-      });
+      };
+
+      // Debug: Log primeros 3 items para verificar formato de fechas
+      if (roadmapData.length < 3) {
+        console.log(`[SUPABASE] Roadmap item ${roadmapData.length + 1}:`, {
+          initiative: roadmapItem.initiative,
+          start: roadmapItem.start,
+          delivery: roadmapItem.delivery,
+          startType: typeof roadmapItem.start,
+          deliveryType: typeof roadmapItem.delivery
+        });
+      }
+
+      roadmapData.push(roadmapItem);
     }
 
     // Procesar issues sin iniciativa agrupados por squad
