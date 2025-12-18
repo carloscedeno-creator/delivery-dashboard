@@ -293,10 +293,10 @@ export const getDeliveryRoadmapData = async () => {
       throw squadsError;
     }
 
-    // Obtener initiatives
+    // Obtener initiatives (incluyendo fechas de épicas)
     const { data: initiatives, error: initiativesError } = await supabase
       .from('initiatives')
-      .select('id, squad_id, initiative_key, initiative_name, created_at')
+      .select('id, squad_id, initiative_key, initiative_name, created_at, start_date, end_date')
       .order('initiative_name', { ascending: true });
 
     if (initiativesError) {
@@ -385,12 +385,38 @@ export const getDeliveryRoadmapData = async () => {
       // Calcular porcentaje de completitud
       const completionPercentage = totalSP > 0 ? Math.round((completedSP / totalSP) * 100) : 0;
 
-      // Obtener fechas del sprint más reciente de este squad
-      // Nota: v_sprint_metrics_complete usa project_name que corresponde a squad_key
-      const squadMetrics = (sprintMetrics || []).filter(
-        m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
-      );
-      const latestSprint = squadMetrics[0];
+      // Obtener fechas de la épica (prioridad) o del sprint más reciente (fallback)
+      // Prioridad 1: Usar fechas de la épica (start_date, end_date de initiatives)
+      // Prioridad 2: Usar fechas del sprint más reciente
+      // Prioridad 3: Usar created_at como start_date
+      let startDate = null;
+      let endDate = null;
+
+      if (initiative.start_date) {
+        startDate = new Date(initiative.start_date).toISOString().split('T')[0];
+      } else {
+        // Fallback: usar sprint más reciente
+        const squadMetrics = (sprintMetrics || []).filter(
+          m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
+        );
+        const latestSprint = squadMetrics[0];
+        startDate = latestSprint?.start_date 
+          ? new Date(latestSprint.start_date).toISOString().split('T')[0]
+          : new Date(initiative.created_at).toISOString().split('T')[0];
+      }
+
+      if (initiative.end_date) {
+        endDate = new Date(initiative.end_date).toISOString().split('T')[0];
+      } else {
+        // Fallback: usar sprint más reciente
+        const squadMetrics = (sprintMetrics || []).filter(
+          m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
+        );
+        const latestSprint = squadMetrics[0];
+        endDate = latestSprint?.end_date
+          ? new Date(latestSprint.end_date).toISOString().split('T')[0]
+          : null;
+      }
 
       // Obtener asignaciones de desarrolladores
       const devIds = [...new Set(
@@ -403,13 +429,9 @@ export const getDeliveryRoadmapData = async () => {
       roadmapData.push({
         squad: squad.squad_name || squad.squad_key,
         initiative: initiative.initiative_name || initiative.initiative_key,
-        start: latestSprint?.start_date 
-          ? new Date(latestSprint.start_date).toISOString().split('T')[0]
-          : new Date(initiative.created_at).toISOString().split('T')[0],
+        start: startDate,
         status: completionPercentage,
-        delivery: latestSprint?.end_date
-          ? new Date(latestSprint.end_date).toISOString().split('T')[0]
-          : null,
+        delivery: endDate,
         spi: parseFloat(spi.toFixed(2)),
         allocation: devNames.length,
         comments: `${initiativeIssues.length} issues, ${totalSP} SP total`,
