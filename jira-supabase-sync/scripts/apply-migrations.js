@@ -14,12 +14,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '../..');
 
-// Cargar variables de entorno desde el directorio raíz de jira-supabase-sync
-const envPath = join(__dirname, '../.env');
-dotenv.config({ path: envPath });
+// Cargar variables de entorno desde múltiples ubicaciones posibles
+// 1. Primero intentar desde el directorio raíz del proyecto (delivery-dashboard/.env)
+const rootEnvPath = join(rootDir, '.env');
+// 2. Luego desde jira-supabase-sync/.env
+const localEnvPath = join(__dirname, '../.env');
+
+// Cargar ambos archivos .env si existen (el último tiene prioridad)
+dotenv.config({ path: rootEnvPath });
+dotenv.config({ path: localEnvPath });
+// También cargar desde el directorio actual por si acaso
+dotenv.config();
 
 // Configuración directa desde variables de entorno
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 /**
@@ -196,9 +204,15 @@ async function applyMigrations() {
     // Validar configuración
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       logger.error('❌ Error: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY deben estar configurados');
-      logger.error('   Configura estas variables en jira-supabase-sync/.env');
-      logger.error(`   Archivo .env esperado en: ${envPath}`);
-      logger.error('   O configura las variables de entorno antes de ejecutar el script');
+      logger.error('   El script busca .env en las siguientes ubicaciones:');
+      logger.error(`   1. ${rootEnvPath} (directorio raíz del proyecto)`);
+      logger.error(`   2. ${localEnvPath} (directorio jira-supabase-sync)`);
+      logger.error('   3. Variables de entorno del sistema');
+      logger.error('');
+      logger.error('   Configura estas variables en cualquiera de estos lugares:');
+      logger.error('   - SUPABASE_URL');
+      logger.error('   - SUPABASE_SERVICE_ROLE_KEY');
+      logger.error('   - O VITE_SUPABASE_URL (como alternativa)');
       process.exit(1);
     }
 
