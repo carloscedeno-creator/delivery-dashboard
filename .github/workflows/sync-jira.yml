@@ -55,7 +55,15 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SYNC_INTERVAL_MINUTES: '30'
         run: |
-          npm run sync 2>&1 | tee sync-output.log || true
+          echo "🚀 Iniciando sincronización..."
+          echo "📋 Proyectos configurados: $(echo '${{ secrets.PROJECTS_CONFIG }}' | jq -r 'length' 2>/dev/null || echo 'N/A')"
+          npm run sync 2>&1 | tee sync-output.log || {
+            EXIT_CODE=$?
+            echo "❌ Sync falló con código: $EXIT_CODE"
+            echo "📄 Últimas 50 líneas del log:"
+            tail -n 50 sync-output.log || true
+            exit $EXIT_CODE
+          }
       
       - name: Upload sync output
         if: always()
