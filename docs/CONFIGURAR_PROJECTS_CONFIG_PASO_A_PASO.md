@@ -87,3 +87,4 @@ Deberías ver:
 - El JSON debe estar en una sola línea (minificado) para GitHub Secrets
 - No uses comillas simples, solo comillas dobles `"`
 - No agregues espacios después de las comas (opcional pero recomendado)
+

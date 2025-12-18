@@ -226,6 +226,11 @@ class SupabaseClient {
         dev_start_date: issueData.devStartDate,
         dev_close_date: issueData.devCloseDate,
         epic_id: issueData.epicId,
+        epic_name: issueData.epicName || null,
+        sprint_history: issueData.sprintHistory || null,
+        status_by_sprint: issueData.statusBySprint || {},
+        story_points_by_sprint: issueData.storyPointsBySprint || {},
+        status_history_days: issueData.statusHistoryDays || null,
         raw_data: issueData.rawData,
       }, {
         onConflict: 'issue_key',

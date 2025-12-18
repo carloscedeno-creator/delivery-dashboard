@@ -43,3 +43,4 @@ try {
   console.error('❌ Error parseando:', error.message);
   process.exit(1);
 }
+

@@ -15,7 +15,8 @@
     "force-sync-issues": "node scripts/force-sync-specific-issues.js",
     "force-full-sync": "node scripts/force-full-sync.js",
     "test-jira": "node scripts/test-jira-query.js",
-    "test-access": "node scripts/test-jira-access.js"
+    "test-access": "node scripts/test-jira-access.js",
+    "apply-migrations": "node scripts/apply-migrations.js"
   },
   "keywords": [
     "jira",

@@ -6,6 +6,71 @@
 import { supabase } from './supabaseApi';
 
 /**
+ * Normaliza el nombre del estado para agrupar correctamente
+ * Convierte variaciones a formato estándar en mayúsculas
+ */
+function normalizeStatus(status) {
+  if (!status || status === 'Unknown') return 'Unknown';
+  
+  // Mapeo de estados comunes a su formato estándar
+  const statusMap = {
+    'to do': 'TO DO',
+    'todo': 'TO DO',
+    'to-do': 'TO DO',
+    'in progress': 'IN PROGRESS',
+    'in-progress': 'IN PROGRESS',
+    'en progreso': 'IN PROGRESS',
+    'done': 'DONE',
+    'testing': 'TESTING',
+    'test': 'TESTING',
+    'blocked': 'BLOCKED',
+    'security review': 'SECURITY REVIEW',
+    'security-review': 'SECURITY REVIEW',
+    'reopen': 'REOPEN',
+    're-opened': 'REOPEN',
+    'compliance check': 'COMPLIANCE CHECK',
+    'compliance-check': 'COMPLIANCE CHECK',
+    'development done': 'DEVELOPMENT DONE',
+    'development-done': 'DEVELOPMENT DONE',
+    'qa': 'QA',
+    'qa external': 'QA EXTERNAL',
+    'qa-external': 'QA EXTERNAL',
+    'staging': 'STAGING',
+    'ready to release': 'READY TO RELEASE',
+    'ready-to-release': 'READY TO RELEASE',
+    'in review': 'IN REVIEW',
+    'in-review': 'IN REVIEW',
+    'open': 'OPEN',
+    'hold': 'HOLD',
+    'requisitions': 'REQUISITIONS',
+  };
+
+  const normalized = status.trim();
+  const lowerStatus = normalized.toLowerCase();
+  
+  // Si está en el mapa, usar el valor mapeado
+  if (statusMap[lowerStatus]) {
+    return statusMap[lowerStatus];
+  }
+  
+  // Si ya está completamente en mayúsculas, verificar si es un estado válido
+  if (normalized === normalized.toUpperCase()) {
+    // Estados válidos que ya están en mayúsculas
+    const validUpperStates = ['QA', 'BLOCKED', 'DONE', 'TO DO', 'IN PROGRESS', 'TESTING', 
+                              'SECURITY REVIEW', 'REOPEN', 'STAGING', 'OPEN', 'HOLD', 
+                              'IN REVIEW', 'REQUISITIONS', 'DEVELOPMENT DONE', 'QA EXTERNAL', 
+                              'READY TO RELEASE', 'COMPLIANCE CHECK'];
+    
+    if (validUpperStates.includes(normalized)) {
+      return normalized;
+    }
+  }
+  
+  // Convertir a mayúsculas por defecto
+  return normalized.toUpperCase();
+}
+
+/**
  * Obtiene todos los squads disponibles
  */
 export const getSquads = async () => {
@@ -157,12 +222,14 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
 
     console.log(`[PROJECT_METRICS] Issues encontrados: ${(issues || []).length}`);
 
-    // Agrupar por Board State (current_status)
+    // Agrupar por Board State (current_status) con normalización
     const statusBreakdown = {};
     let totalSP = 0;
 
     (issues || []).forEach(issue => {
-      const status = issue.current_status || 'Unknown';
+      const rawStatus = issue.current_status || 'Unknown';
+      const status = normalizeStatus(rawStatus);
+      
       if (!statusBreakdown[status]) {
         statusBreakdown[status] = {
           name: status,
@@ -251,3 +318,4 @@ export const getSprintById = async (sprintId) => {
     throw error;
   }
 };
+

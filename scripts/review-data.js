@@ -266,3 +266,4 @@ reviewData().catch(error => {
   console.error('\n❌ Error durante la revisión:', error);
   process.exit(1);
 });
+

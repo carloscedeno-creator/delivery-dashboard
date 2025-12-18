@@ -68,3 +68,4 @@ ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 -- Políticas permisivas (sin restricciones por ahora)
 CREATE POLICY "Allow all on app_users" ON app_users FOR ALL USING (true);
 CREATE POLICY "Allow all on user_sessions" ON user_sessions FOR ALL USING (true);
+
