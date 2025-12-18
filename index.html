@@ -255,6 +255,9 @@
                 ),
                 CheckCircle: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                ),
+                BarChart: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
                 )
             };
 
@@ -4091,19 +4094,38 @@
             );
         };
 
+        // Configuración de permisos por rol
+        const ROLE_PERMISSIONS = {
+            admin: ['overall', 'product', 'delivery', 'strata', 'user-admin', 'projects-metrics', 'developer-metrics'],
+            stakeholder: ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics'],
+            regular: ['overall'],
+            '3amigos': ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics'],
+            pm: ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics']
+        };
+        
+        const getModulesForRole = (role) => {
+            if (!role) return ['overall'];
+            const normalizedRole = role.toLowerCase();
+            return ROLE_PERMISSIONS[normalizedRole] || ['overall'];
+        };
+        
+        const getNavbarModules = (role) => {
+            const modules = getModulesForRole(role);
+            const moduleInfo = {
+                'overall': { id: 'overall', label: 'Overall', icon: Icons.Layout },
+                'product': { id: 'product', label: 'Product Roadmap', icon: Icons.Box },
+                'delivery': { id: 'delivery', label: 'Delivery Roadmap', icon: Icons.Truck },
+                'strata': { id: 'strata', label: 'Strata Mapping', icon: Icons.Map },
+                'user-admin': { id: 'user-admin', label: 'User Administration', icon: Icons.Users },
+                'projects-metrics': { id: 'projects-metrics', label: 'Projects Metrics', icon: Icons.BarChart },
+                'developer-metrics': { id: 'developer-metrics', label: 'Developer Metrics', icon: Icons.Activity }
+            };
+            return modules.map(module => moduleInfo[module]).filter(Boolean);
+        };
+
         const Navbar = ({ activeView, setActiveView, currentUser, onLogout }) => {
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-            const navItems = [
-                { id: 'overall', label: 'Overall', icon: Icons.Layout },
-                { id: 'product', label: 'Product Roadmap', icon: Icons.Box },
-                { id: 'delivery', label: 'Delivery Roadmap', icon: Icons.Truck },
-                { id: 'strata', label: 'Strata Mapping', icon: Icons.Map },
-            ];
-            
-            // Agregar menú de administración solo para admin
-            if (currentUser && currentUser.role === 'admin') {
-                navItems.push({ id: 'admin', label: 'User Administration', icon: Icons.Users });
-            }
+            const navItems = getNavbarModules(currentUser?.role || 'regular');
 
             return (
                 <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-4 md:px-8 py-3 md:py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
@@ -4188,6 +4210,16 @@
 
         const App = () => {
             const [activeView, setActiveView] = useState('overall'); // Default to Overall (Landing Page)
+            
+            // Verificar permisos al cambiar de vista
+            useEffect(() => {
+                if (currentUser) {
+                    const allowedModules = getModulesForRole(currentUser.role);
+                    if (!allowedModules.includes(activeView)) {
+                        setActiveView(allowedModules[0] || 'overall');
+                    }
+                }
+            }, [currentUser, activeView]);
             const [projectData, setProjectData] = useState([]);
             const [devAllocationData, setDevAllocationData] = useState([]);
             const [productInitiatives, setProductInitiatives] = useState([]);
@@ -4861,10 +4893,24 @@
                         <header className="max-w-7xl mx-auto mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h1 className="text-2xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-                                    {activeView === 'overall' ? 'Overall Dashboard' : activeView === 'product' ? 'Product Roadmap' : activeView === 'delivery' ? 'Delivery Roadmap' : activeView === 'strata' ? 'Strata Mapping' : 'User Administration'}
+                                    {activeView === 'overall' ? 'Overall Dashboard' : 
+                                     activeView === 'product' ? 'Product Roadmap' : 
+                                     activeView === 'delivery' ? 'Delivery Roadmap' : 
+                                     activeView === 'strata' ? 'Strata Mapping' : 
+                                     activeView === 'user-admin' ? 'User Administration' :
+                                     activeView === 'projects-metrics' ? 'Projects Metrics' :
+                                     activeView === 'developer-metrics' ? 'Developer Metrics' :
+                                     'Dashboard'}
                                 </h1>
                                 <p className="text-slate-400 mt-1 md:mt-2 text-sm md:text-base">
-                                    {activeView === 'overall' ? 'Strategic Overview & Combined Status' : activeView === 'product' ? 'Product Initiatives & Milestones' : activeView === 'delivery' ? 'Execution & Resource Allocation' : activeView === 'strata' ? 'Strata Mapping & Analysis' : 'Manage users, roles, and access'}
+                                    {activeView === 'overall' ? 'Strategic Overview & Combined Status' : 
+                                     activeView === 'product' ? 'Product Initiatives & Milestones' : 
+                                     activeView === 'delivery' ? 'Execution & Resource Allocation' : 
+                                     activeView === 'strata' ? 'Strata Mapping & Analysis' : 
+                                     activeView === 'user-admin' ? 'Manage users, roles, and access' :
+                                     activeView === 'projects-metrics' ? 'Comprehensive project performance analytics' :
+                                     activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
+                                     'Dashboard'}
                                 </p>
                             </div>
                             <div className="flex gap-3 items-center flex-wrap">
@@ -4892,7 +4938,7 @@
                             {activeView === 'product' && <ProductRoadmapView productInitiatives={productInitiatives} productBugRelease={productBugRelease} />}
                             {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
                             {activeView === 'strata' && <StrataMappingView productInitiatives={productInitiatives} deliveryProjects={projectData} devAllocationData={devAllocationData} strataMappingData={strataMappingData} />}
-                            {activeView === 'admin' && currentUser && currentUser.role === 'admin' && (() => {
+                            {activeView === 'user-admin' && currentUser && getModulesForRole(currentUser.role).includes('user-admin') && (() => {
                                 // Componente UserAdministration inline
                                 const UserAdministration = ({ currentUser }) => {
                                     const [users, setUsers] = useState([]);
