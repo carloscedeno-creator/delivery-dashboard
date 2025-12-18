@@ -15,6 +15,44 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '../..');
 
 /**
+ * Verifica si las columnas requeridas existen en la tabla issues
+ */
+async function checkRequiredColumnsExist(supabaseClient) {
+  const REQUIRED_COLUMNS = [
+    'sprint_history',
+    'status_by_sprint',
+    'story_points_by_sprint',
+    'status_history_days',
+    'epic_name'
+  ];
+
+  try {
+    // Intentar hacer un SELECT de las columnas
+    const { error } = await supabaseClient
+      .from('issues')
+      .select(REQUIRED_COLUMNS.join(', '))
+      .limit(1);
+
+    if (error) {
+      // Si el error es que las columnas no existen
+      if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        return { exists: false, missingColumns: REQUIRED_COLUMNS };
+      }
+      // Otro tipo de error (puede ser que la tabla no tenga datos pero las columnas existen)
+      // En ese caso, asumimos que existen
+      return { exists: true, missingColumns: [] };
+    }
+
+    // Si no hay error, las columnas existen
+    return { exists: true, missingColumns: [] };
+  } catch (error) {
+    logger.warn(`⚠️ Error verificando columnas: ${error.message}`);
+    // En caso de error, asumimos que no existen para ser seguros
+    return { exists: false, missingColumns: REQUIRED_COLUMNS };
+  }
+}
+
+/**
  * Obtiene archivos de migración ordenados numéricamente
  */
 function getMigrationFiles() {
@@ -138,6 +176,17 @@ async function applyMigrations() {
       config.supabase.url,
       config.supabase.serviceRoleKey
     );
+
+    // Verificar primero si las columnas críticas existen
+    logger.info('🔍 Verificando si las columnas históricas existen...');
+    const columnCheck = await checkRequiredColumnsExist(supabaseClient);
+    
+    if (columnCheck.exists) {
+      logger.info('✅ Las columnas históricas ya existen. Verificando otras migraciones...');
+    } else {
+      logger.warn(`⚠️ Faltan columnas: ${columnCheck.missingColumns.join(', ')}`);
+      logger.info('📋 Aplicando migraciones para crear las columnas faltantes...');
+    }
 
     const migrationFiles = getMigrationFiles();
     

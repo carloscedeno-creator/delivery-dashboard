@@ -19,7 +19,8 @@
     "check-sprint": "node scripts/check-sprint-issues.js",
     "check-status": "node scripts/check-issue-status.js",
     "force-sync-issues": "node scripts/force-sync-issues.js",
-    "update-status": "node scripts/update-issue-status.js"
+    "update-status": "node scripts/update-issue-status.js",
+    "apply-migration": "node scripts/verify-and-apply-migration.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
