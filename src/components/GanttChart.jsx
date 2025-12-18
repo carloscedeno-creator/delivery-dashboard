@@ -43,21 +43,43 @@ const GanttChart = ({ data }) => {
 
     // 1. Determine Date Range
     const { startDate, endDate, totalDays, months } = useMemo(() => {
+        console.log('[GANTT] Procesando datos:', { count: data.length });
+        
         if (!data.length) {
             console.warn('[GANTT] No hay datos para mostrar');
             return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
         }
 
+        // Log primeros 3 items para debug
+        console.log('[GANTT] Primeros 3 items:', data.slice(0, 3).map(d => ({
+            initiative: d.initiative,
+            start: d.start,
+            delivery: d.delivery,
+            startType: typeof d.start,
+            deliveryType: typeof d.delivery
+        })));
+
         const parsedDates = data
-            .flatMap(d => [parseDate(d.start), parseDate(d.delivery)])
+            .flatMap(d => {
+                const start = parseDate(d.start);
+                const delivery = parseDate(d.delivery);
+                return [start, delivery];
+            })
             .filter(d => d !== null && isValid(d));
+
+        console.log('[GANTT] Fechas parseadas:', { 
+            total: parsedDates.length, 
+            sample: parsedDates.slice(0, 3).map(d => d.toISOString())
+        });
 
         if (parsedDates.length === 0) {
             console.warn('[GANTT] No se pudieron parsear fechas. Datos recibidos:', 
                 data.slice(0, 3).map(d => ({ 
                     initiative: d.initiative, 
                     start: d.start, 
-                    delivery: d.delivery 
+                    delivery: d.delivery,
+                    startType: typeof d.start,
+                    deliveryType: typeof d.delivery
                 }))
             );
             return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
