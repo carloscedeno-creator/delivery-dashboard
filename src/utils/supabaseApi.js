@@ -426,6 +426,16 @@ export const getDeliveryRoadmapData = async () => {
       )];
       const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
 
+      // Validar que al menos una fecha esté presente
+      if (!startDate && !endDate) {
+        console.warn(`[SUPABASE] Iniciativa ${initiative.initiative_name} no tiene fechas. Usando created_at como fallback.`);
+        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
+        // Si no hay end_date, usar 3 meses después del start como estimación
+        const estimatedEnd = new Date(initiative.created_at);
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
+        endDate = estimatedEnd.toISOString().split('T')[0];
+      }
+
       roadmapData.push({
         squad: squad.squad_name || squad.squad_key,
         initiative: initiative.initiative_name || initiative.initiative_key,

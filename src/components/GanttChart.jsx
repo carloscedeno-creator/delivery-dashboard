@@ -43,13 +43,23 @@ const GanttChart = ({ data }) => {
 
     // 1. Determine Date Range
     const { startDate, endDate, totalDays, months } = useMemo(() => {
-        if (!data.length) return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
+        if (!data.length) {
+            console.warn('[GANTT] No hay datos para mostrar');
+            return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
+        }
 
         const parsedDates = data
             .flatMap(d => [parseDate(d.start), parseDate(d.delivery)])
             .filter(d => d !== null && isValid(d));
 
         if (parsedDates.length === 0) {
+            console.warn('[GANTT] No se pudieron parsear fechas. Datos recibidos:', 
+                data.slice(0, 3).map(d => ({ 
+                    initiative: d.initiative, 
+                    start: d.start, 
+                    delivery: d.delivery 
+                }))
+            );
             return { startDate: new Date(), endDate: new Date(), totalDays: 0, months: [] };
         }
 
@@ -120,6 +130,16 @@ const GanttChart = ({ data }) => {
                         const startDateObj = parseDate(item.start);
                         const endDateObj = parseDate(item.delivery);
                         const { left, width } = getPosition(item.start, item.delivery);
+                        
+                        // Debug: Log si las fechas no se pueden parsear
+                        if (!startDateObj || !endDateObj) {
+                            console.warn(`[GANTT] Fechas inválidas para ${item.initiative}:`, {
+                                start: item.start,
+                                delivery: item.delivery,
+                                startParsed: startDateObj,
+                                endParsed: endDateObj
+                            });
+                        }
                         
                         // Format dates for tooltip
                         const formatDateForTooltip = (dateObj) => {
