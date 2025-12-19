@@ -378,12 +378,126 @@ const ProjectsMetrics = () => {
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {metricsData.totalTickets > 0 
-                  ? (metricsData.totalSP / metricsData.totalTickets).toFixed(1)
-                  : 0}
+                {metricsData.completedSP || 0}
               </div>
-              <div className="text-sm text-slate-400">Avg. Story Points</div>
+              <div className="text-sm text-slate-400">Completed Story Points</div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla de Épicas/Iniciativas */}
+      {metricsData && metricsData.epicMetrics && metricsData.epicMetrics.length > 0 && (
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-xl font-semibold text-white mb-6">Initiatives Progress</h3>
+          
+          {/* Leyenda de colores */}
+          <div className="mb-6 flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-slate-500"></div>
+              <span className="text-slate-300">Total Work (Tickets)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-blue-500"></div>
+              <span className="text-slate-300">Completed Before Sprint</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-orange-500"></div>
+              <span className="text-slate-300">Completed in Sprint</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-slate-700"></div>
+              <span className="text-slate-300">Remaining in Sprint</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-3 px-4 text-slate-300 font-semibold">Initiative</th>
+                  <th className="text-center py-3 px-4 text-slate-300 font-semibold">Total Tickets</th>
+                  <th className="text-center py-3 px-4 text-slate-300 font-semibold">Lifetime Completion</th>
+                  <th className="text-center py-3 px-4 text-slate-300 font-semibold">Sprint Completion</th>
+                  <th className="text-center py-3 px-4 text-slate-300 font-semibold">Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metricsData.epicMetrics.map((epic, index) => {
+                  // Calcular porcentajes para la barra
+                  const totalTickets = epic.totalTickets;
+                  const completedLifetime = epic.completedTicketsLifetime;
+                  const completedInSprint = epic.completedTicketsInSprint;
+                  const remainingInSprint = epic.remainingTicketsInSprint;
+                  
+                  // Porcentajes basados en total de tickets
+                  const lifetimePercent = totalTickets > 0 ? (completedLifetime / totalTickets) * 100 : 0;
+                  const sprintCompletedPercent = totalTickets > 0 ? (completedInSprint / totalTickets) * 100 : 0;
+                  const remainingPercent = totalTickets > 0 ? (remainingInSprint / totalTickets) * 100 : 0;
+                  
+                  // Calcular la posición del naranja (completados durante sprint)
+                  // El azul muestra todos los completados lifetime
+                  // El naranja muestra solo los completados durante el sprint (dentro del azul, pero destacado)
+                  // El gris oscuro muestra los remaining en el sprint
+                  const completedBeforeSprint = completedLifetime - completedInSprint;
+                  const completedBeforeSprintPercent = totalTickets > 0 ? (completedBeforeSprint / totalTickets) * 100 : 0;
+                  
+                  return (
+                    <tr key={epic.epicId || `no-initiative-${index}`} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                      <td className="py-4 px-4 text-white font-medium">{epic.epicName}</td>
+                      <td className="py-4 px-4 text-center text-slate-300">{totalTickets}</td>
+                      <td className="py-4 px-4 text-center text-slate-300">
+                        {epic.lifetimeCompletionPercentage.toFixed(1)}%
+                        <div className="text-xs text-slate-500 mt-1">
+                          {completedLifetime}/{totalTickets} tickets
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center text-slate-300">
+                        {epic.sprintCompletionPercentage.toFixed(1)}%
+                        <div className="text-xs text-slate-500 mt-1">
+                          {completedInSprint} tickets
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="relative w-full h-8 bg-slate-500 rounded overflow-hidden">
+                          {/* Base gris: Total de trabajo (100%) - ya está como fondo */}
+                          
+                          {/* Azul: Completados antes del sprint (lifetime menos los del sprint) */}
+                          {completedBeforeSprintPercent > 0 && (
+                            <div 
+                              className="absolute left-0 top-0 h-full bg-blue-500"
+                              style={{ width: `${completedBeforeSprintPercent}%` }}
+                            ></div>
+                          )}
+                          
+                          {/* Naranja: Completados durante el sprint (después del azul, en sección) */}
+                          {sprintCompletedPercent > 0 && (
+                            <div 
+                              className="absolute top-0 h-full bg-orange-500"
+                              style={{ 
+                                left: `${completedBeforeSprintPercent}%`,
+                                width: `${sprintCompletedPercent}%` 
+                              }}
+                            ></div>
+                          )}
+                          
+                          {/* Gris oscuro: Remaining en el sprint (después del naranja) */}
+                          {remainingPercent > 0 && (
+                            <div 
+                              className="absolute top-0 h-full bg-slate-700"
+                              style={{ 
+                                left: `${completedBeforeSprintPercent + sprintCompletedPercent}%`,
+                                width: `${remainingPercent}%` 
+                              }}
+                            ></div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

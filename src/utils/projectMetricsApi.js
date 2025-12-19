@@ -162,19 +162,20 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       }
     }
 
-    // Obtener issue_ids del sprint si está seleccionado
-    let sprintIssueIds = null;
+    // Obtener el nombre del sprint si está seleccionado para filtrar por current_sprint
+    let sprintName = null;
     if (sprintId) {
-      const { data: sprintIssues, error: sprintError } = await supabase
-        .from('issue_sprints')
-        .select('issue_id')
-        .eq('sprint_id', sprintId);
+      const { data: sprint, error: sprintError } = await supabase
+        .from('sprints')
+        .select('sprint_name')
+        .eq('id', sprintId)
+        .single();
 
       if (sprintError) throw sprintError;
-      sprintIssueIds = (sprintIssues || []).map(si => si.issue_id);
+      sprintName = sprint?.sprint_name;
       
-      if (sprintIssueIds.length === 0) {
-        // Si no hay issues en el sprint, retornar datos vacíos
+      if (!sprintName) {
+        // Si no se encuentra el sprint, retornar datos vacíos
         return {
           tickets: [],
           statusBreakdown: {},
@@ -185,7 +186,7 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       }
     }
 
-    // Construir query base
+    // Construir query base (incluyendo status_by_sprint para calcular completados durante el sprint)
     let query = supabase
       .from('issues')
       .select(`
@@ -194,9 +195,12 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
         summary,
         current_status,
         current_story_points,
+        current_sprint,
+        status_by_sprint,
         initiative_id,
         initiatives(
           id,
+          initiative_name,
           squad_id,
           squads(
             id,
@@ -211,9 +215,9 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       query = query.in('initiative_id', initiativeIds);
     }
 
-    // Filtrar por issues del sprint
-    if (sprintIssueIds) {
-      query = query.in('id', sprintIssueIds);
+    // Filtrar por current_sprint (métrica real que define si está en el sprint seleccionado)
+    if (sprintName) {
+      query = query.eq('current_sprint', sprintName);
     }
 
     const { data: issues, error } = await query;
@@ -222,9 +226,24 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
 
     console.log(`[PROJECT_METRICS] Issues encontrados: ${(issues || []).length}`);
 
+    // Función para determinar si un estado es "Dev Done"
+    const isDevDone = (status) => {
+      if (!status) return false;
+      const statusUpper = status.trim().toUpperCase();
+      return statusUpper === 'DONE' || 
+             statusUpper === 'DEVELOPMENT DONE' ||
+             statusUpper.includes('DEVELOPMENT DONE') ||
+             statusUpper.includes('DEV DONE') ||
+             (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
+             statusUpper === 'CLOSED' ||
+             statusUpper === 'RESOLVED' ||
+             statusUpper === 'COMPLETED';
+    };
+
     // Agrupar por Board State (current_status) con normalización
     const statusBreakdown = {};
     let totalSP = 0;
+    let completedSP = 0; // SP de tickets completados
 
     (issues || []).forEach(issue => {
       const rawStatus = issue.current_status || 'Unknown';
@@ -241,6 +260,11 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       const sp = issue.current_story_points || 0;
       statusBreakdown[status].sp += sp;
       totalSP += sp;
+      
+      // Calcular SP completados
+      if (isDevDone(status)) {
+        completedSP += sp;
+      }
     });
 
     // Convertir a array para los gráficos
@@ -260,18 +284,204 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
     // Ordenar por count descendente
     statusData.sort((a, b) => b.value - a.value);
 
+    // Calcular métricas de épicas/iniciativas
+    const epicMetrics = await calculateEpicMetrics(issues || [], sprintName, squadId);
+
     return {
       tickets: issues || [],
       statusBreakdown: statusBreakdown,
       statusData: statusData,
       totalTickets: totalTickets,
-      totalSP: totalSP
+      totalSP: totalSP,
+      completedSP: completedSP, // SP completados
+      epicMetrics: epicMetrics // Métricas por épica
     };
   } catch (error) {
     console.error('[PROJECT_METRICS] Error obteniendo métricas:', error);
     throw error;
   }
 };
+
+/**
+ * Calcula métricas por épica/iniciativa
+ * IMPORTANTE: Para lifetime, necesitamos TODOS los tickets de la épica, no solo los del sprint
+ */
+async function calculateEpicMetrics(issues, sprintName, squadId) {
+  if (!issues || issues.length === 0) return [];
+
+  // Función para determinar si un estado es "Dev Done"
+  const isDevDone = (status) => {
+    if (!status) return false;
+    const statusUpper = status.trim().toUpperCase();
+    return statusUpper === 'DONE' || 
+           statusUpper === 'DEVELOPMENT DONE' ||
+           statusUpper.includes('DEVELOPMENT DONE') ||
+           statusUpper.includes('DEV DONE') ||
+           (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
+           statusUpper === 'CLOSED' ||
+           statusUpper === 'RESOLVED' ||
+           statusUpper === 'COMPLETED';
+  };
+
+  // Obtener todas las iniciativas del squad para calcular lifetime
+  let allEpicIssues = [];
+  if (squadId) {
+    try {
+      const { data: initiatives, error: initiativesError } = await supabase
+        .from('initiatives')
+        .select('id')
+        .eq('squad_id', squadId);
+
+      if (!initiativesError && initiatives && initiatives.length > 0) {
+        const initiativeIds = initiatives.map(i => i.id);
+        
+        // Obtener TODOS los issues de estas iniciativas (lifetime) - sin filtrar por sprint
+        const { data: allIssues, error: allIssuesError } = await supabase
+          .from('issues')
+          .select(`
+            id,
+            initiative_id,
+            current_status,
+            current_story_points,
+            current_sprint,
+            status_by_sprint,
+            initiatives(
+              id,
+              initiative_name
+            )
+          `)
+          .in('initiative_id', initiativeIds);
+
+        if (!allIssuesError) {
+          allEpicIssues = allIssues || [];
+        }
+      }
+    } catch (error) {
+      console.error('[PROJECT_METRICS] Error obteniendo issues lifetime:', error);
+      // Continuar con solo los issues del sprint si falla
+    }
+  }
+
+  // Agrupar issues por iniciativa para lifetime
+  const epicMap = new Map();
+
+  // Identificar épicas que tienen tickets en el sprint seleccionado
+  const epicIdsInSprint = new Set(issues.map(i => i.initiative_id).filter(Boolean));
+  
+  // Primero, procesar todos los issues (lifetime) - solo épicas que tienen tickets en el sprint
+  // Para evitar mostrar épicas que no tienen trabajo en el sprint
+  allEpicIssues.forEach(issue => {
+    const epicId = issue.initiative_id;
+    // Solo procesar épicas que tienen tickets en el sprint seleccionado
+    if (!epicId || !epicIdsInSprint.has(epicId)) return;
+    
+    const epicName = issue.initiatives?.initiative_name || 'Sin Iniciativa';
+    
+    if (!epicMap.has(epicId)) {
+      epicMap.set(epicId, {
+        epicId: epicId,
+        epicName: epicName,
+        totalTickets: 0,
+        completedTicketsLifetime: 0,
+        completedTicketsInSprint: 0,
+        remainingTicketsInSprint: 0,
+        totalSP: 0,
+        completedSPLifetime: 0,
+        completedSPInSprint: 0
+      });
+    }
+
+    const epic = epicMap.get(epicId);
+    const sp = issue.current_story_points || 0;
+    const currentStatus = issue.current_status || 'Unknown';
+    const isCompleted = isDevDone(currentStatus);
+    
+    // Métricas lifetime (todos los tickets de la épica)
+    epic.totalTickets++;
+    epic.totalSP += sp;
+    if (isCompleted) {
+      epic.completedTicketsLifetime++;
+      epic.completedSPLifetime += sp;
+    }
+  });
+
+  // Ahora, procesar solo los issues del sprint para métricas del sprint
+  issues.forEach(issue => {
+    const epicId = issue.initiative_id;
+    if (!epicId) return; // Skip si no tiene iniciativa
+    
+    let epic = epicMap.get(epicId);
+    if (!epic) {
+      // Si la épica no está en el mapa (no se encontraron issues lifetime), 
+      // crear entrada solo con datos del sprint (usar los issues del sprint como total)
+      const epicName = issue.initiatives?.initiative_name || 'Sin Iniciativa';
+      epicMap.set(epicId, {
+        epicId: epicId,
+        epicName: epicName,
+        totalTickets: 0, // Se calculará después
+        completedTicketsLifetime: 0,
+        completedTicketsInSprint: 0,
+        remainingTicketsInSprint: 0,
+        totalSP: 0,
+        completedSPLifetime: 0,
+        completedSPInSprint: 0
+      });
+      epic = epicMap.get(epicId);
+    }
+    
+    const sp = issue.current_story_points || 0;
+    const currentStatus = issue.current_status || 'Unknown';
+    const isCompleted = isDevDone(currentStatus);
+
+    // Métricas del sprint (solo si hay sprint seleccionado y el ticket está en el sprint)
+    if (sprintName && issue.current_sprint === sprintName) {
+      // Verificar si se completó durante este sprint usando status_by_sprint
+      const statusBySprint = issue.status_by_sprint || {};
+      const sprintStatus = statusBySprint[sprintName];
+      const wasCompletedInSprint = sprintStatus && isDevDone(sprintStatus);
+      
+      // Si el ticket está en el sprint y se completó durante el sprint
+      if (isCompleted && wasCompletedInSprint) {
+        epic.completedTicketsInSprint++;
+        epic.completedSPInSprint += sp;
+      } else if (!isCompleted) {
+        // Si está en el sprint pero no se completó
+        epic.remainingTicketsInSprint++;
+      }
+    }
+  });
+  
+  // Para épicas que no tienen datos lifetime, usar los datos del sprint como total
+  epicMap.forEach((epic, epicId) => {
+    if (epic.totalTickets === 0) {
+      // Si no hay datos lifetime, usar los del sprint como total
+      epic.totalTickets = epic.completedTicketsInSprint + epic.remainingTicketsInSprint;
+      epic.totalSP = epic.completedSPInSprint;
+      epic.completedTicketsLifetime = epic.completedTicketsInSprint;
+      epic.completedSPLifetime = epic.completedSPInSprint;
+    }
+  });
+
+  // Convertir a array y calcular porcentajes
+  return Array.from(epicMap.values())
+    .filter(epic => epic.totalTickets > 0) // Solo épicas con tickets
+    .map(epic => {
+      const lifetimeCompletion = epic.totalTickets > 0 
+        ? (epic.completedTicketsLifetime / epic.totalTickets) * 100 
+        : 0;
+      
+      const sprintCompletion = epic.totalTickets > 0
+        ? (epic.completedTicketsInSprint / epic.totalTickets) * 100
+        : 0;
+
+      return {
+        ...epic,
+        lifetimeCompletionPercentage: Math.round(lifetimeCompletion * 10) / 10,
+        sprintCompletionPercentage: Math.round(sprintCompletion * 10) / 10
+      };
+    })
+    .sort((a, b) => b.totalTickets - a.totalTickets); // Ordenar por total de tickets
+}
 
 /**
  * Obtiene información del squad

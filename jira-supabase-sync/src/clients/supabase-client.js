@@ -227,6 +227,7 @@ class SupabaseClient {
       initiative_id: issueData.epicId || null, // Usar initiative_id, NO epic_id
       epic_name: issueData.epicName || null,
       sprint_history: issueData.sprintHistory || null,
+      current_sprint: issueData.currentSprint || 'Backlog', // Sprint actual/último calculado
       status_by_sprint: issueData.statusBySprint || {},
       story_points_by_sprint: issueData.storyPointsBySprint || {},
       status_history_days: issueData.statusHistoryDays || null,

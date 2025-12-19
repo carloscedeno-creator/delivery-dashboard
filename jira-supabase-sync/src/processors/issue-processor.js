@@ -249,7 +249,24 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
     const sprintData = fields[config.jira.sprintFieldId] || [];
     const sprintIds = [];
     
+    // --- CÁLCULO DE SPRINT ACTUAL/ÚLTIMO (current_sprint) ---
+    // Lógica: Si hay sprint "active", ese es el current_sprint
+    // Si no hay activo, se toma el último sprint de la lista
+    // Si no hay sprints, el valor por defecto es "Backlog"
+    let currentSprint = 'Backlog'; // Por defecto si no hay sprint
+    
     if (Array.isArray(sprintData) && sprintData.length > 0) {
+      // Buscar primero el sprint que esté "active" (en curso)
+      const activeSprint = sprintData.find(sprint => sprint.state === 'active');
+      
+      if (activeSprint) {
+        currentSprint = activeSprint.name;
+      } else {
+        // Si no hay activo, tomamos el último de la lista (el más reciente)
+        const lastSprint = sprintData[sprintData.length - 1];
+        if (lastSprint) currentSprint = lastSprint.name;
+      }
+      
       for (const sprint of sprintData) {
         const sprintId = await supabaseClient.getOrCreateSprint(squadId, {
           name: sprint.name,
@@ -409,6 +426,7 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       epicId,
       epicName,
       sprintHistory,
+      currentSprint, // Sprint actual/último calculado arriba
       statusBySprint: Object.keys(statusBySprint).length > 0 ? statusBySprint : null,
       storyPointsBySprint: Object.keys(storyPointsBySprint).length > 0 ? storyPointsBySprint : null,
       statusHistoryDays,

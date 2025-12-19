@@ -561,34 +561,15 @@ export const getDeveloperAllocationData = async () => {
     // Obtener issues con fechas para filtrar por sprint (incluyendo los sin iniciativa)
     const { data: issues, error: issuesError } = await supabase
       .from('issues')
-      .select('id, squad_id, initiative_id, current_story_points, assignee_id, created_date, dev_start_date, dev_close_date, resolved_date');
+      .select('id, squad_id, initiative_id, current_story_points, current_sprint, assignee_id, created_date, dev_start_date, dev_close_date, resolved_date');
 
     if (issuesError) {
       console.error('[SUPABASE] Error obteniendo issues:', issuesError);
       throw issuesError;
     }
 
-    // Obtener relaciones issue-sprint para saber en qué sprint está cada issue
-    const { data: issueSprints, error: issueSprintsError } = await supabase
-      .from('issue_sprints')
-      .select('issue_id, sprint_id');
-
-    if (issueSprintsError) {
-      console.warn('[SUPABASE] Error obteniendo issue_sprints:', issueSprintsError);
-    }
-
-    // Crear mapa de sprints por issue
-    const issueSprintMap = new Map();
-    if (issueSprints) {
-      for (const is of issueSprints) {
-        if (!issueSprintMap.has(is.issue_id)) {
-          issueSprintMap.set(is.issue_id, []);
-        }
-        issueSprintMap.get(is.issue_id).push(is.sprint_id);
-      }
-    }
-
     // Función para verificar si un issue está activo en el sprint actual
+    // Usa current_sprint (métrica real que define si está en el sprint seleccionado)
     const isIssueActiveInSprint = (issue, sprint) => {
       if (!sprint) return false;
 
@@ -603,14 +584,13 @@ export const getDeveloperAllocationData = async () => {
         if (daysSinceEnd > 14) return false; // Más de 2 semanas = no contar
       }
 
-      // PRIORIDAD 1: Verificar si el issue está explícitamente en este sprint (issue_sprints)
-      // Esta es la fuente más confiable
-      const issueSprintIds = issueSprintMap.get(issue.id) || [];
-      if (issueSprintIds.includes(sprint.id)) {
+      // PRIORIDAD 1: Verificar si el issue tiene current_sprint que coincida con el sprint
+      // Esta es la fuente más confiable (métrica real del spreadsheet)
+      if (issue.current_sprint && issue.current_sprint === sprint.sprint_name) {
         return true; // Está en el sprint, contar
       }
 
-      // PRIORIDAD 2: Si NO está en issue_sprints, verificar fechas SOLO para tickets muy recientes
+      // PRIORIDAD 2: Si NO tiene current_sprint, verificar fechas SOLO para tickets muy recientes
       // Solo contar si fue creado DURANTE el sprint actual (no antes)
       const issueCreated = issue.created_date ? new Date(issue.created_date) : null;
       
