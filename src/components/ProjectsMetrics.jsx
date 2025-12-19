@@ -27,14 +27,18 @@ const ProjectsMetrics = () => {
     'DEVELOPMENT DONE': '#86efac', // Light green
     'STAGING': '#4ade80',       // Medium green
     'READY TO RELEASE': '#16a34a', // Dark green
-    'TO DO': '#1f2937',        // Black/Dark gray
+    'TO DO': '#3b82f6',        // Blue (cambiar de negro a azul para mejor visibilidad)
     'REOPEN': '#ef4444',        // Red
-    'IN PROGRESS': '#d1d5db',   // Light gray
+    'IN PROGRESS': '#60a5fa',   // Light blue (cambiar de gris para mejor visibilidad)
     'BLOCKED': '#f9a8d4',       // Pink
     'DONE': '#10b981',         // Green
     'SECURITY REVIEW': '#3b82f6', // Blue
     'TESTING': '#fbbf24',      // Yellow/Amber
     'COMPLIANCE CHECK': '#a78bfa', // Purple
+    'IN REVIEW': '#8b5cf6',     // Purple variant
+    'OPEN': '#06b6d4',         // Cyan
+    'HOLD': '#f59e0b',         // Amber
+    'REQUISITIONS': '#ec4899',  // Pink variant
     'Unknown': '#6b7280'        // Gray
   };
 
@@ -120,16 +124,44 @@ const ProjectsMetrics = () => {
     }
   };
 
-  // Preparar datos para los gráficos
+  // Preparar datos para los gráficos con colores
   const chartData = useMemo(() => {
     if (!metricsData || !metricsData.statusData) return [];
 
-    return metricsData.statusData.map(status => ({
-      name: status.name,
-      value: status.value,
-      percentage: status.percentage,
-      color: statusColors[status.name] || statusColors['Unknown']
-    }));
+    console.log('[ProjectsMetrics] 📊 Datos recibidos:', metricsData.statusData);
+    console.log('[ProjectsMetrics] 🎨 Colores disponibles:', Object.keys(statusColors));
+
+    const data = metricsData.statusData.map(status => {
+      // Normalizar el nombre del estado
+      const normalizedName = status.name.toUpperCase().trim();
+      
+      // Intentar encontrar el color con diferentes variaciones
+      let color = statusColors[normalizedName] || 
+                  statusColors[status.name] || 
+                  statusColors[normalizedName.replace(/\s+/g, ' ')] ||
+                  statusColors['Unknown'] || 
+                  '#6b7280';
+      
+      // Debug detallado
+      console.log(`[ProjectsMetrics] 🔍 Estado: "${status.name}" -> Normalizado: "${normalizedName}" -> Color encontrado: ${color}`);
+      console.log(`[ProjectsMetrics]    - statusColors["${normalizedName}"]:`, statusColors[normalizedName]);
+      console.log(`[ProjectsMetrics]    - statusColors["${status.name}"]:`, statusColors[status.name]);
+      
+      const result = {
+        name: status.name,
+        value: status.value,
+        percentage: status.percentage,
+        color: color
+      };
+      
+      console.log(`[ProjectsMetrics] ✅ Resultado final:`, result);
+      
+      return result;
+    });
+    
+    console.log('[ProjectsMetrics] 📈 chartData final:', data);
+    
+    return data;
   }, [metricsData]);
 
   // Título dinámico
@@ -226,12 +258,29 @@ const ProjectsMetrics = () => {
                   labelLine={false}
                   label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
                   outerRadius={120}
-                  fill="#8884d8"
                   dataKey="value"
+                  nameKey="name"
                 >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
+                  {chartData.map((entry, index) => {
+                    // Obtener color con múltiples intentos
+                    const normalizedName = entry.name.toUpperCase().trim();
+                    const fillColor = entry.color || 
+                                     statusColors[normalizedName] || 
+                                     statusColors[entry.name] || 
+                                     statusColors['Unknown'] || 
+                                     '#6b7280';
+                    
+                    console.log(`[ProjectsMetrics] 🎨 Pie Cell ${index}: "${entry.name}" (normalized: "${normalizedName}") -> fill: ${fillColor}, entry.color: ${entry.color}`);
+                    
+                    return (
+                      <Cell 
+                        key={`pie-cell-${index}-${entry.name}`} 
+                        fill={fillColor}
+                        stroke={fillColor}
+                        strokeWidth={1}
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip 
                   contentStyle={{ 
@@ -276,10 +325,27 @@ const ProjectsMetrics = () => {
                   formatter={(value) => [`${value} tickets`, 'Count']}
                 />
                 <Legend />
-                <Bar dataKey="value" fill="#3b82f6" name="Tickets">
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
+                <Bar dataKey="value" name="Tickets" isAnimationActive={true}>
+                  {chartData.map((entry, index) => {
+                    // Obtener color con múltiples intentos
+                    const normalizedName = entry.name.toUpperCase().trim();
+                    const fillColor = entry.color || 
+                                     statusColors[normalizedName] || 
+                                     statusColors[entry.name] || 
+                                     statusColors['Unknown'] || 
+                                     '#6b7280';
+                    
+                    console.log(`[ProjectsMetrics] 🎨 Bar Cell ${index}: "${entry.name}" (normalized: "${normalizedName}") -> fill: ${fillColor}, entry.color: ${entry.color}`);
+                    
+                    return (
+                      <Cell 
+                        key={`bar-cell-${index}-${entry.name}`} 
+                        fill={fillColor}
+                        stroke={fillColor}
+                        strokeWidth={1}
+                      />
+                    );
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

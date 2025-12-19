@@ -10,15 +10,8 @@ const getSupabase = () => {
         return window.supabaseClient;
     }
     
-    // Fallback: intentar importar
-    try {
-        // En contexto de módulo ES6
-        if (typeof import !== 'undefined') {
-            return null; // Se manejará dinámicamente
-        }
-    } catch (e) {
-        // Ignorar
-    }
+    // Fallback: intentar importar dinámicamente más adelante
+    // (no podemos verificar 'import' aquí porque causa problemas en algunos entornos)
     
     return null;
 };
@@ -53,13 +46,16 @@ export const login = async (email, password) => {
   }
 
   try {
+    // Normalizar email a minúsculas
+    const normalizedEmail = email.toLowerCase().trim();
+    
     // Hash simple del password (en producción usar bcrypt o similar)
     // Por ahora, para desarrollo, usamos un hash simple
     const passwordHash = btoa(password); // Base64 encoding (temporal, no seguro para producción)
 
     // Llamar a la función de autenticación
     const { data, error } = await supabaseClient.rpc('authenticate_user', {
-      p_email: email,
+      p_email: normalizedEmail,
       p_password_hash: passwordHash
     });
 
@@ -94,7 +90,7 @@ export const login = async (email, password) => {
       token,
       user: {
         id: user.user_id,
-        email: user.email,
+        email: user.user_email || user.email, // Soporta ambos nombres por compatibilidad
         displayName: user.display_name,
         role: user.role
       },

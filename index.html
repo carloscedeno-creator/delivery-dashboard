@@ -3609,14 +3609,70 @@
                             if (!window.supabaseClient) {
                                 return { success: false, error: 'Supabase is not configured' };
                             }
-                            const passwordHash = btoa(password);
-                            const { data, error } = await window.supabaseClient.rpc('authenticate_user', {
-                                p_email: email,
-                                p_password_hash: passwordHash
-                            });
-                            if (error || !data || data.length === 0) {
-                                return { success: false, error: 'Invalid credentials or account not approved' };
+                            
+                            // Validar que email y password no estén vacíos
+                            if (!email || !password) {
+                                return { success: false, error: 'Email and password are required' };
                             }
+                            
+                            const passwordHash = btoa(password);
+                            
+                            console.log('[LOGIN] Intentando autenticar:', { email: email.trim().toLowerCase() });
+                            
+                            // Verificar que supabaseClient esté configurado correctamente
+                            if (!window.supabaseClient || typeof window.supabaseClient.rpc !== 'function') {
+                                console.error('[LOGIN] Supabase client no está configurado correctamente');
+                                return { success: false, error: 'Authentication service is not configured. Please refresh the page.' };
+                            }
+                            
+                            let data, error;
+                            try {
+                                console.log('[LOGIN] Llamando authenticate_user RPC...');
+                                const result = await window.supabaseClient.rpc('authenticate_user', {
+                                    p_email: email.trim().toLowerCase(),
+                                    p_password_hash: passwordHash
+                                });
+                                data = result.data;
+                                error = result.error;
+                                
+                                if (error) {
+                                    console.error('[LOGIN] Error en authenticate_user:', error);
+                                    console.error('[LOGIN] Detalles del error:', {
+                                        code: error.code,
+                                        message: error.message,
+                                        details: error.details,
+                                        hint: error.hint
+                                    });
+                                    
+                                    // Proporcionar mensaje de error más específico
+                                    if (error.code === '42883' || error.message?.includes('function authenticate_user') || error.message?.includes('does not exist')) {
+                                        return { success: false, error: 'Authentication function not found. The database may need to be updated. Please contact administrator.' };
+                                    }
+                                    if (error.code === '42501' || error.message?.includes('permission denied')) {
+                                        return { success: false, error: 'Permission denied. Please contact administrator.' };
+                                    }
+                                    if (error.code === 'P0001' || error.message?.includes('Invalid credentials')) {
+                                        return { success: false, error: 'Invalid email or password' };
+                                    }
+                                    if (error.message?.includes('not active') || error.message?.includes('not approved')) {
+                                        return { success: false, error: 'Account is not active. Please contact an administrator.' };
+                                    }
+                                    // Error 400 genérico - podría ser varios problemas
+                                    if (error.code === '400' || error.message?.includes('Bad Request')) {
+                                        return { success: false, error: 'Authentication service error. The function may not be configured correctly. Please contact administrator.' };
+                                    }
+                                    return { success: false, error: error.message || 'Authentication failed. Please try again.' };
+                                }
+                                
+                                if (!data || data.length === 0) {
+                                    return { success: false, error: 'Invalid email or password' };
+                                }
+                            } catch (rpcError) {
+                                console.error('[LOGIN] Error llamando RPC:', rpcError);
+                                console.error('[LOGIN] Stack trace:', rpcError.stack);
+                                return { success: false, error: 'Authentication service error. Please try again or contact administrator if the problem persists.' };
+                            }
+                            
                             const user = data[0];
                             const token = 'token_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
                             await window.supabaseClient.rpc('create_session', {
@@ -3628,7 +3684,7 @@
                                 token,
                                 user: {
                                     id: user.user_id,
-                                    email: user.email,
+                                    email: user.user_email || user.email, // Soporta ambos nombres por compatibilidad
                                     displayName: user.display_name,
                                     role: user.role
                                 },
@@ -4954,20 +5010,26 @@
                                     const [squadInfo, setSquadInfo] = useState(null);
                                     const [sprintInfo, setSprintInfo] = useState(null);
 
-                                    // Colores para los Board States
+                                    // Colores para los Board States (normalizados a mayúsculas)
                                     const statusColors = {
-                                        'QA': '#fef3c7',
-                                        'QA External': '#fb923c',
-                                        'Development Done': '#86efac',
-                                        'Staging': '#4ade80',
-                                        'Ready To Release': '#16a34a',
-                                        'To Do': '#1f2937',
-                                        'Reopen': '#ef4444',
-                                        'In Progress': '#d1d5db',
-                                        'Blocked': '#f9a8d4',
-                                        'Done': '#10b981',
-                                        'Security Review': '#3b82f6',
-                                        'Unknown': '#6b7280'
+                                        'QA': '#fef3c7',           // Light yellow
+                                        'QA EXTERNAL': '#fb923c',   // Orange
+                                        'DEVELOPMENT DONE': '#86efac', // Light green
+                                        'STAGING': '#4ade80',       // Medium green
+                                        'READY TO RELEASE': '#16a34a', // Dark green
+                                        'TO DO': '#3b82f6',        // Blue
+                                        'REOPEN': '#ef4444',        // Red
+                                        'IN PROGRESS': '#60a5fa',   // Light blue
+                                        'BLOCKED': '#f9a8d4',       // Pink
+                                        'DONE': '#10b981',         // Green
+                                        'SECURITY REVIEW': '#3b82f6', // Blue
+                                        'TESTING': '#fbbf24',      // Yellow/Amber
+                                        'COMPLIANCE CHECK': '#a78bfa', // Purple
+                                        'IN REVIEW': '#8b5cf6',     // Purple variant
+                                        'OPEN': '#06b6d4',         // Cyan
+                                        'HOLD': '#f59e0b',         // Amber
+                                        'REQUISITIONS': '#ec4899',  // Pink variant
+                                        'Unknown': '#6b7280'        // Gray
                                     };
 
                                     // Cargar squads al montar
@@ -5182,15 +5244,32 @@
                                         }
                                     }, [selectedSquad, selectedSprint]);
 
-                                    // Preparar datos para gráficos
+                                    // Preparar datos para gráficos con colores normalizados
                                     const chartData = useMemo(() => {
                                         if (!metricsData || !metricsData.statusData) return [];
-                                        return metricsData.statusData.map(status => ({
-                                            name: status.name,
-                                            value: status.value,
-                                            percentage: status.percentage,
-                                            color: statusColors[status.name] || statusColors['Unknown']
-                                        }));
+                                        
+                                        console.log('[ProjectsMetricsInline] 📊 Datos recibidos:', metricsData.statusData);
+                                        console.log('[ProjectsMetricsInline] 🎨 Colores disponibles:', Object.keys(statusColors));
+                                        
+                                        return metricsData.statusData.map(status => {
+                                            // Normalizar el nombre del estado a mayúsculas
+                                            const normalizedName = status.name.toUpperCase().trim();
+                                            
+                                            // Buscar color con normalización
+                                            const color = statusColors[normalizedName] || 
+                                                         statusColors[status.name] || 
+                                                         statusColors['Unknown'] || 
+                                                         '#6b7280';
+                                            
+                                            console.log(`[ProjectsMetricsInline] 🔍 Estado: "${status.name}" -> Normalizado: "${normalizedName}" -> Color: ${color}`);
+                                            
+                                            return {
+                                                name: status.name,
+                                                value: status.value,
+                                                percentage: status.percentage,
+                                                color: color
+                                            };
+                                        });
                                     }, [metricsData]);
 
                                     // Título dinámico
@@ -5300,8 +5379,17 @@
                                                             formatter: (value) => [`${value} tickets`, 'Count']
                                                         }),
                                                         React.createElement(window.Recharts.Legend),
-                                                        React.createElement(window.Recharts.Bar, { dataKey: 'value', fill: '#3b82f6', name: 'Tickets' },
-                                                            chartData.map((entry, index) => React.createElement(window.Recharts.Cell, { key: `cell-${index}`, fill: entry.color }))
+                                                        React.createElement(window.Recharts.Bar, { dataKey: 'value', name: 'Tickets', isAnimationActive: true },
+                                                            chartData.map((entry, index) => {
+                                                                const fillColor = entry.color || statusColors['Unknown'] || '#6b7280';
+                                                                console.log(`[ProjectsMetricsInline] 🎨 Bar Cell ${index}: "${entry.name}" -> fill: ${fillColor}`);
+                                                                return React.createElement(window.Recharts.Cell, { 
+                                                                    key: `bar-cell-${index}-${entry.name}`, 
+                                                                    fill: fillColor,
+                                                                    stroke: fillColor,
+                                                                    strokeWidth: 1
+                                                                });
+                                                            })
                                                         )
                                                     )
                                                 )
