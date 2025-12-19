@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🧪 Ejecutando pruebas antes de push..."
+
+# Ejecutar pruebas unitarias
+echo "📦 Ejecutando pruebas unitarias..."
+npm run test:unit || {
+  echo "❌ Las pruebas unitarias fallaron. Por favor, corrige los errores antes de hacer push."
+  exit 1
+}
+
+# Ejecutar pruebas e2e solo con Chromium (más rápido)
+# En CI se ejecutan todas las pruebas e2e automáticamente
+if [ -z "$CI" ]; then
+  echo "🌐 Ejecutando pruebas e2e (Chromium)..."
+  npx playwright test --project=chromium || {
+    echo "❌ Las pruebas e2e fallaron. Por favor, corrige los errores antes de hacer push."
+    exit 1
+  }
+else
+  echo "⏭️  Saltando pruebas e2e en CI (se ejecutan en GitHub Actions)"
+fi
+
+echo "✅ Todas las pruebas pasaron. Procediendo con push..."

@@ -1,42 +1,146 @@
-# Tests para DeliveryRoadmapData Module
+# Testing Guide
 
-## 🧪 Archivos de Test
+Este proyecto incluye pruebas unitarias y e2e para garantizar la calidad del código.
 
-1. **validate-delivery.js** - Script de validación para consola del navegador
-2. **validate-delivery-isolation.md** - Checklist de validación manual
-3. **test-delivery-module.html** - Página HTML para pruebas visuales
+## Estructura de Pruebas
 
-## 📋 Cómo Ejecutar los Tests
+```
+tests/
+├── unit/              # Pruebas unitarias
+│   ├── authService.test.js
+│   └── ProjectsMetrics.test.jsx
+├── e2e/               # Pruebas end-to-end
+│   ├── login.spec.js
+│   └── dashboard.spec.js
+└── setup.js           # Configuración global de pruebas
+```
 
-### Opción 1: Validación en Consola del Navegador
+## Ejecutar Pruebas
 
-1. Abre `index.html` en el navegador
-2. Abre la consola (F12)
-3. Copia y pega el contenido de `validate-delivery.js`
-4. Presiona Enter
+### Pruebas Unitarias
 
-### Opción 2: Validación Manual
+```bash
+# Ejecutar todas las pruebas unitarias
+npm run test:unit
 
-Revisa el checklist en `validate-delivery-isolation.md`
+# Ejecutar en modo watch (desarrollo)
+npm run test:unit:watch
 
-### Opción 3: Test HTML
+# Ejecutar con UI interactiva
+npm run test:unit:ui
 
-Abre `test-delivery-module.html` en el navegador (requiere ajustar la ruta del módulo)
+# Ejecutar con cobertura
+npm run test:coverage
+```
 
-## ✅ Tests Implementados
+### Pruebas E2E
 
-- [x] Verificación de estructura del módulo
-- [x] Validación de URLs (solo Delivery, no Product)
-- [x] Validación de datos mock
-- [x] Test de función parseCSV
-- [x] Verificación de aislamiento (no contamina scope global)
-- [x] Verificación de función load
+```bash
+# Ejecutar todas las pruebas e2e
+npm run test:e2e
 
-## 🎯 Resultado Esperado
+# Ejecutar con UI interactiva
+npm run test:e2e:ui
 
-Todos los tests deben pasar (✅) para confirmar que el módulo está:
-- ✅ Completamente aislado
-- ✅ Sin mezclas con Product Roadmap
-- ✅ Estructurado correctamente
-- ✅ Funcional
+# Ejecutar en modo headed (ver el navegador)
+npm run test:e2e:headed
+```
 
+### Ejecutar Todas las Pruebas
+
+```bash
+npm run test:all
+```
+
+## Pre-Push Hook
+
+Las pruebas se ejecutan automáticamente antes de cada `git push` gracias a Husky. Si las pruebas fallan, el push será bloqueado.
+
+Para saltar el hook (no recomendado):
+
+```bash
+git push --no-verify
+```
+
+## Cobertura de Pruebas
+
+### Módulos Cubiertos
+
+1. **authService** (`src/utils/authService.js`)
+   - ✅ Login con credenciales válidas/inválidas
+   - ✅ Normalización de email
+   - ✅ Logout
+   - ✅ Gestión de sesiones
+   - ✅ Validación de sesiones
+   - ✅ Manejo de errores
+
+2. **ProjectsMetrics** (`src/components/ProjectsMetrics.jsx`)
+   - ✅ Renderizado del componente
+   - ✅ Asignación de colores a estados
+   - ✅ Normalización de estados
+   - ✅ Manejo de datos vacíos
+   - ✅ Manejo de errores
+
+3. **E2E - Login Flow**
+   - ✅ Formulario de login
+   - ✅ Validación de campos
+   - ✅ Autenticación exitosa
+   - ✅ Persistencia de sesión
+   - ✅ Logout
+
+4. **E2E - Dashboard**
+   - ✅ Navegación entre vistas
+   - ✅ Visualización de gráficos con colores
+   - ✅ Filtros por squad y sprint
+
+## Escribir Nuevas Pruebas
+
+### Pruebas Unitarias
+
+```javascript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import MyComponent from '../src/components/MyComponent';
+
+describe('MyComponent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('debe renderizar correctamente', () => {
+    render(<MyComponent />);
+    expect(screen.getByText('Expected Text')).toBeInTheDocument();
+  });
+});
+```
+
+### Pruebas E2E
+
+```javascript
+import { test, expect } from '@playwright/test';
+
+test.describe('My Feature', () => {
+  test('debe funcionar correctamente', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByText('Expected Text')).toBeVisible();
+  });
+});
+```
+
+## Troubleshooting
+
+### ResizeObserver no está definido
+
+Este error ocurre con componentes que usan Recharts. Ya está mockeado en `tests/setup.js`.
+
+### localStorage no funciona en pruebas
+
+El localStorage está mockeado en `tests/setup.js`. Si necesitas resetearlo, usa `localStorage.clear()` en `beforeEach`.
+
+### Supabase no está configurado
+
+Las pruebas mockean `window.supabaseClient`. Si necesitas probar con Supabase real, configura las variables de entorno en `.env.test`.
+
+## CI/CD
+
+Las pruebas también se ejecutan en GitHub Actions. Ver `.github/workflows/` para más detalles.
