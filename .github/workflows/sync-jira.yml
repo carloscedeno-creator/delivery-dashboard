@@ -9,7 +9,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60  # Aumentado a 60 minutos para permitir sincronización completa
     
     steps:
       - name: Checkout code
@@ -37,44 +37,18 @@ jobs:
           npm run verify-config || echo "⚠️ Verificación falló, pero continuando..."
       
       - name: Apply database migrations
+        working-directory: jira-supabase-sync
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "📦 Aplicando migraciones de base de datos..."
-          
-          # Instalar psql si no está disponible
-          if ! command -v psql &> /dev/null; then
-            echo "📥 Instalando PostgreSQL client..."
-            sudo apt-get update -qq
-            sudo apt-get install -y postgresql-client
-          fi
-          
-          # Extraer información de conexión de Supabase URL
-          # Formato: https://xxxxx.supabase.co
-          SUPABASE_HOST=$(echo "$SUPABASE_URL" | sed 's|https://||' | sed 's|http://||')
-          
-          # Ejecutar migraciones pendientes
-          # Buscar archivos de migración en orden numérico
-          for migration_file in docs/supabase/*.sql; do
-            if [ -f "$migration_file" ]; then
-              echo "🔄 Aplicando migración: $(basename $migration_file)"
-              # Usar Supabase REST API para ejecutar SQL (más seguro que psql directo)
-              SQL_CONTENT=$(cat "$migration_file" | sed "s/'/''/g")
-              curl -X POST \
-                "$SUPABASE_URL/rest/v1/rpc/exec_sql" \
-                -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-                -H "Content-Type: application/json" \
-                -d "{\"sql\": \"$SQL_CONTENT\"}" \
-                --fail-with-body 2>/dev/null || {
-                  echo "⚠️ Migración $(basename $migration_file) falló o ya estaba aplicada (continuando...)"
-                }
-            fi
-          done
-          
-          echo "✅ Migraciones aplicadas"
+          echo "🔍 Verificando y aplicando migraciones pendientes..."
+          npm run apply-migrations || {
+            echo "⚠️ Algunas migraciones pueden requerir aplicación manual"
+            echo "📝 Revisa los logs arriba para más detalles"
+          }
       
       - name: Run sync
         working-directory: jira-supabase-sync

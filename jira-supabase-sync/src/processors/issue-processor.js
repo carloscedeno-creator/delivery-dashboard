@@ -8,6 +8,9 @@ import supabaseClient from '../clients/supabase-client.js';
 import jiraClientDefault from '../clients/jira-client.js';
 import { config } from '../config.js';
 
+// Cache para detalles de épicas para evitar llamadas redundantes a la API de Jira
+const epicDetailsCache = new Map();
+
 /**
  * Encuentra el valor de un campo en el changelog en una fecha específica
  * @param {Object} changelog - Changelog del issue de Jira
@@ -207,23 +210,35 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       let epicStartDate = null;
       let epicEndDate = null;
       
-      try {
-        const epicDetails = await client.fetchIssueDetails(fields.parent.key);
-        if (epicDetails && epicDetails.fields) {
-          // Intentar extraer fechas del timeline
-            const timelineDates = client.extractTimelineDates(epicDetails.fields);
-          epicStartDate = timelineDates.startDate;
-          epicEndDate = timelineDates.endDate;
-          
-          logger.debug(`📅 Épica ${fields.parent.key}: start=${epicStartDate || 'null'}, end=${epicEndDate || 'null'}`);
+      const epicKey = fields.parent.key;
+      
+      // Usar cache para evitar llamadas redundantes a la API de Jira
+      let epicDetails = epicDetailsCache.get(epicKey);
+      
+      if (!epicDetails) {
+        try {
+          epicDetails = await client.fetchIssueDetails(epicKey);
+          if (epicDetails) {
+            // Guardar en cache
+            epicDetailsCache.set(epicKey, epicDetails);
+          }
+        } catch (error) {
+          logger.warn(`⚠️ Error obteniendo fechas de timeline para épica ${epicKey}:`, error.message);
         }
-      } catch (error) {
-        logger.warn(`⚠️ Error obteniendo fechas de timeline para épica ${fields.parent.key}:`, error.message);
+      }
+      
+      if (epicDetails && epicDetails.fields) {
+        // Intentar extraer fechas del timeline
+        const timelineDates = client.extractTimelineDates(epicDetails.fields);
+        epicStartDate = timelineDates.startDate;
+        epicEndDate = timelineDates.endDate;
+        
+        logger.debug(`📅 Épica ${epicKey}: start=${epicStartDate || 'null'}, end=${epicEndDate || 'null'}`);
       }
       
       epicId = await supabaseClient.getOrCreateEpic(
         squadId,
-        fields.parent.key,
+        epicKey,
         fields.parent.fields.summary || 'N/A',
         epicStartDate,
         epicEndDate
@@ -497,6 +512,9 @@ export async function processIssues(squadId, jiraIssues) {
 
 export async function processIssuesWithClient(squadId, jiraIssues, jiraClient) {
   logger.info(`🔄 Procesando ${jiraIssues.length} issues...`);
+  
+  // Limpiar cache de épicas al inicio de cada sincronización para evitar datos obsoletos
+  epicDetailsCache.clear();
   
   let successCount = 0;
   let errorCount = 0;

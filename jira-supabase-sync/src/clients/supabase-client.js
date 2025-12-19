@@ -208,37 +208,68 @@ class SupabaseClient {
    * Upsert de un issue
    */
   async upsertIssue(squadId, issueData) {
+    // Construir el objeto de datos explícitamente, asegurándonos de NO incluir epic_id
+    const upsertData = {
+      squad_id: squadId,
+      issue_key: issueData.key,
+      issue_type: issueData.issueType,
+      summary: issueData.summary,
+      assignee_id: issueData.assigneeId,
+      priority: issueData.priority,
+      current_status: issueData.status,
+      current_story_points: issueData.storyPoints || 0,
+      resolution: issueData.resolution,
+      created_date: issueData.createdDate,
+      resolved_date: issueData.resolvedDate,
+      updated_date: issueData.updatedDate,
+      dev_start_date: issueData.devStartDate,
+      dev_close_date: issueData.devCloseDate,
+      initiative_id: issueData.epicId || null, // Usar initiative_id, NO epic_id
+      epic_name: issueData.epicName || null,
+      sprint_history: issueData.sprintHistory || null,
+      status_by_sprint: issueData.statusBySprint || {},
+      story_points_by_sprint: issueData.storyPointsBySprint || {},
+      status_history_days: issueData.statusHistoryDays || null,
+      raw_data: issueData.rawData,
+    };
+
+    // Asegurarse de que NO haya ninguna referencia a epic_id
+    if ('epic_id' in upsertData) {
+      delete upsertData.epic_id;
+    }
+
     const { data, error } = await this.client
       .from('issues')
-      .upsert({
-        squad_id: squadId,
-        issue_key: issueData.key,
-        issue_type: issueData.issueType,
-        summary: issueData.summary,
-        assignee_id: issueData.assigneeId,
-        priority: issueData.priority,
-        current_status: issueData.status,
-        current_story_points: issueData.storyPoints || 0,
-        resolution: issueData.resolution,
-        created_date: issueData.createdDate,
-        resolved_date: issueData.resolvedDate,
-        updated_date: issueData.updatedDate,
-        dev_start_date: issueData.devStartDate,
-        dev_close_date: issueData.devCloseDate,
-        initiative_id: issueData.epicId,
-        epic_name: issueData.epicName || null,
-        sprint_history: issueData.sprintHistory || null,
-        status_by_sprint: issueData.statusBySprint || {},
-        story_points_by_sprint: issueData.storyPointsBySprint || {},
-        status_history_days: issueData.statusHistoryDays || null,
-        raw_data: issueData.rawData,
-      }, {
+      .upsert(upsertData, {
         onConflict: 'issue_key',
       })
       .select('id')
       .single();
 
     if (error) {
+      // Si el error es sobre epic_id, intentar esperar un momento y reintentar
+      // (esto puede ayudar si PostgREST está refrescando su caché)
+      if (error.message && error.message.includes('epic_id')) {
+        logger.warn(`⚠️ Error relacionado con epic_id para ${issueData.key}, esperando 2 segundos y reintentando...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Reintentar una vez más
+        const { data: retryData, error: retryError } = await this.client
+          .from('issues')
+          .upsert(upsertData, {
+            onConflict: 'issue_key',
+          })
+          .select('id')
+          .single();
+
+        if (retryError) {
+          logger.error(`❌ Error upserting issue ${issueData.key} (después de reintento):`, retryError);
+          throw retryError;
+        }
+
+        return retryData.id;
+      }
+
       logger.error(`❌ Error upserting issue ${issueData.key}:`, error);
       throw error;
     }
