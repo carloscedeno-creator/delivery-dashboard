@@ -20,16 +20,7 @@
     "check-status": "node scripts/check-issue-status.js",
     "force-sync-issues": "node scripts/force-sync-issues.js",
     "update-status": "node scripts/update-issue-status.js",
-    "test": "vitest run",
-    "test:unit": "vitest run tests/unit",
-    "test:unit:watch": "vitest watch tests/unit",
-    "test:unit:ui": "vitest --ui",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "test:all": "npm run test:unit && npm run test:e2e",
-    "test:coverage": "vitest run --coverage",
-    "prepare": "husky"
+    "apply-migration": "node scripts/verify-and-apply-migration.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",

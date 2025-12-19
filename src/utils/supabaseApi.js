@@ -443,19 +443,8 @@ export const getDeliveryRoadmapData = async () => {
         endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
-      // Validar que las fechas sean strings válidos (no null, no undefined)
-      if (!startDate || typeof startDate !== 'string') {
-        console.warn(`[SUPABASE] ⚠️ startDate inválido para ${initiative.initiative_name}:`, startDate);
-        startDate = new Date(initiative.created_at).toISOString().split('T')[0];
-      }
-      if (!endDate || typeof endDate !== 'string') {
-        console.warn(`[SUPABASE] ⚠️ endDate inválido para ${initiative.initiative_name}:`, endDate);
-        const estimatedEnd = new Date(startDate);
-        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3);
-        endDate = estimatedEnd.toISOString().split('T')[0];
-      }
-
       const roadmapItem = {
+
         squad: squad.squad_name || squad.squad_key,
         initiative: initiative.initiative_name || initiative.initiative_key,
         start: startDate,

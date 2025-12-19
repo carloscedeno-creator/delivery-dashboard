@@ -21,9 +21,9 @@ CREATE INDEX IF NOT EXISTS idx_issues_sprint_history ON public.issues USING gin 
 CREATE INDEX IF NOT EXISTS idx_issues_story_points_by_sprint ON public.issues USING gin (story_points_by_sprint jsonb_path_ops);
 CREATE INDEX IF NOT EXISTS idx_issues_epic_name ON public.issues USING btree (epic_name) WHERE epic_name IS NOT NULL;
 
--- Actualizar epic_name desde la tabla epics para datos existentes
+-- Actualizar epic_name desde la tabla initiatives para datos existentes
 UPDATE public.issues i
-SET epic_name = e.epic_name
-FROM public.epics e
-WHERE i.epic_id = e.id
+SET epic_name = e.initiative_name
+FROM public.initiatives e
+WHERE i.initiative_id = e.id
   AND i.epic_name IS NULL;
