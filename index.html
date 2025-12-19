@@ -4516,34 +4516,15 @@
                                 }
                             }
                             
-                            // Obtener issues con fechas para filtrar por sprint
+                            // Obtener issues con fechas para filtrar por sprint (incluyendo current_sprint)
                             const { data: issues, error: issuesError } = await supabaseClient
                                 .from('issues')
-                                .select('id, squad_id, initiative_id, current_status, current_story_points, assignee_id, created_date, dev_start_date, dev_close_date, resolved_date');
+                                .select('id, squad_id, initiative_id, current_status, current_story_points, current_sprint, assignee_id, created_date, dev_start_date, dev_close_date, resolved_date');
                             
                             if (issuesError) console.warn('[SUPABASE] Error obteniendo issues:', issuesError);
                             
-                            // Obtener relaciones issue-sprint
-                            const { data: issueSprints, error: issueSprintsError } = await supabaseClient
-                                .from('issue_sprints')
-                                .select('issue_id, sprint_id');
-                            
-                            if (issueSprintsError) {
-                                console.warn('[SUPABASE] Error obteniendo issue_sprints:', issueSprintsError);
-                            }
-                            
-                            // Crear mapa de sprints por issue
-                            const issueSprintMap = new Map();
-                            if (issueSprints) {
-                                for (const is of issueSprints) {
-                                    if (!issueSprintMap.has(is.issue_id)) {
-                                        issueSprintMap.set(is.issue_id, []);
-                                    }
-                                    issueSprintMap.get(is.issue_id).push(is.sprint_id);
-                                }
-                            }
-                            
                             // Función para verificar si un issue está activo en el sprint actual
+                            // Usa current_sprint (métrica real que define si está en el sprint seleccionado)
                             const isIssueActiveInSprint = (issue, sprint) => {
                                 if (!sprint) return false;
                                 
@@ -4557,14 +4538,13 @@
                                     if (daysSinceEnd > 14) return false; // Más de 2 semanas = no contar
                                 }
                                 
-                                // PRIORIDAD 1: Verificar si el issue está explícitamente en este sprint (issue_sprints)
-                                // Esta es la fuente más confiable
-                                const issueSprintIds = issueSprintMap.get(issue.id) || [];
-                                if (issueSprintIds.includes(sprint.id)) {
+                                // PRIORIDAD 1: Verificar si el issue tiene current_sprint que coincida con el sprint
+                                // Esta es la fuente más confiable (métrica real del spreadsheet)
+                                if (issue.current_sprint && issue.current_sprint.trim() === sprint.sprint_name.trim()) {
                                     return true; // Está en el sprint, contar
                                 }
                                 
-                                // PRIORIDAD 2: Si NO está en issue_sprints, verificar fechas SOLO para tickets muy recientes
+                                // PRIORIDAD 2: Si NO tiene current_sprint, verificar fechas SOLO para tickets muy recientes
                                 // Solo contar si fue creado DURANTE el sprint actual (no antes)
                                 const issueCreated = issue.created_date ? new Date(issue.created_date) : null;
                                 
@@ -5153,17 +5133,18 @@
                                                         return;
                                                     }
 
-                                                    // Obtener issue_ids del sprint si está seleccionado
-                                                    let sprintIssueIds = null;
+                                                    // Obtener el nombre del sprint si está seleccionado para filtrar por current_sprint
+                                                    let sprintName = null;
                                                     if (selectedSprint) {
-                                                        const { data: sprintIssues, error: sprintError } = await window.supabaseClient
-                                                            .from('issue_sprints')
-                                                            .select('issue_id')
-                                                            .eq('sprint_id', selectedSprint);
+                                                        const { data: sprint, error: sprintError } = await window.supabaseClient
+                                                            .from('sprints')
+                                                            .select('sprint_name')
+                                                            .eq('id', selectedSprint)
+                                                            .single();
                                                         if (sprintError) throw sprintError;
-                                                        sprintIssueIds = (sprintIssues || []).map(si => si.issue_id);
+                                                        sprintName = sprint?.sprint_name?.trim();
                                                         
-                                                        if (sprintIssueIds.length === 0) {
+                                                        if (!sprintName) {
                                                             setMetricsData({
                                                                 tickets: [],
                                                                 statusBreakdown: {},
@@ -5176,7 +5157,7 @@
                                                         }
                                                     }
 
-                                                    // Construir query
+                                                    // Construir query (incluyendo status_by_sprint para calcular completados durante el sprint)
                                                     let query = window.supabaseClient
                                                         .from('issues')
                                                         .select(`
@@ -5185,22 +5166,45 @@
                                                             summary,
                                                             current_status,
                                                             current_story_points,
-                                                            initiative_id
+                                                            current_sprint,
+                                                            status_by_sprint,
+                                                            initiative_id,
+                                                            initiatives(
+                                                                id,
+                                                                initiative_name
+                                                            )
                                                         `);
 
                                                     if (initiativeIds) {
                                                         query = query.in('initiative_id', initiativeIds);
                                                     }
-                                                    if (sprintIssueIds) {
-                                                        query = query.in('id', sprintIssueIds);
+                                                    
+                                                    // Filtrar por current_sprint (métrica real que define si está en el sprint seleccionado)
+                                                    if (sprintName) {
+                                                        query = query.eq('current_sprint', sprintName);
                                                     }
 
                                                     const { data: issues, error } = await query;
                                                     if (error) throw error;
 
+                                                    // Función para determinar si un estado es "Dev Done"
+                                                    const isDevDone = (status) => {
+                                                        if (!status) return false;
+                                                        const statusUpper = status.trim().toUpperCase();
+                                                        return statusUpper === 'DONE' || 
+                                                               statusUpper === 'DEVELOPMENT DONE' ||
+                                                               statusUpper.includes('DEVELOPMENT DONE') ||
+                                                               statusUpper.includes('DEV DONE') ||
+                                                               (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
+                                                               statusUpper === 'CLOSED' ||
+                                                               statusUpper === 'RESOLVED' ||
+                                                               statusUpper === 'COMPLETED';
+                                                    };
+
                                                     // Agrupar por Board State
                                                     const statusBreakdown = {};
                                                     let totalSP = 0;
+                                                    let completedSP = 0; // SP de tickets completados
                                                     (issues || []).forEach(issue => {
                                                         const status = issue.current_status || 'Unknown';
                                                         if (!statusBreakdown[status]) {
@@ -5210,6 +5214,11 @@
                                                         const sp = issue.current_story_points || 0;
                                                         statusBreakdown[status].sp += sp;
                                                         totalSP += sp;
+                                                        
+                                                        // Calcular SP completados
+                                                        if (isDevDone(status)) {
+                                                            completedSP += sp;
+                                                        }
                                                     });
 
                                                     // Convertir a array
@@ -5227,12 +5236,167 @@
 
                                                     statusData.sort((a, b) => b.value - a.value);
 
+                                                    // Calcular métricas de épicas/iniciativas
+                                                    const calculateEpicMetrics = async () => {
+                                                        if (!issues || issues.length === 0) return [];
+                                                        
+                                                        // Obtener todas las iniciativas del squad para calcular lifetime
+                                                        let allEpicIssues = [];
+                                                        try {
+                                                            const { data: initiatives, error: initiativesError } = await window.supabaseClient
+                                                                .from('initiatives')
+                                                                .select('id')
+                                                                .eq('squad_id', selectedSquad);
+                                                            
+                                                            if (!initiativesError && initiatives && initiatives.length > 0) {
+                                                                const initiativeIds = initiatives.map(i => i.id);
+                                                                
+                                                                // Obtener TODOS los issues de estas iniciativas (lifetime) - sin filtrar por sprint
+                                                                const { data: allIssues, error: allIssuesError } = await window.supabaseClient
+                                                                    .from('issues')
+                                                                    .select(`
+                                                                        id,
+                                                                        initiative_id,
+                                                                        current_status,
+                                                                        current_story_points,
+                                                                        current_sprint,
+                                                                        status_by_sprint,
+                                                                        initiatives(
+                                                                            id,
+                                                                            initiative_name
+                                                                        )
+                                                                    `)
+                                                                    .in('initiative_id', initiativeIds);
+                                                                
+                                                                if (!allIssuesError) {
+                                                                    allEpicIssues = allIssues || [];
+                                                                }
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('[ProjectsMetricsInline] Error obteniendo issues lifetime:', error);
+                                                        }
+                                                        
+                                                        // Agrupar issues por iniciativa para lifetime
+                                                        const epicMap = new Map();
+                                                        const epicIdsInSprint = new Set(issues.map(i => i.initiative_id).filter(Boolean));
+                                                        
+                                                        // Procesar todos los issues (lifetime) - solo épicas que tienen tickets en el sprint
+                                                        allEpicIssues.forEach(issue => {
+                                                            const epicId = issue.initiative_id;
+                                                            if (!epicId || !epicIdsInSprint.has(epicId)) return;
+                                                            
+                                                            const epicName = issue.initiatives?.initiative_name || 'Sin Iniciativa';
+                                                            
+                                                            if (!epicMap.has(epicId)) {
+                                                                epicMap.set(epicId, {
+                                                                    epicId: epicId,
+                                                                    epicName: epicName,
+                                                                    totalTickets: 0,
+                                                                    completedTicketsLifetime: 0,
+                                                                    completedTicketsInSprint: 0,
+                                                                    remainingTicketsInSprint: 0,
+                                                                    totalSP: 0,
+                                                                    completedSPLifetime: 0,
+                                                                    completedSPInSprint: 0
+                                                                });
+                                                            }
+                                                            
+                                                            const epic = epicMap.get(epicId);
+                                                            const sp = issue.current_story_points || 0;
+                                                            const currentStatus = issue.current_status || 'Unknown';
+                                                            const isCompleted = isDevDone(currentStatus);
+                                                            
+                                                            // Métricas lifetime
+                                                            epic.totalTickets++;
+                                                            epic.totalSP += sp;
+                                                            if (isCompleted) {
+                                                                epic.completedTicketsLifetime++;
+                                                                epic.completedSPLifetime += sp;
+                                                            }
+                                                        });
+                                                        
+                                                        // Procesar issues del sprint para métricas del sprint
+                                                        issues.forEach(issue => {
+                                                            const epicId = issue.initiative_id;
+                                                            if (!epicId) return;
+                                                            
+                                                            let epic = epicMap.get(epicId);
+                                                            if (!epic) {
+                                                                const epicName = issue.initiatives?.initiative_name || 'Sin Iniciativa';
+                                                                epicMap.set(epicId, {
+                                                                    epicId: epicId,
+                                                                    epicName: epicName,
+                                                                    totalTickets: 0,
+                                                                    completedTicketsLifetime: 0,
+                                                                    completedTicketsInSprint: 0,
+                                                                    remainingTicketsInSprint: 0,
+                                                                    totalSP: 0,
+                                                                    completedSPLifetime: 0,
+                                                                    completedSPInSprint: 0
+                                                                });
+                                                                epic = epicMap.get(epicId);
+                                                            }
+                                                            
+                                                            const sp = issue.current_story_points || 0;
+                                                            const currentStatus = issue.current_status || 'Unknown';
+                                                            const isCompleted = isDevDone(currentStatus);
+                                                            
+                                                            // Métricas del sprint
+                                                            if (sprintName && issue.current_sprint === sprintName) {
+                                                                const statusBySprint = issue.status_by_sprint || {};
+                                                                const sprintStatus = statusBySprint[sprintName];
+                                                                const wasCompletedInSprint = sprintStatus && isDevDone(sprintStatus);
+                                                                
+                                                                if (isCompleted && wasCompletedInSprint) {
+                                                                    epic.completedTicketsInSprint++;
+                                                                    epic.completedSPInSprint += sp;
+                                                                } else if (!isCompleted) {
+                                                                    epic.remainingTicketsInSprint++;
+                                                                }
+                                                            }
+                                                        });
+                                                        
+                                                        // Para épicas que no tienen datos lifetime, usar los datos del sprint como total
+                                                        epicMap.forEach((epic) => {
+                                                            if (epic.totalTickets === 0) {
+                                                                epic.totalTickets = epic.completedTicketsInSprint + epic.remainingTicketsInSprint;
+                                                                epic.totalSP = epic.completedSPInSprint;
+                                                                epic.completedTicketsLifetime = epic.completedTicketsInSprint;
+                                                                epic.completedSPLifetime = epic.completedSPInSprint;
+                                                            }
+                                                        });
+                                                        
+                                                        // Convertir a array y calcular porcentajes
+                                                        return Array.from(epicMap.values())
+                                                            .filter(epic => epic.totalTickets > 0)
+                                                            .map(epic => {
+                                                                const lifetimeCompletion = epic.totalTickets > 0 
+                                                                    ? (epic.completedTicketsLifetime / epic.totalTickets) * 100 
+                                                                    : 0;
+                                                                
+                                                                const sprintCompletion = epic.totalTickets > 0
+                                                                    ? (epic.completedTicketsInSprint / epic.totalTickets) * 100
+                                                                    : 0;
+                                                                
+                                                                return {
+                                                                    ...epic,
+                                                                    lifetimeCompletionPercentage: Math.round(lifetimeCompletion * 10) / 10,
+                                                                    sprintCompletionPercentage: Math.round(sprintCompletion * 10) / 10
+                                                                };
+                                                            })
+                                                            .sort((a, b) => b.totalTickets - a.totalTickets);
+                                                    };
+                                                    
+                                                    const epicMetrics = await calculateEpicMetrics();
+
                                                     setMetricsData({
                                                         tickets: issues || [],
                                                         statusBreakdown: statusBreakdown,
                                                         statusData: statusData,
                                                         totalTickets: totalTickets,
-                                                        totalSP: totalSP
+                                                        totalSP: totalSP,
+                                                        completedSP: completedSP, // SP completados
+                                                        epicMetrics: epicMetrics // Métricas por épica
                                                     });
                                                 } catch (error) {
                                                     console.error('🔴 [ProjectsMetricsInline] Error cargando métricas:', error);
@@ -5415,9 +5579,100 @@
                                                 ),
                                                 React.createElement('div', null,
                                                     React.createElement('div', { className: 'text-2xl font-bold text-white' },
-                                                        metricsData.totalTickets > 0 ? (metricsData.totalSP / metricsData.totalTickets).toFixed(1) : 0
+                                                        metricsData.completedSP || 0
                                                     ),
-                                                    React.createElement('div', { className: 'text-sm text-slate-400' }, 'Avg. Story Points')
+                                                    React.createElement('div', { className: 'text-sm text-slate-400' }, 'Completed Story Points')
+                                                )
+                                            )
+                                        ),
+                                        // Tabla de Épicas/Iniciativas
+                                        metricsData && metricsData.epicMetrics && metricsData.epicMetrics.length > 0 && React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                            React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, 'Initiatives Progress'),
+                                            // Leyenda de colores
+                                            React.createElement('div', { className: 'mb-6 flex flex-wrap gap-4 text-sm' },
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-slate-500' }),
+                                                    React.createElement('span', { className: 'text-slate-300' }, 'Total Work (Tickets)')
+                                                ),
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-blue-500' }),
+                                                    React.createElement('span', { className: 'text-slate-300' }, 'Completed Before Sprint')
+                                                ),
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-orange-500' }),
+                                                    React.createElement('span', { className: 'text-slate-300' }, 'Completed in Sprint')
+                                                ),
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-slate-700' }),
+                                                    React.createElement('span', { className: 'text-slate-300' }, 'Remaining in Sprint')
+                                                )
+                                            ),
+                                            React.createElement('div', { className: 'overflow-x-auto' },
+                                                React.createElement('table', { className: 'w-full' },
+                                                    React.createElement('thead', null,
+                                                        React.createElement('tr', { className: 'border-b border-slate-700' },
+                                                            React.createElement('th', { className: 'text-left py-3 px-4 text-slate-300 font-semibold' }, 'Initiative'),
+                                                            React.createElement('th', { className: 'text-center py-3 px-4 text-slate-300 font-semibold' }, 'Total Tickets'),
+                                                            React.createElement('th', { className: 'text-center py-3 px-4 text-slate-300 font-semibold' }, 'Lifetime Completion'),
+                                                            React.createElement('th', { className: 'text-center py-3 px-4 text-slate-300 font-semibold' }, 'Sprint Completion'),
+                                                            React.createElement('th', { className: 'text-center py-3 px-4 text-slate-300 font-semibold' }, 'Progress')
+                                                        )
+                                                    ),
+                                                    React.createElement('tbody', null,
+                                                        metricsData.epicMetrics.map((epic, index) => {
+                                                            const totalTickets = epic.totalTickets;
+                                                            const completedLifetime = epic.completedTicketsLifetime;
+                                                            const completedInSprint = epic.completedTicketsInSprint;
+                                                            const remainingInSprint = epic.remainingTicketsInSprint;
+                                                            
+                                                            const completedBeforeSprint = completedLifetime - completedInSprint;
+                                                            const completedBeforeSprintPercent = totalTickets > 0 ? (completedBeforeSprint / totalTickets) * 100 : 0;
+                                                            const sprintCompletedPercent = totalTickets > 0 ? (completedInSprint / totalTickets) * 100 : 0;
+                                                            const remainingPercent = totalTickets > 0 ? (remainingInSprint / totalTickets) * 100 : 0;
+                                                            
+                                                            return React.createElement('tr', { 
+                                                                key: epic.epicId || `no-initiative-${index}`, 
+                                                                className: 'border-b border-slate-800/50 hover:bg-slate-800/30' 
+                                                            },
+                                                                React.createElement('td', { className: 'py-4 px-4 text-white font-medium' }, epic.epicName),
+                                                                React.createElement('td', { className: 'py-4 px-4 text-center text-slate-300' }, totalTickets),
+                                                                React.createElement('td', { className: 'py-4 px-4 text-center text-slate-300' },
+                                                                    epic.lifetimeCompletionPercentage.toFixed(1) + '%',
+                                                                    React.createElement('div', { className: 'text-xs text-slate-500 mt-1' },
+                                                                        completedLifetime + '/' + totalTickets + ' tickets'
+                                                                    )
+                                                                ),
+                                                                React.createElement('td', { className: 'py-4 px-4 text-center text-slate-300' },
+                                                                    epic.sprintCompletionPercentage.toFixed(1) + '%',
+                                                                    React.createElement('div', { className: 'text-xs text-slate-500 mt-1' },
+                                                                        completedInSprint + ' tickets'
+                                                                    )
+                                                                ),
+                                                                React.createElement('td', { className: 'py-4 px-4' },
+                                                                    React.createElement('div', { className: 'relative w-full h-8 bg-slate-500 rounded overflow-hidden' },
+                                                                        completedBeforeSprintPercent > 0 && React.createElement('div', {
+                                                                            className: 'absolute left-0 top-0 h-full bg-blue-500',
+                                                                            style: { width: completedBeforeSprintPercent + '%' }
+                                                                        }),
+                                                                        sprintCompletedPercent > 0 && React.createElement('div', {
+                                                                            className: 'absolute top-0 h-full bg-orange-500',
+                                                                            style: { 
+                                                                                left: completedBeforeSprintPercent + '%',
+                                                                                width: sprintCompletedPercent + '%' 
+                                                                            }
+                                                                        }),
+                                                                        remainingPercent > 0 && React.createElement('div', {
+                                                                            className: 'absolute top-0 h-full bg-slate-700',
+                                                                            style: { 
+                                                                                left: (completedBeforeSprintPercent + sprintCompletedPercent) + '%',
+                                                                                width: remainingPercent + '%' 
+                                                                            }
+                                                                        })
+                                                                    )
+                                                                )
+                                                            );
+                                                        })
+                                                    )
                                                 )
                                             )
                                         )
@@ -5607,24 +5862,25 @@
                                                     console.log('🟢 [DeveloperMetricsInline] Developer info:', devInfo);
                                                     setDeveloperInfo(devInfo);
                                                     
-                                                    // Obtener issue_ids del sprint si se especifica
-                                                    let issueIds = null;
+                                                    // Obtener el nombre del sprint si está seleccionado para filtrar por current_sprint
+                                                    let sprintName = null;
                                                     if (selectedSprint) {
-                                                        console.log('🟢 [DeveloperMetricsInline] Obteniendo issues del sprint:', selectedSprint);
-                                                        const { data: sprintIssues, error: sprintIssuesError } = await window.supabaseClient
-                                                            .from('issue_sprints')
-                                                            .select('issue_id')
-                                                            .eq('sprint_id', String(selectedSprint));
+                                                        console.log('🟢 [DeveloperMetricsInline] Obteniendo nombre del sprint:', selectedSprint);
+                                                        const { data: sprint, error: sprintError } = await window.supabaseClient
+                                                            .from('sprints')
+                                                            .select('sprint_name')
+                                                            .eq('id', String(selectedSprint))
+                                                            .single();
                                                         
-                                                        if (sprintIssuesError) {
-                                                            console.error('🔴 [DeveloperMetricsInline] Error obteniendo issues del sprint:', sprintIssuesError);
-                                                            throw sprintIssuesError;
+                                                        if (sprintError) {
+                                                            console.error('🔴 [DeveloperMetricsInline] Error obteniendo sprint:', sprintError);
+                                                            throw sprintError;
                                                         }
-                                                        issueIds = (sprintIssues || []).map(si => si.issue_id);
-                                                        console.log('🟢 [DeveloperMetricsInline] Issues en el sprint:', issueIds.length, 'IDs:', issueIds.slice(0, 5));
+                                                        sprintName = sprint?.sprint_name?.trim();
+                                                        console.log('🟢 [DeveloperMetricsInline] Sprint name obtenido:', sprintName);
                                                         
-                                                        if (issueIds.length === 0) {
-                                                            console.warn('⚠️ [DeveloperMetricsInline] No hay issues en el sprint seleccionado');
+                                                        if (!sprintName) {
+                                                            console.warn('⚠️ [DeveloperMetricsInline] No se encontró el nombre del sprint');
                                                             setMetricsData({
                                                                 tickets: [],
                                                                 metrics: { totalTickets: 0, withSP: 0, noSP: 0, totalSP: 0, devDone: 0, devDoneSP: 0, totalSPAssigned: 0, devDoneRate: 0, spDevDoneRate: 0 },
@@ -5644,6 +5900,7 @@
                                                             summary,
                                                             current_status,
                                                             current_story_points,
+                                                            current_sprint,
                                                             assignee_id,
                                                             initiative_id,
                                                             initiatives(
@@ -5658,12 +5915,12 @@
                                                         `)
                                                         .eq('assignee_id', String(selectedDeveloper));
                                                     
-                                                    // Filtrar por sprint si se especifica
-                                                    if (issueIds && issueIds.length > 0) {
-                                                        console.log('🟢 [DeveloperMetricsInline] Filtrando por', issueIds.length, 'issue IDs del sprint');
-                                                        query = query.in('id', issueIds);
-                                                    } else if (selectedSprint) {
-                                                        console.warn('⚠️ [DeveloperMetricsInline] Sprint seleccionado pero no hay issueIds');
+                                                    // Filtrar por current_sprint (métrica real que define si está en el sprint seleccionado)
+                                                    if (sprintName) {
+                                                        console.log('🟢 [DeveloperMetricsInline] Filtrando por current_sprint:', sprintName);
+                                                        query = query.eq('current_sprint', sprintName);
+                                                    } else {
+                                                        console.log('🟢 [DeveloperMetricsInline] No hay sprint seleccionado, obteniendo todos los issues del developer');
                                                     }
                                                     
                                                     const { data: issues, error: issuesError } = await query;
@@ -5673,12 +5930,16 @@
                                                     }
                                                     console.log('🟢 [DeveloperMetricsInline] Issues encontrados (antes de filtrar por squad):', issues?.length || 0);
                                                     if (issues && issues.length > 0) {
+                                                        const uniqueSprints = [...new Set(issues.map(i => i.current_sprint).filter(Boolean))];
                                                         console.log('🟢 [DeveloperMetricsInline] Primeros 3 issues:', issues.slice(0, 3).map(i => ({
                                                             key: i.issue_key,
                                                             status: i.current_status,
                                                             sp: i.current_story_points,
+                                                            current_sprint: i.current_sprint,
                                                             assignee: i.assignee_id
                                                         })));
+                                                        console.log('🟢 [DeveloperMetricsInline] current_sprint únicos encontrados:', uniqueSprints);
+                                                        console.log('🟢 [DeveloperMetricsInline] sprintName usado para filtrar:', sprintName);
                                                     }
                                                     
                                                     // Filtrar por squad si se especifica

@@ -129,19 +129,26 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
   }
 
   try {
-    // Primero obtener los issue_ids del sprint si se especifica
-    let issueIds = null;
+    // Obtener el nombre del sprint si está seleccionado para filtrar por current_sprint
+    let sprintName = null;
     if (sprintId) {
-      const { data: sprintIssues, error: sprintIssuesError } = await supabase
-        .from('issue_sprints')
-        .select('issue_id')
-        .eq('sprint_id', sprintId);
+      const { data: sprint, error: sprintError } = await supabase
+        .from('sprints')
+        .select('sprint_name')
+        .eq('id', sprintId)
+        .single();
 
-      if (sprintIssuesError) throw sprintIssuesError;
-
-      issueIds = (sprintIssues || []).map(si => si.issue_id);
-      if (issueIds.length === 0) {
-        // Si no hay issues en el sprint, retornar array vacío
+      if (sprintError) throw sprintError;
+      sprintName = sprint?.sprint_name?.trim();
+      
+      console.log('[DEVELOPER_METRICS] Sprint seleccionado:', {
+        sprintId,
+        sprintName,
+        sprintNameLength: sprintName?.length
+      });
+      
+      if (!sprintName) {
+        // Si no se encuentra el sprint, retornar datos vacíos
         return {
           tickets: [],
           metrics: {
@@ -169,6 +176,7 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
         summary,
         current_status,
         current_story_points,
+        current_sprint,
         assignee_id,
         initiative_id,
         initiatives(
@@ -183,13 +191,42 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       `)
       .eq('assignee_id', developerId);
 
-    // Filtrar por sprint si se especifica
-    if (issueIds) {
-      query = query.in('id', issueIds);
+    // Filtrar por current_sprint (métrica real que define si está en el sprint seleccionado)
+    // IMPORTANTE: Usamos comparación exacta. Si hay problemas, verificar que los nombres coincidan exactamente
+    if (sprintName) {
+      const trimmedSprintName = sprintName.trim();
+      console.log('[DEVELOPER_METRICS] Filtrando por current_sprint:', {
+        sprintName: trimmedSprintName,
+        sprintNameQuoted: `"${trimmedSprintName}"`,
+        sprintNameLength: trimmedSprintName.length,
+        originalSprintName: sprintName,
+        originalLength: sprintName.length
+      });
+      // Usar el nombre trimmeado para la comparación
+      query = query.eq('current_sprint', trimmedSprintName);
+    } else {
+      console.log('[DEVELOPER_METRICS] ⚠️ No hay sprint seleccionado, obteniendo TODOS los issues del developer (sin filtrar por sprint)');
     }
 
     const { data: issues, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('[DEVELOPER_METRICS] Error en query:', error);
+      throw error;
+    }
+    
+    // Debug: Verificar qué current_sprint tienen los issues obtenidos
+    const uniqueSprints = [...new Set((issues || []).map(i => i.current_sprint).filter(Boolean))];
+    console.log('[DEVELOPER_METRICS] Issues obtenidos antes de filtrar por squad:', {
+      total: issues?.length || 0,
+      sprintNameFilter: sprintName,
+      uniqueCurrentSprints: uniqueSprints,
+      sampleIssues: (issues || []).slice(0, 3).map(i => ({
+        key: i.issue_key,
+        current_sprint: i.current_sprint,
+        current_sprintQuoted: `"${i.current_sprint}"`,
+        matches: sprintName ? i.current_sprint === sprintName : 'N/A (no filter)'
+      }))
+    });
 
     // Filtrar por squad si se especifica (después de obtener los datos)
     let filteredIssues = issues || [];
@@ -198,6 +235,17 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
         return issue.initiatives?.squad_id === squadId;
       });
     }
+    
+    console.log('[DEVELOPER_METRICS] Issues después de filtrar por squad:', {
+      total: filteredIssues.length,
+      sprintNameFilter: sprintName,
+      uniqueCurrentSprints: [...new Set(filteredIssues.map(i => i.current_sprint).filter(Boolean))],
+      issuesBySprint: filteredIssues.reduce((acc, issue) => {
+        const sprint = issue.current_sprint || 'Backlog';
+        acc[sprint] = (acc[sprint] || 0) + 1;
+        return acc;
+      }, {})
+    });
 
     // Calcular métricas
     const tickets = filteredIssues.map(issue => ({
