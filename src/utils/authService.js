@@ -94,7 +94,7 @@ export const login = async (email, password) => {
       token,
       user: {
         id: user.user_id,
-        email: user.email,
+        email: user.user_email || user.email, // Soporta ambos nombres por compatibilidad
         displayName: user.display_name,
         role: user.role
       },

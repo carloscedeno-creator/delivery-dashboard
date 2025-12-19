@@ -28,47 +28,60 @@ $$;
 -- Otorgar permisos para RPC
 GRANT EXECUTE ON FUNCTION create_user TO anon, authenticated, service_role;
 
--- Función para autenticar usuario (verificar email y password)
-CREATE OR REPLACE FUNCTION authenticate_user(
-    p_email VARCHAR(255),
-    p_password_hash VARCHAR(255)
-)
-RETURNS TABLE (
+-- Crear tipo compuesto para evitar ambigüedad
+DROP TYPE IF EXISTS authenticate_user_result CASCADE;
+CREATE TYPE authenticate_user_result AS (
     user_id UUID,
-    email VARCHAR(255),
+    user_email VARCHAR(255),
     display_name VARCHAR(255),
     role VARCHAR(50),
     is_active BOOLEAN
+);
+
+-- Función para autenticar usuario (verificar email y password)
+DROP FUNCTION IF EXISTS authenticate_user(VARCHAR(255), VARCHAR(255));
+
+CREATE FUNCTION authenticate_user(
+    p_email VARCHAR(255),
+    p_password_hash VARCHAR(255)
 )
+RETURNS SETOF authenticate_user_result
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
     v_user_id UUID;
+    v_result authenticate_user_result;
 BEGIN
-    -- Buscar el usuario
-    SELECT u.id INTO v_user_id
-    FROM app_users u
-    WHERE u.email = p_email
-        AND u.password_hash = p_password_hash
-        AND u.is_active = true;
+    -- Buscar el usuario y actualizar last_login_at en una sola operación
+    UPDATE public.app_users au
+    SET last_login_at = NOW()
+    WHERE au.email = authenticate_user.p_email
+        AND au.password_hash = authenticate_user.p_password_hash
+        AND au.is_active = true
+    RETURNING au.id INTO v_user_id;
     
-    -- Si se encontró, actualizar last_login_at y retornar los datos
+    -- Si se encontró, construir el resultado y retornarlo
     IF v_user_id IS NOT NULL THEN
-        UPDATE app_users
-        SET last_login_at = NOW()
-        WHERE id = v_user_id;
-        
-        RETURN QUERY
         SELECT 
-            u.id,
-            u.email,
-            u.display_name,
-            u.role,
-            u.is_active
-        FROM app_users u
-        WHERE u.id = v_user_id;
+            au.id,
+            au.email,
+            au.display_name,
+            au.role,
+            au.is_active
+        INTO 
+            v_result.user_id,
+            v_result.user_email,
+            v_result.display_name,
+            v_result.role,
+            v_result.is_active
+        FROM public.app_users au
+        WHERE au.id = v_user_id;
+        
+        RETURN NEXT v_result;
     END IF;
+    
+    RETURN;
 END;
 $$;
 
@@ -118,10 +131,10 @@ BEGIN
     
     RETURN QUERY
     SELECT 
-        u.id,
-        u.email,
-        u.display_name,
-        u.role
+        u.id AS user_id,
+        u.email AS email,
+        u.display_name AS display_name,
+        u.role AS role
     FROM user_sessions s
     INNER JOIN app_users u ON s.user_id = u.id
     WHERE s.token = p_token
@@ -129,10 +142,10 @@ BEGIN
         AND u.is_active = true;
     
     -- Actualizar last_activity_at si la sesión es válida
-    UPDATE user_sessions
+    UPDATE user_sessions us
     SET last_activity_at = NOW()
-    WHERE token = p_token
-        AND expires_at > NOW();
+    WHERE us.token = p_token
+        AND us.expires_at > NOW();
 END;
 $$;
 
@@ -195,13 +208,13 @@ AS $$
 BEGIN
     RETURN QUERY
     SELECT 
-        u.id,
-        u.email,
-        u.display_name,
-        u.role,
-        u.is_active,
-        u.last_login_at,
-        u.created_at
+        u.id AS id,
+        u.email AS email,
+        u.display_name AS display_name,
+        u.role AS role,
+        u.is_active AS is_active,
+        u.last_login_at AS last_login_at,
+        u.created_at AS created_at
     FROM app_users u
     WHERE u.id = p_user_id;
 END;
