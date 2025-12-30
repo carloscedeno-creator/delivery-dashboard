@@ -11,6 +11,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist",
+    "test": "vitest run",
     "calculate-metrics": "node scripts/calculate-metrics.js",
     "test-metrics": "node scripts/test-metrics-calculation.js",
     "analyze": "node scripts/analyze-supabase.js",

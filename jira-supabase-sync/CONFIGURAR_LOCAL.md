@@ -74,3 +74,6 @@ El JSON que tienes en GitHub Secrets está correcto, solo necesitas:
 1. Reemplazar `TOKEN_GOAVANTO` con el token real
 2. Actualizar el secret en GitHub
 
+
+
+

@@ -212,3 +212,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION update_user_role TO authenticated, service_role;
 
+
+
+

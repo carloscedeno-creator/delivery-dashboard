@@ -247,6 +247,12 @@
                 ArrowLeft: ({ size = 24, className = "" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
                 ),
+                ChevronLeft: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"></path></svg>
+                ),
+                ChevronRight: ({ size = 24, className = "" }) => (
+                    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"></path></svg>
+                ),
                 Star: ({ size = 24, className = "", fill = "none" }) => (
                     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                 ),
@@ -4155,11 +4161,11 @@
 
         // Configuración de permisos por rol
         const ROLE_PERMISSIONS = {
-            admin: ['overall', 'product', 'delivery', 'strata', 'user-admin', 'projects-metrics', 'developer-metrics'],
-            stakeholder: ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics'],
+            admin: ['overall', 'product', 'delivery', 'strata', 'user-admin', 'projects-metrics', 'developer-metrics', 'software-engineering-benchmarks'],
+            stakeholder: ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics', 'software-engineering-benchmarks'],
             regular: ['overall'],
-            '3amigos': ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics'],
-            pm: ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics']
+            '3amigos': ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics', 'software-engineering-benchmarks'],
+            pm: ['overall', 'product', 'delivery', 'strata', 'projects-metrics', 'developer-metrics', 'software-engineering-benchmarks']
         };
         
         const getModulesForRole = (role) => {
@@ -4177,98 +4183,111 @@
                 'strata': { id: 'strata', label: 'Strata Mapping', icon: Icons.Map },
                 'user-admin': { id: 'user-admin', label: 'User Administration', icon: Icons.Users },
                 'projects-metrics': { id: 'projects-metrics', label: 'Projects Metrics', icon: Icons.BarChart },
-                'developer-metrics': { id: 'developer-metrics', label: 'Developer Metrics', icon: Icons.Activity }
+                'developer-metrics': { id: 'developer-metrics', label: 'Developer Metrics', icon: Icons.Activity },
+                'software-engineering-benchmarks': { id: 'software-engineering-benchmarks', label: 'Software Engineering Benchmarks', icon: Icons.TrendingUp }
             };
             return modules.map(module => moduleInfo[module]).filter(Boolean);
         };
 
-        const Navbar = ({ activeView, setActiveView, currentUser, onLogout }) => {
-            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+        const Sidebar = ({ activeView, setActiveView, currentUser, onLogout, isOpen, setIsOpen }) => {
             const navItems = getNavbarModules(currentUser?.role || 'regular');
 
             return (
-                <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-4 md:px-8 py-3 md:py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">
-                        <div className="flex items-center">
-                            <img src="logo.png" alt="Logo" className="h-10 md:h-14 w-auto object-contain" />
-                    </div>
-
-                    {/* Desktop Menu */}
-                    <div className="hidden md:flex items-center gap-6 lg:gap-8">
-                        {navItems.map(item => (
-                            <button
-                                key={item.id}
-                                onClick={() => setActiveView(item.id)}
-                                className={`text-sm font-medium transition-colors flex items-center gap-2 ${activeView === item.id ? 'text-cyan-400 border-b-2 border-cyan-400 pb-1' : 'text-slate-400 hover:text-slate-200'}`}
-                            >
-                                {item.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Mobile Menu Button */}
-                    <div className="md:hidden flex items-center gap-2">
-                        <button
-                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                            className="p-2 text-slate-400 hover:text-white transition-colors"
-                            aria-label="Toggle menu"
-                        >
-                            {mobileMenuOpen ? <Icons.X size={24} /> : <Icons.Menu size={24} />}
-                        </button>
-                    </div>
-
-                    {/* Mobile Menu Dropdown */}
-                    {mobileMenuOpen && (
-                        <div className="absolute top-full left-0 right-0 md:hidden glass border-b border-white/10 backdrop-blur-md bg-slate-900/95 shadow-lg">
-                            <div className="px-4 py-3 space-y-2">
-                                {navItems.map(item => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => {
-                                            setActiveView(item.id);
-                                            setMobileMenuOpen(false);
-                                        }}
-                                        className={`w-full text-left px-4 py-2 rounded-lg transition-colors flex items-center gap-3 ${activeView === item.id ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}`}
-                                    >
-                                        <item.icon size={20} />
-                                        <span className="font-medium">{item.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                <>
+                    {/* Overlay para móvil cuando el sidebar está abierto */}
+                    {isOpen && (
+                        <div 
+                            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                            onClick={() => setIsOpen(false)}
+                        />
                     )}
+                    
+                    {/* Sidebar */}
+                    <aside className={`fixed left-0 top-0 h-full z-50 glass border-r border-white/10 backdrop-blur-md bg-slate-900/95 transition-all duration-300 ease-in-out ${
+                        isOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0 md:w-16'
+                    } overflow-hidden`}>
+                        <div className="flex flex-col h-full">
+                            {/* Header del Sidebar */}
+                            <div className={`flex items-center ${isOpen ? 'justify-between' : 'justify-center'} p-4 border-b border-white/10`}>
+                                {isOpen && (
+                                    <div className="flex items-center gap-3">
+                                        <img src="logo.png" alt="Logo" className="h-8 w-auto object-contain" />
+                                        <span className="text-white font-semibold text-sm">Dashboard</span>
+                                    </div>
+                                )}
+                                {!isOpen && (
+                                    <img src="logo.png" alt="Logo" className="h-8 w-auto object-contain" />
+                                )}
+                                <button
+                                    onClick={() => setIsOpen(!isOpen)}
+                                    className={`p-2 text-slate-400 hover:text-white transition-colors ${isOpen ? 'ml-auto' : ''}`}
+                                    aria-label="Toggle sidebar"
+                                >
+                                    {isOpen ? <Icons.ChevronLeft size={20} /> : <Icons.ChevronRight size={20} />}
+                                </button>
+                            </div>
 
-                    <div className="flex items-center gap-2 md:gap-4">
-                        {currentUser && (
-                            <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-white/10">
-                                <div className="text-xs text-slate-400">{currentUser.displayName}</div>
-                                <div className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                                    {currentUser.role}
+                            {/* Navigation Items */}
+                            <nav className="flex-1 overflow-y-auto py-4">
+                                <div className={`space-y-1 ${isOpen ? 'px-2' : 'px-2'}`}>
+                                    {navItems.map(item => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setActiveView(item.id)}
+                                            className={`w-full text-left ${isOpen ? 'px-3' : 'px-2 justify-center'} py-2.5 rounded-lg transition-all flex items-center gap-3 group ${
+                                                activeView === item.id 
+                                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' 
+                                                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                                            }`}
+                                            title={!isOpen ? item.label : ''}
+                                        >
+                                            <item.icon size={20} className="flex-shrink-0" />
+                                            {isOpen && (
+                                                <span className="font-medium text-sm whitespace-nowrap">{item.label}</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </nav>
+
+                            {/* Footer del Sidebar */}
+                            <div className={`border-t border-white/10 p-4 ${isOpen ? '' : 'flex flex-col items-center'}`}>
+                                {currentUser && isOpen && (
+                                    <div className="mb-3 px-3 py-2 rounded-lg bg-slate-800/50 border border-white/10">
+                                        <div className="text-xs text-slate-400 truncate">{currentUser.displayName}</div>
+                                        <div className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 mt-1 inline-block">
+                                            {currentUser.role}
+                                        </div>
+                                    </div>
+                                )}
+                                <div className={`flex items-center gap-2 ${isOpen ? '' : 'flex-col'}`}>
+                                    <button className="p-2 text-slate-400 hover:text-white transition-colors relative" title="Notifications">
+                                        <Icons.AlertCircle size={20} />
+                                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
+                                    </button>
+                                    {currentUser && (
+                                        <button
+                                            onClick={onLogout}
+                                            className="p-2 text-slate-400 hover:text-white transition-colors"
+                                            title="Cerrar sesión"
+                                        >
+                                            <Icons.LogOut size={20} />
+                                        </button>
+                                    )}
+                                    {!currentUser && (
+                                        <div className="w-8 h-8 rounded-full bg-slate-700 border border-white/10 flex items-center justify-center text-xs text-slate-300">CC</div>
+                                    )}
                                 </div>
                             </div>
-                        )}
-                        <button className="p-2 text-slate-400 hover:text-white transition-colors relative hidden sm:block">
-                            <Icons.AlertCircle size={20} />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
-                        </button>
-                        {currentUser && (
-                            <button
-                                onClick={onLogout}
-                                className="p-2 text-slate-400 hover:text-white transition-colors"
-                                title="Cerrar sesión"
-                            >
-                                <Icons.LogOut size={20} />
-                            </button>
-                        )}
-                        {!currentUser && (
-                            <div className="w-8 h-8 rounded-full bg-slate-700 border border-white/10 flex items-center justify-center text-xs text-slate-300 hidden sm:flex">CC</div>
-                        )}
-                    </div>
-                </nav>
+                        </div>
+                    </aside>
+                </>
             );
         };
 
         const App = () => {
             const [activeView, setActiveView] = useState('overall'); // Default to Overall (Landing Page)
+            const [sidebarOpen, setSidebarOpen] = useState(true); // Sidebar abierto por defecto en desktop
             
             // Verificar permisos al cambiar de vista
             useEffect(() => {
@@ -4927,8 +4946,15 @@
 
             return (
                 <div className="min-h-screen font-sans bg-[#0a0e17]">
-                    <Navbar activeView={activeView} setActiveView={setActiveView} currentUser={currentUser} onLogout={handleLogout} />
-                    <div className="pt-16 md:pt-20 px-4 md:px-8 pb-8 md:pb-12">
+                    <Sidebar 
+                        activeView={activeView} 
+                        setActiveView={setActiveView} 
+                        currentUser={currentUser} 
+                        onLogout={handleLogout}
+                        isOpen={sidebarOpen}
+                        setIsOpen={setSidebarOpen}
+                    />
+                    <div className={`transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'} ml-0 pt-4 px-4 md:px-8 pb-8 md:pb-12`}>
                         <header className="max-w-7xl mx-auto mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h1 className="text-2xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
@@ -4949,6 +4975,7 @@
                                      activeView === 'user-admin' ? 'Manage users, roles, and access' :
                                      activeView === 'projects-metrics' ? 'Comprehensive project performance analytics' :
                                      activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
+                                     activeView === 'software-engineering-benchmarks' ? 'Engineering metrics, benchmarks, and performance indicators' :
                                      'Dashboard'}
                                 </p>
                             </div>
@@ -6342,33 +6369,68 @@
                                                                 React.createElement('tr', {},
                                                                     React.createElement('td', { colSpan: 5, className: 'text-center py-8 text-slate-400' }, 'No tickets found')
                                                                 ) :
-                                                                metricsData.tickets.map((ticket, index) => {
-                                                                    const isDone = isDevDone(ticket.status);
-                                                                    return React.createElement('tr', { 
-                                                                        key: ticket.id || index,
-                                                                        className: 'border-b border-white/5 hover:bg-white/5 transition-colors'
-                                                                    },
-                                                                        React.createElement('td', { className: 'py-3 px-4 text-cyan-400 font-mono text-sm' }, ticket.key || 'N/A'),
-                                                                        React.createElement('td', { className: 'py-3 px-4 text-slate-300 text-sm' }, ticket.summary || 'No summary'),
-                                                                        React.createElement('td', { className: 'py-3 px-4' },
-                                                                            React.createElement('span', {
-                                                                                className: `px-2 py-1 rounded text-xs font-medium ${
-                                                                                    isDone 
-                                                                                        ? 'bg-green-500/20 text-green-400' 
-                                                                                        : 'bg-slate-700/50 text-slate-400'
-                                                                                }`
-                                                                            }, ticket.status || 'Unknown')
-                                                                        ),
-                                                                        React.createElement('td', { className: 'py-3 px-4 text-center text-slate-300 text-sm' },
-                                                                            ticket.hasSP ? ticket.storyPoints : React.createElement('span', { className: 'text-slate-500' }, '-')
-                                                                        ),
-                                                                        React.createElement('td', { className: 'py-3 px-4 text-center' },
-                                                                            isDone ? 
-                                                                                React.createElement('span', { className: 'px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400' }, '✓') :
-                                                                                React.createElement('span', { className: 'px-2 py-1 rounded text-xs font-medium bg-slate-700/50 text-slate-500' }, '-')
-                                                                        )
-                                                                    );
-                                                                })
+                                                                (() => {
+                                                                    // Función para obtener el orden del status
+                                                                    const getStatusOrder = (status) => {
+                                                                        if (!status) return 999;
+                                                                        const statusUpper = status.toUpperCase().trim();
+                                                                        const statusOrder = {
+                                                                            'TO DO': 1,
+                                                                            'TODO': 1,
+                                                                            'IN PROGRESS': 2,
+                                                                            'BLOCKED': 3,
+                                                                            'TESTING': 4,
+                                                                            'QA': 5,
+                                                                            'QA EXTERNAL': 6,
+                                                                            'STAGING': 7,
+                                                                            'SECURITY REVIEW': 8,
+                                                                            'READY TO RELEASE': 9,
+                                                                            'DEVELOPMENT DONE': 10,
+                                                                            'DONE': 11
+                                                                        };
+                                                                        return statusOrder[statusUpper] || 50; // Estados desconocidos al final
+                                                                    };
+                                                                    
+                                                                    // Ordenar tickets: primero con SP, luego sin SP, y dentro de cada grupo por status
+                                                                    const sortedTickets = [...metricsData.tickets].sort((a, b) => {
+                                                                        // Primero ordenar por hasSP (true primero)
+                                                                        if (a.hasSP !== b.hasSP) {
+                                                                            return b.hasSP ? 1 : -1; // true primero
+                                                                        }
+                                                                        // Luego ordenar por status
+                                                                        const orderA = getStatusOrder(a.status);
+                                                                        const orderB = getStatusOrder(b.status);
+                                                                        return orderA - orderB;
+                                                                    });
+                                                                    
+                                                                    return sortedTickets.map((ticket, index) => {
+                                                                        const isDone = isDevDone(ticket.status);
+                                                                        return React.createElement('tr', { 
+                                                                            key: ticket.id || index,
+                                                                            className: 'border-b border-white/5 hover:bg-white/5 transition-colors'
+                                                                        },
+                                                                            React.createElement('td', { className: 'py-3 px-4 text-cyan-400 font-mono text-sm' }, ticket.key || 'N/A'),
+                                                                            React.createElement('td', { className: 'py-3 px-4 text-slate-300 text-sm' }, ticket.summary || 'No summary'),
+                                                                            React.createElement('td', { className: 'py-3 px-4' },
+                                                                                React.createElement('span', {
+                                                                                    className: `px-2 py-1 rounded text-xs font-medium ${
+                                                                                        isDone 
+                                                                                            ? 'bg-green-500/20 text-green-400' 
+                                                                                            : 'bg-slate-700/50 text-slate-400'
+                                                                                    }`
+                                                                                }, ticket.status || 'Unknown')
+                                                                            ),
+                                                                            React.createElement('td', { className: 'py-3 px-4 text-center text-slate-300 text-sm' },
+                                                                                ticket.hasSP ? ticket.storyPoints : React.createElement('span', { className: 'text-slate-500' }, '-')
+                                                                            ),
+                                                                            React.createElement('td', { className: 'py-3 px-4 text-center' },
+                                                                                isDone ? 
+                                                                                    React.createElement('span', { className: 'px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400' }, '✓') :
+                                                                                    React.createElement('span', { className: 'px-2 py-1 rounded text-xs font-medium bg-slate-700/50 text-slate-500' }, '-')
+                                                                            )
+                                                                        );
+                                                                    });
+                                                                })()
                                                         )
                                                     )
                                                 )
@@ -6377,6 +6439,785 @@
                                     );
                                 };
                                 return React.createElement(DeveloperMetricsInline);
+                            })()}
+                            {activeView === 'software-engineering-benchmarks' && getModulesForRole(currentUser?.role || 'regular').includes('software-engineering-benchmarks') && (() => {
+                                console.log('🟢 [INDEX] Renderizando SoftwareEngineeringBenchmarks inline');
+                                // Componente SoftwareEngineeringBenchmarks inline
+                                const SoftwareEngineeringBenchmarks = () => {
+                                    const [squads, setSquads] = useState([]);
+                                    const [sprints, setSprints] = useState([]);
+                                    const [developers, setDevelopers] = useState([]);
+                                    const [selectedSquad, setSelectedSquad] = useState(null);
+                                    const [selectedSprint, setSelectedSprint] = useState(null);
+                                    const [selectedDeveloper, setSelectedDeveloper] = useState(null);
+                                    const [metrics, setMetrics] = useState(null);
+                                    const [loading, setLoading] = useState(true);
+
+                                    // Función para obtener nivel de clasificación
+                                    const getMetricLevel = (metricName, value) => {
+                                        const thresholds = {
+                                            // Project Management Metrics
+                                            'issuesLinkedToParents': {
+                                                elite: { min: 90 },
+                                                good: { min: 67, max: 90 },
+                                                fair: { min: 56, max: 67 },
+                                                needsFocus: { max: 56 }
+                                            },
+                                            'inProgressWithEstimation': {
+                                                elite: { min: 90 },
+                                                good: { min: 55, max: 90 },
+                                                fair: { min: 25, max: 55 },
+                                                needsFocus: { max: 25 }
+                                            },
+                                            'inProgressWithAssignees': {
+                                                elite: { min: 96 },
+                                                good: { min: 84, max: 96 },
+                                                fair: { min: 76, max: 84 },
+                                                needsFocus: { max: 76 }
+                                            },
+                                            // Delivery Metrics
+                                            'cycleTime': {
+                                                elite: { max: 1 },
+                                                good: { min: 1, max: 3 },
+                                                fair: { min: 3, max: 7 },
+                                                needsFocus: { min: 7 }
+                                            },
+                                            'leadTime': {
+                                                elite: { max: 7 },
+                                                good: { min: 7, max: 14 },
+                                                fair: { min: 14, max: 28 },
+                                                needsFocus: { min: 28 }
+                                            },
+                                            'codingTime': {
+                                                elite: { max: 0.5 },
+                                                good: { min: 0.5, max: 2 },
+                                                fair: { min: 2, max: 5 },
+                                                needsFocus: { min: 5 }
+                                            },
+                                            // Predictability Metrics
+                                            'sprintCompletionRate': {
+                                                elite: { min: 90 },
+                                                good: { min: 70, max: 90 },
+                                                fair: { min: 50, max: 70 },
+                                                needsFocus: { max: 50 }
+                                            },
+                                            // Quality Metrics
+                                            'blockedTimeRatio': {
+                                                elite: { max: 5 },
+                                                good: { min: 5, max: 15 },
+                                                fair: { min: 15, max: 30 },
+                                                needsFocus: { min: 30 }
+                                            }
+                                        };
+                                        
+                                        const threshold = thresholds[metricName];
+                                        if (!threshold) return { level: 'unknown', color: 'slate', bgColor: 'bg-slate-500/20', textColor: 'text-slate-400', borderColor: 'border-slate-500/30' };
+                                        
+                                        // Para métricas donde menor es mejor (cycleTime, leadTime, codingTime, blockedTimeRatio)
+                                        const isLowerBetter = ['cycleTime', 'leadTime', 'codingTime', 'blockedTimeRatio'].includes(metricName);
+                                        
+                                        if (isLowerBetter) {
+                                            if (threshold.elite.max !== undefined && value <= threshold.elite.max) {
+                                                return { level: 'Elite', color: 'green', bgColor: 'bg-green-500/20', textColor: 'text-green-400', borderColor: 'border-green-500/30' };
+                                            } else if (threshold.good.min !== undefined && threshold.good.max !== undefined && value > threshold.good.min && value <= threshold.good.max) {
+                                                return { level: 'Good', color: 'blue', bgColor: 'bg-blue-500/20', textColor: 'text-blue-400', borderColor: 'border-blue-500/30' };
+                                            } else if (threshold.fair.min !== undefined && threshold.fair.max !== undefined && value > threshold.fair.min && value <= threshold.fair.max) {
+                                                return { level: 'Fair', color: 'orange', bgColor: 'bg-orange-500/20', textColor: 'text-orange-400', borderColor: 'border-orange-500/30' };
+                                            } else {
+                                                return { level: 'Needs Focus', color: 'red', bgColor: 'bg-red-500/20', textColor: 'text-red-400', borderColor: 'border-red-500/30' };
+                                            }
+                                        } else {
+                                            // Para métricas donde mayor es mejor
+                                            if (value >= threshold.elite.min) {
+                                                return { level: 'Elite', color: 'green', bgColor: 'bg-green-500/20', textColor: 'text-green-400', borderColor: 'border-green-500/30' };
+                                            } else if (value >= threshold.good.min && value < threshold.good.max) {
+                                                return { level: 'Good', color: 'blue', bgColor: 'bg-blue-500/20', textColor: 'text-blue-400', borderColor: 'border-blue-500/30' };
+                                            } else if (value >= threshold.fair.min && value < threshold.fair.max) {
+                                                return { level: 'Fair', color: 'orange', bgColor: 'bg-orange-500/20', textColor: 'text-orange-400', borderColor: 'border-orange-500/30' };
+                                            } else {
+                                                return { level: 'Needs Focus', color: 'red', bgColor: 'bg-red-500/20', textColor: 'text-red-400', borderColor: 'border-red-500/30' };
+                                            }
+                                        }
+                                    };
+
+                                    // Cargar squads
+                                    useEffect(() => {
+                                        const loadSquads = async () => {
+                                            try {
+                                                if (!window.supabaseClient) return;
+                                                const { data, error } = await window.supabaseClient
+                                                    .from('squads')
+                                                    .select('id, squad_key, squad_name')
+                                                    .order('squad_name', { ascending: true });
+                                                if (error) throw error;
+                                                setSquads(data || []);
+                                                if (data && data.length > 0) {
+                                                    setSelectedSquad(data[0].id);
+                                                }
+                                            } catch (error) {
+                                                console.error('[BENCHMARKS] Error cargando squads:', error);
+                                            }
+                                        };
+                                        loadSquads();
+                                    }, []);
+
+                                    // Cargar sprints cuando se selecciona un squad
+                                    useEffect(() => {
+                                        if (!selectedSquad) {
+                                            setSprints([]);
+                                            setSelectedSprint(null);
+                                            return;
+                                        }
+                                        const loadSprints = async () => {
+                                            try {
+                                                if (!window.supabaseClient) return;
+                                                // Solo cargar sprints del squad seleccionado
+                                                const { data, error } = await window.supabaseClient
+                                                    .from('sprints')
+                                                    .select('id, sprint_key, sprint_name, start_date, end_date, squad_id')
+                                                    .eq('squad_id', selectedSquad)
+                                                    .order('start_date', { ascending: false });
+                                                if (error) throw error;
+                                                
+                                                // Determinar sprint actual
+                                                const now = new Date();
+                                                const sprintsWithCurrent = (data || []).map(sprint => {
+                                                    const endDate = sprint.end_date ? new Date(sprint.end_date) : null;
+                                                    const isActive = endDate ? endDate >= now : false;
+                                                    return { ...sprint, is_active: isActive };
+                                                });
+                                                
+                                                setSprints(sprintsWithCurrent);
+                                                
+                                                // Seleccionar sprint actual por defecto y resetear developer
+                                                const currentSprint = sprintsWithCurrent.find(s => s.is_active) || sprintsWithCurrent[0];
+                                                if (currentSprint) {
+                                                    setSelectedSprint(currentSprint.id);
+                                                } else {
+                                                    setSelectedSprint(null);
+                                                }
+                                                setSelectedDeveloper(null); // Resetear developer al cambiar squad
+                                            } catch (error) {
+                                                console.error('[BENCHMARKS] Error cargando sprints:', error);
+                                            }
+                                        };
+                                        loadSprints();
+                                    }, [selectedSquad]);
+
+                                    // Cargar developers cuando se selecciona un squad y sprint
+                                    useEffect(() => {
+                                        if (!selectedSquad) {
+                                            setDevelopers([]);
+                                            setSelectedDeveloper(null);
+                                            return;
+                                        }
+                                        
+                                        const loadDevelopers = async () => {
+                                            try {
+                                                if (!window.supabaseClient) return;
+                                                
+                                                // Obtener initiatives del squad
+                                                const { data: initiatives, error: initiativesError } = await window.supabaseClient
+                                                    .from('initiatives')
+                                                    .select('id')
+                                                    .eq('squad_id', selectedSquad);
+                                                
+                                                if (initiativesError) throw initiativesError;
+                                                const initiativeIds = (initiatives || []).map(i => i.id);
+                                                
+                                                if (initiativeIds.length === 0) {
+                                                    setDevelopers([]);
+                                                    return;
+                                                }
+                                                
+                                                // Construir query base para obtener developers del squad
+                                                let query = window.supabaseClient
+                                                    .from('issues')
+                                                    .select('assignee_id, developers(id, display_name, jira_account_id)')
+                                                    .in('initiative_id', initiativeIds)
+                                                    .not('assignee_id', 'is', null);
+                                                
+                                                // Si hay un sprint seleccionado, filtrar también por sprint
+                                                if (selectedSprint) {
+                                                    const { data: sprintData } = await window.supabaseClient
+                                                        .from('sprints')
+                                                        .select('sprint_name')
+                                                        .eq('id', selectedSprint)
+                                                        .single();
+                                                    
+                                                    if (sprintData && sprintData.sprint_name) {
+                                                        query = query.eq('current_sprint', sprintData.sprint_name.trim());
+                                                    }
+                                                }
+                                                
+                                                const { data: issues, error: issuesError } = await query;
+                                                
+                                                if (issuesError) throw issuesError;
+                                                
+                                                // Obtener developers únicos del squad (y sprint si está seleccionado)
+                                                const uniqueDevelopers = new Map();
+                                                (issues || []).forEach(issue => {
+                                                    if (issue.developers && issue.developers.id) {
+                                                        uniqueDevelopers.set(issue.developers.id, {
+                                                            id: issue.developers.id,
+                                                            display_name: issue.developers.display_name || 'Unknown',
+                                                            jira_account_id: issue.developers.jira_account_id
+                                                        });
+                                                    }
+                                                });
+                                                
+                                                const developersList = Array.from(uniqueDevelopers.values());
+                                                setDevelopers(developersList);
+                                                
+                                                // Si el developer seleccionado no está en la nueva lista, resetearlo
+                                                if (selectedDeveloper && !developersList.find(d => String(d.id) === String(selectedDeveloper))) {
+                                                    setSelectedDeveloper(null);
+                                                }
+                                            } catch (error) {
+                                                console.error('[BENCHMARKS] Error cargando developers:', error);
+                                                setDevelopers([]);
+                                            }
+                                        };
+                                        
+                                        loadDevelopers();
+                                    }, [selectedSquad, selectedSprint]);
+                                    
+                                    // Resetear developer cuando cambia el sprint para mejor UX
+                                    useEffect(() => {
+                                        if (selectedSprint) {
+                                            setSelectedDeveloper(null);
+                                        }
+                                    }, [selectedSprint]);
+
+                                    // Calcular métricas
+                                    useEffect(() => {
+                                        if (!selectedSquad || !selectedSprint) return;
+                                        
+                                        const calculateMetrics = async () => {
+                                            try {
+                                                setLoading(true);
+                                                if (!window.supabaseClient) return;
+                                                
+                                                // Obtener nombre del sprint y del squad
+                                                const { data: sprint, error: sprintError } = await window.supabaseClient
+                                                    .from('sprints')
+                                                    .select('sprint_name')
+                                                    .eq('id', selectedSprint)
+                                                    .single();
+                                                
+                                                if (sprintError) throw sprintError;
+                                                const sprintName = sprint?.sprint_name?.trim();
+                                                if (!sprintName) return;
+                                                
+                                                // Obtener información del squad para identificar Orderbahn
+                                                const { data: squadInfo, error: squadInfoError } = await window.supabaseClient
+                                                    .from('squads')
+                                                    .select('squad_key, squad_name')
+                                                    .eq('id', selectedSquad)
+                                                    .single();
+                                                
+                                                const isOrderbahn = squadInfo?.squad_key?.toLowerCase().includes('orderbahn') || 
+                                                                   squadInfo?.squad_name?.toLowerCase().includes('orderbahn');
+                                                
+                                                // Obtener initiatives del squad
+                                                const { data: initiatives, error: initiativesError } = await window.supabaseClient
+                                                    .from('initiatives')
+                                                    .select('id')
+                                                    .eq('squad_id', selectedSquad);
+                                                
+                                                if (initiativesError) throw initiativesError;
+                                                const initiativeIds = (initiatives || []).map(i => i.id);
+                                                
+                                                if (initiativeIds.length === 0) {
+                                                    setMetrics({
+                                                        // Project Management
+                                                        issuesLinkedToParents: 0,
+                                                        inProgressWithEstimation: 0,
+                                                        inProgressWithAssignees: 0,
+                                                        // Delivery
+                                                        cycleTime: 0,
+                                                        leadTime: 0,
+                                                        codingTime: 0,
+                                                        // Predictability
+                                                        sprintCompletionRate: 0,
+                                                        // Quality
+                                                        blockedTimeRatio: 0
+                                                    });
+                                                    setLoading(false);
+                                                    return;
+                                                }
+                                                
+                                                // Construir query base - incluir campos de fecha para métricas de tiempo
+                                                let query = window.supabaseClient
+                                                    .from('issues')
+                                                    .select(`
+                                                        id,
+                                                        initiative_id,
+                                                        current_status,
+                                                        current_story_points,
+                                                        assignee_id,
+                                                        current_sprint,
+                                                        created_date,
+                                                        resolved_date,
+                                                        dev_start_date,
+                                                        dev_close_date,
+                                                        status_history_days
+                                                    `)
+                                                    .in('initiative_id', initiativeIds)
+                                                    .eq('current_sprint', sprintName);
+                                                
+                                                // Filtrar por desarrollador si está seleccionado
+                                                if (selectedDeveloper) {
+                                                    query = query.eq('assignee_id', selectedDeveloper);
+                                                }
+                                                
+                                                const { data: issues, error } = await query;
+                                                if (error) throw error;
+                                                
+                                                // Obtener información del sprint para calcular completion rate
+                                                const { data: sprintInfo, error: sprintInfoError } = await window.supabaseClient
+                                                    .from('sprints')
+                                                    .select('start_date, end_date, sprint_name')
+                                                    .eq('id', selectedSprint)
+                                                    .single();
+                                                
+                                                // Obtener todos los sprints del squad para calcular completion rate histórico
+                                                const { data: allSprints, error: allSprintsError } = await window.supabaseClient
+                                                    .from('sprints')
+                                                    .select('id, sprint_name, start_date, end_date')
+                                                    .eq('squad_id', selectedSquad)
+                                                    .order('start_date', { ascending: false })
+                                                    .limit(10); // Últimos 10 sprints
+                                                
+                                                const totalIssues = (issues || []).length;
+                                                if (totalIssues === 0) {
+                                                    setMetrics({
+                                                        // Project Management
+                                                        issuesLinkedToParents: 0,
+                                                        inProgressWithEstimation: 0,
+                                                        inProgressWithAssignees: 0,
+                                                        // Delivery
+                                                        cycleTime: 0,
+                                                        leadTime: 0,
+                                                        codingTime: 0,
+                                                        // Predictability
+                                                        sprintCompletionRate: 0,
+                                                        // Quality
+                                                        blockedTimeRatio: 0
+                                                    });
+                                                    setLoading(false);
+                                                    return;
+                                                }
+                                                
+                                                // ========== PROJECT MANAGEMENT METRICS ==========
+                                                
+                                                // 1. Issues Linked to Parents (%)
+                                                const issuesWithParent = (issues || []).filter(issue => issue.initiative_id).length;
+                                                const issuesLinkedToParents = totalIssues > 0 ? (issuesWithParent / totalIssues) * 100 : 0;
+                                                
+                                                // 2. In Progress Issues with Estimation (%)
+                                                const inProgressIssues = (issues || []).filter(issue => {
+                                                    const status = (issue.current_status || '').toUpperCase().trim();
+                                                    return status !== 'TO DO' && status !== 'TODO';
+                                                });
+                                                
+                                                let issuesForEstimationCalculation = inProgressIssues;
+                                                if (isOrderbahn) {
+                                                    issuesForEstimationCalculation = inProgressIssues.filter(issue => {
+                                                        const status = (issue.current_status || '').toUpperCase().trim();
+                                                        const hasEstimation = (issue.current_story_points || 0) > 0;
+                                                        const isQAStatus = status === 'QA EXTERNAL' || status === 'STAGING' || status === 'QA';
+                                                        const isBlocked = status === 'BLOCKED';
+                                                        if ((isQAStatus || isBlocked) && !hasEstimation) {
+                                                            return false;
+                                                        }
+                                                        return true;
+                                                    });
+                                                }
+                                                
+                                                const inProgressWithEstimation = issuesForEstimationCalculation.length > 0 
+                                                    ? (issuesForEstimationCalculation.filter(issue => (issue.current_story_points || 0) > 0).length / issuesForEstimationCalculation.length) * 100 
+                                                    : 0;
+                                                
+                                                // 3. In Progress Issues with Assignees (%)
+                                                const inProgressWithAssignees = inProgressIssues.length > 0
+                                                    ? (inProgressIssues.filter(issue => issue.assignee_id).length / inProgressIssues.length) * 100
+                                                    : 0;
+                                                
+                                                // ========== DELIVERY METRICS ==========
+                                                
+                                                // 4. Cycle Time (días): tiempo desde dev_start_date hasta dev_close_date
+                                                const completedIssues = (issues || []).filter(issue => 
+                                                    issue.dev_start_date && issue.dev_close_date
+                                                );
+                                                let cycleTime = 0;
+                                                if (completedIssues.length > 0) {
+                                                    const cycleTimes = completedIssues.map(issue => {
+                                                        const start = new Date(issue.dev_start_date);
+                                                        const close = new Date(issue.dev_close_date);
+                                                        return (close - start) / (1000 * 60 * 60 * 24); // días
+                                                    });
+                                                    cycleTime = cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length;
+                                                }
+                                                
+                                                // 5. Lead Time (días): tiempo desde created_date hasta resolved_date
+                                                const resolvedIssues = (issues || []).filter(issue => 
+                                                    issue.created_date && issue.resolved_date
+                                                );
+                                                let leadTime = 0;
+                                                if (resolvedIssues.length > 0) {
+                                                    const leadTimes = resolvedIssues.map(issue => {
+                                                        const created = new Date(issue.created_date);
+                                                        const resolved = new Date(issue.resolved_date);
+                                                        return (resolved - created) / (1000 * 60 * 60 * 24); // días
+                                                    });
+                                                    leadTime = leadTimes.reduce((sum, time) => sum + time, 0) / leadTimes.length;
+                                                }
+                                                
+                                                // 6. Coding Time (días): tiempo en estados de desarrollo activo usando status_history_days
+                                                let codingTime = 0;
+                                                const devStatuses = ['IN PROGRESS', 'DEVELOPMENT', 'CODING', 'DEVELOPMENT DONE'];
+                                                const issuesWithHistory = (issues || []).filter(issue => issue.status_history_days);
+                                                if (issuesWithHistory.length > 0) {
+                                                    let totalCodingDays = 0;
+                                                    issuesWithHistory.forEach(issue => {
+                                                        const history = issue.status_history_days || '';
+                                                        // Parsear formato: "To Do: 2.5d; In Progress: 5.0d; QA: 1.0d"
+                                                        // O también puede ser: "To Do: 2.5d, In Progress: 5.0d"
+                                                        const statusMatches = history.match(/([^:;]+):\s*([\d.]+)d/g);
+                                                        if (statusMatches) {
+                                                            statusMatches.forEach(match => {
+                                                                const parts = match.split(':');
+                                                                if (parts.length === 2) {
+                                                                    const status = parts[0].trim();
+                                                                    const daysStr = parts[1].trim().replace('d', '').trim();
+                                                                    const days = parseFloat(daysStr) || 0;
+                                                                    const statusUpper = status.toUpperCase();
+                                                                    if (devStatuses.some(devStatus => statusUpper.includes(devStatus))) {
+                                                                        totalCodingDays += days;
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                    });
+                                                    if (issuesWithHistory.length > 0) {
+                                                        codingTime = totalCodingDays / issuesWithHistory.length;
+                                                    }
+                                                }
+                                                
+                                                // ========== PREDICTABILITY METRICS ==========
+                                                
+                                                // 7. Sprint Completion Rate (%): porcentaje de sprints completados al 90% o más
+                                                let sprintCompletionRate = 0;
+                                                if (allSprints && allSprints.length > 0 && initiativeIds.length > 0) {
+                                                    // Obtener todos los issues de todos los sprints de una vez
+                                                    const sprintNames = allSprints.map(s => s.sprint_name);
+                                                    const { data: allSprintIssues } = await window.supabaseClient
+                                                        .from('issues')
+                                                        .select('id, current_status, current_story_points, current_sprint')
+                                                        .in('initiative_id', initiativeIds)
+                                                        .in('current_sprint', sprintNames);
+                                                    
+                                                    if (allSprintIssues && allSprintIssues.length > 0) {
+                                                        // Función para determinar si un ticket está completado
+                                                        // Considera completados: DONE, DEVELOPMENT DONE, STAGING, QA EXTERNAL
+                                                        const isCompleted = (status) => {
+                                                            if (!status) return false;
+                                                            const statusUpper = status.toUpperCase().trim();
+                                                            // Detectar variaciones de "development done" (con o sin espacio, mayúsculas/minúsculas)
+                                                            return statusUpper === 'DONE' || 
+                                                                   statusUpper === 'DEVELOPMENT DONE' ||
+                                                                   statusUpper.includes('DEVELOPMENT DONE') ||
+                                                                   statusUpper.includes('DEV DONE') ||
+                                                                   statusUpper === 'STAGING' ||
+                                                                   statusUpper === 'QA EXTERNAL' ||
+                                                                   statusUpper === 'CLOSED' || 
+                                                                   statusUpper === 'RESOLVED';
+                                                        };
+                                                        
+                                                        let completedSprints = 0;
+                                                        for (const sprint of allSprints) {
+                                                            const sprintIssues = allSprintIssues.filter(issue => 
+                                                                issue.current_sprint === sprint.sprint_name
+                                                            );
+                                                            
+                                                            if (sprintIssues.length > 0) {
+                                                                const totalSP = sprintIssues.reduce((sum, issue) => sum + (issue.current_story_points || 0), 0);
+                                                                const completedSP = sprintIssues
+                                                                    .filter(issue => isCompleted(issue.current_status))
+                                                                    .reduce((sum, issue) => sum + (issue.current_story_points || 0), 0);
+                                                                
+                                                                // Sprint completado si >= 90% de SP completados
+                                                                if (totalSP > 0 && (completedSP / totalSP) >= 0.9) {
+                                                                    completedSprints++;
+                                                                }
+                                                            }
+                                                        }
+                                                        sprintCompletionRate = (completedSprints / allSprints.length) * 100;
+                                                    }
+                                                }
+                                                
+                                                // ========== QUALITY METRICS ==========
+                                                
+                                                // 8. Blocked Time Ratio (%): porcentaje de tiempo en estado BLOCKED
+                                                let blockedTimeRatio = 0;
+                                                const issuesWithBlockedHistory = (issues || []).filter(issue => issue.status_history_days);
+                                                if (issuesWithBlockedHistory.length > 0) {
+                                                    let totalDays = 0;
+                                                    let blockedDays = 0;
+                                                    issuesWithBlockedHistory.forEach(issue => {
+                                                        const history = issue.status_history_days || '';
+                                                        const statusMatches = history.match(/([^:;]+):\s*([\d.]+)d/g);
+                                                        if (statusMatches) {
+                                                            statusMatches.forEach(match => {
+                                                                const parts = match.split(':');
+                                                                if (parts.length === 2) {
+                                                                    const status = parts[0].trim();
+                                                                    const daysStr = parts[1].trim().replace('d', '').trim();
+                                                                    const daysValue = parseFloat(daysStr) || 0;
+                                                                    const statusUpper = status.toUpperCase();
+                                                                    totalDays += daysValue;
+                                                                    if (statusUpper.includes('BLOCKED')) {
+                                                                        blockedDays += daysValue;
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                    });
+                                                    if (totalDays > 0) {
+                                                        blockedTimeRatio = (blockedDays / totalDays) * 100;
+                                                    }
+                                                }
+                                                
+                                                setMetrics({
+                                                    // Project Management
+                                                    issuesLinkedToParents: Math.round(issuesLinkedToParents * 10) / 10,
+                                                    inProgressWithEstimation: Math.round(inProgressWithEstimation * 10) / 10,
+                                                    inProgressWithAssignees: Math.round(inProgressWithAssignees * 10) / 10,
+                                                    // Delivery
+                                                    cycleTime: Math.round(cycleTime * 10) / 10,
+                                                    leadTime: Math.round(leadTime * 10) / 10,
+                                                    codingTime: Math.round(codingTime * 10) / 10,
+                                                    // Predictability
+                                                    sprintCompletionRate: Math.round(sprintCompletionRate * 10) / 10,
+                                                    // Quality
+                                                    blockedTimeRatio: Math.round(blockedTimeRatio * 10) / 10
+                                                });
+                                                
+                                            } catch (error) {
+                                                console.error('[BENCHMARKS] Error calculando métricas:', error);
+                                            } finally {
+                                                setLoading(false);
+                                            }
+                                        };
+                                        
+                                        calculateMetrics();
+                                    }, [selectedSquad, selectedSprint, selectedDeveloper]);
+
+                                    if (loading && !metrics) {
+                                        return React.createElement('div', { className: 'min-h-screen flex items-center justify-center' },
+                                            React.createElement('div', { className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500' })
+                                        );
+                                    }
+
+                                    const projectManagementMetrics = [
+                                        {
+                                            name: 'Issues Linked to Parents (%)',
+                                            key: 'issuesLinkedToParents',
+                                            value: metrics?.issuesLinkedToParents || 0,
+                                            description: 'Percentage of issues associated with a parent item (epic)',
+                                            unit: '%'
+                                        },
+                                        {
+                                            name: 'In Progress Issues with Estimation (%)',
+                                            key: 'inProgressWithEstimation',
+                                            value: metrics?.inProgressWithEstimation || 0,
+                                            description: 'Percentage of in-progress issues that have story points assigned',
+                                            unit: '%'
+                                        },
+                                        {
+                                            name: 'In Progress Issues with Assignees (%)',
+                                            key: 'inProgressWithAssignees',
+                                            value: metrics?.inProgressWithAssignees || 0,
+                                            description: 'Percentage of in-progress issues that have an assignee',
+                                            unit: '%'
+                                        }
+                                    ];
+                                    
+                                    const deliveryMetrics = [
+                                        {
+                                            name: 'Cycle Time',
+                                            key: 'cycleTime',
+                                            value: metrics?.cycleTime || 0,
+                                            description: 'Average time from development start to completion (days)',
+                                            unit: ' days'
+                                        },
+                                        {
+                                            name: 'Lead Time',
+                                            key: 'leadTime',
+                                            value: metrics?.leadTime || 0,
+                                            description: 'Average time from ticket creation to resolution (days)',
+                                            unit: ' days'
+                                        },
+                                        {
+                                            name: 'Coding Time',
+                                            key: 'codingTime',
+                                            value: metrics?.codingTime || 0,
+                                            description: 'Average time spent in active development states (days)',
+                                            unit: ' days'
+                                        }
+                                    ];
+                                    
+                                    const predictabilityMetrics = [
+                                        {
+                                            name: 'Sprint Completion Rate (%)',
+                                            key: 'sprintCompletionRate',
+                                            value: metrics?.sprintCompletionRate || 0,
+                                            description: 'Percentage of sprints completed at 90% or more',
+                                            unit: '%'
+                                        }
+                                    ];
+                                    
+                                    const qualityMetrics = [
+                                        {
+                                            name: 'Blocked Time Ratio (%)',
+                                            key: 'blockedTimeRatio',
+                                            value: metrics?.blockedTimeRatio || 0,
+                                            description: 'Percentage of total time tickets spent in blocked status',
+                                            unit: '%'
+                                        }
+                                    ];
+                                    
+                                    const renderMetricsTable = (sectionTitle, metricsList) => {
+                                        if (!metricsList || metricsList.length === 0) return null;
+                                        
+                                        return React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                            React.createElement('h3', { className: 'text-xl font-semibold text-white mb-6' }, sectionTitle),
+                                            React.createElement('div', { className: 'overflow-x-auto' },
+                                                React.createElement('table', { className: 'w-full' },
+                                                    React.createElement('thead', null,
+                                                        React.createElement('tr', { className: 'border-b border-slate-700' },
+                                                            React.createElement('th', { className: 'text-left py-3 px-4 text-slate-300 font-semibold' }, 'Metric'),
+                                                            React.createElement('th', { className: 'text-center py-3 px-4 text-slate-300 font-semibold' }, 'Current Value')
+                                                        )
+                                                    ),
+                                                    React.createElement('tbody', null,
+                                                        metricsList.map((metric, index) => {
+                                                            const level = getMetricLevel(metric.key, metric.value);
+                                                            
+                                                            return React.createElement('tr', { key: index, className: 'border-b border-slate-800/50 hover:bg-slate-800/30' },
+                                                                React.createElement('td', { className: 'py-4 px-4' },
+                                                                    React.createElement('div', { className: 'text-white font-medium' }, metric.name),
+                                                                    React.createElement('div', { className: 'text-xs text-slate-400 mt-1' }, metric.description)
+                                                                ),
+                                                                React.createElement('td', { className: 'py-4 px-4 text-center' },
+                                                                    React.createElement('div', { className: `inline-flex items-center gap-3 px-4 py-2 rounded-lg border ${level.bgColor} ${level.textColor} ${level.borderColor}` },
+                                                                        React.createElement('span', { className: 'font-bold text-xl' }, 
+                                                                            metric.value.toFixed(1) + metric.unit
+                                                                        ),
+                                                                        React.createElement('span', { className: 'text-sm font-semibold' }, level.level)
+                                                                    )
+                                                                )
+                                                            );
+                                                        })
+                                                    )
+                                                )
+                                            )
+                                        );
+                                    };
+
+                                    return React.createElement('div', { className: 'space-y-6' },
+                                        // Filtros
+                                        React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                            React.createElement('h3', { className: 'text-xl font-semibold text-white mb-4' }, 'Filters'),
+                                            React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-4' },
+                                                // Squad Selector
+                                                React.createElement('div', null,
+                                                    React.createElement('label', { className: 'block text-sm font-medium text-slate-300 mb-2' }, 'Squad'),
+                                                    React.createElement('div', { className: 'relative' },
+                                                        React.createElement('select', {
+                                                            value: selectedSquad || '',
+                                                            onChange: (e) => setSelectedSquad(e.target.value ? String(e.target.value) : null),
+                                                            className: 'w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white appearance-none focus:outline-none focus:ring-2 focus:ring-cyan-500'
+                                                        },
+                                                            React.createElement('option', { value: '' }, 'Select Squad'),
+                                                            squads.map(squad => React.createElement('option', { key: squad.id, value: squad.id }, squad.squad_name))
+                                                        ),
+                                                        React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none', size: 20 })
+                                                    )
+                                                ),
+                                                // Sprint Selector
+                                                React.createElement('div', null,
+                                                    React.createElement('label', { className: 'block text-sm font-medium text-slate-300 mb-2' }, 'Sprint'),
+                                                    React.createElement('div', { className: 'relative' },
+                                                        React.createElement('select', {
+                                                            value: selectedSprint || '',
+                                                            onChange: (e) => setSelectedSprint(e.target.value ? String(e.target.value) : null),
+                                                            className: 'w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white appearance-none focus:outline-none focus:ring-2 focus:ring-cyan-500',
+                                                            disabled: !selectedSquad || sprints.length === 0
+                                                        },
+                                                            React.createElement('option', { value: '' }, 'Select Sprint'),
+                                                            sprints.map(sprint => React.createElement('option', { key: sprint.id, value: sprint.id }, 
+                                                                sprint.sprint_name + (sprint.is_active ? ' ⭐ Current' : '')
+                                                            ))
+                                                        ),
+                                                        React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none', size: 20 })
+                                                    )
+                                                ),
+                                                // Developer Selector
+                                                React.createElement('div', null,
+                                                    React.createElement('label', { className: 'block text-sm font-medium text-slate-300 mb-2' }, 'Developer'),
+                                                    React.createElement('div', { className: 'relative' },
+                                                        React.createElement('select', {
+                                                            value: selectedDeveloper || '',
+                                                            onChange: (e) => setSelectedDeveloper(e.target.value ? String(e.target.value) : null),
+                                                            className: 'w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white appearance-none focus:outline-none focus:ring-2 focus:ring-cyan-500',
+                                                            disabled: !selectedSquad || developers.length === 0
+                                                        },
+                                                            React.createElement('option', { value: '' }, 'All Developers'),
+                                                            developers.map(dev => React.createElement('option', { key: dev.id, value: String(dev.id) }, dev.display_name || 'Unknown'))
+                                                        ),
+                                                        React.createElement(Icons.ChevronDown, { className: 'absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none', size: 20 })
+                                                    )
+                                                )
+                                            )
+                                        ),
+                                        // Leyenda de niveles
+                                        React.createElement('div', { className: 'glass rounded-2xl p-6' },
+                                            React.createElement('h3', { className: 'text-xl font-semibold text-white mb-4' }, 'Performance Levels'),
+                                            React.createElement('div', { className: 'flex flex-wrap gap-4' },
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-green-500/20 border border-green-500/30' }),
+                                                    React.createElement('span', { className: 'text-sm text-slate-300' }, 'Elite')
+                                                ),
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-blue-500/20 border border-blue-500/30' }),
+                                                    React.createElement('span', { className: 'text-sm text-slate-300' }, 'Good')
+                                                ),
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-orange-500/20 border border-orange-500/30' }),
+                                                    React.createElement('span', { className: 'text-sm text-slate-300' }, 'Fair')
+                                                ),
+                                                React.createElement('div', { className: 'flex items-center gap-2' },
+                                                    React.createElement('div', { className: 'w-4 h-4 rounded bg-red-500/20 border border-red-500/30' }),
+                                                    React.createElement('span', { className: 'text-sm text-slate-300' }, 'Needs Focus')
+                                                )
+                                            )
+                                        ),
+                                        // Métricas organizadas por secciones
+                                        React.createElement(React.Fragment, {},
+                                            // Project Management Metrics
+                                            renderMetricsTable('Project Management Metrics', projectManagementMetrics),
+                                            // Delivery Metrics
+                                            renderMetricsTable('Delivery Metrics', deliveryMetrics),
+                                            // Predictability Metrics
+                                            renderMetricsTable('Predictability Metrics', predictabilityMetrics),
+                                            // Quality Metrics
+                                            renderMetricsTable('Quality Metrics', qualityMetrics)
+                                        )
+                                    );
+                                };
+                                return React.createElement(SoftwareEngineeringBenchmarks);
                             })()}
                             {activeView === 'user-admin' && currentUser && getModulesForRole(currentUser.role).includes('user-admin') && (() => {
                                 // Componente UserAdministration inline
