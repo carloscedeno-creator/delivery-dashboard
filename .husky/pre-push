@@ -1,11 +1,8 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 echo "🧪 Ejecutando pruebas antes de push..."
 
 # Ejecutar pruebas unitarias
 echo "📦 Ejecutando pruebas unitarias..."
-npm run test:unit || {
+npm run test || {
   echo "❌ Las pruebas unitarias fallaron. Por favor, corrige los errores antes de hacer push."
   exit 1
 }
