@@ -55,8 +55,8 @@ export const parseCSV = (text, type) => {
             } else if (type === 'allocation') {
                 if (h === 'Percentage') val = parseFloat(val.replace('%', '')) || 0;
             } else if (type === 'productInitiatives') {
-                if (h === 'Effort (days)') val = parseFloat(val) || 0;
-                if (h === 'Completion (%)') val = parseFloat(val) || 0;
+                if (h === 'Effort (days)' || h === 'Effort in Days') val = parseFloat(val) || 0;
+                if (h === 'Completion (%)' || h === '% Completion') val = parseFloat(val) || 0;
             }
 
             // Delivery roadmap fields
@@ -74,13 +74,15 @@ export const parseCSV = (text, type) => {
 
             // Product roadmap fields
             if (h === 'Initiative') entry.initiative = val;
+            if (h === 'GWOW Gate 1 Status') entry.gwowGate1Status = val;
+            if (h === 'Reporter') entry.reporter = val;
             if (h === 'BA') entry.ba = val;
             if (h === 'Designer') entry.designer = val;
             if (h === 'Team') entry.team = val;
-            if (h === 'Quarter') entry.quarter = val;
-            if (h === 'Status') entry.status = val;
-            if (h === 'Effort (days)') entry.effort = val;
-            if (h === 'Completion (%)') entry.completion = val;
+            if (h === 'Quarter' || h === 'Delivery Q') entry.quarter = val;
+            if (h === 'Status' || h === 'Delivery Status') entry.status = val;
+            if (h === 'Effort (days)' || h === 'Effort in Days') entry.effort = val;
+            if (h === 'Completion (%)' || h === '% Completion') entry.completion = val;
             if (h === 'Start Date') entry.startDate = val;
             if (h === 'Expected Date') entry.expectedDate = val;
             if (h === 'End Date') entry.endDate = val;
