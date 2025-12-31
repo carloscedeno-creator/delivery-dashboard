@@ -5,10 +5,18 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Login Flow', () => {
   test.beforeEach(async ({ page }) => {
-    // Navegar a la página y esperar a que cargue
-    await page.goto('/', { waitUntil: 'networkidle' });
-    // Esperar a que el formulario de login aparezca
-    await page.waitForSelector('#email, [data-testid="login-form"]', { timeout: 10000 });
+    // Limpiar localStorage para asegurar que no hay sesión guardada
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    
+    // Recargar la página para que la app detecte que no hay usuario
+    await page.reload({ waitUntil: 'networkidle' });
+    
+    // Esperar a que el formulario de login aparezca (puede tomar tiempo en cargar)
+    await page.waitForSelector('#email', { timeout: 15000, state: 'visible' });
   });
 
   test('debe mostrar el formulario de login', async ({ page }) => {

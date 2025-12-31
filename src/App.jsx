@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { AlertCircle, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DataSourceSelector from './components/DataSourceSelector';
+import Login from './components/Login';
 
 // Lazy load de componentes para mejor HMR y rendimiento
 const OverallView = lazy(() => import('./components/OverallView'));
@@ -332,6 +333,19 @@ function App() {
             }
         }
     }, [dataSource, loadData]);
+
+    // Si no hay usuario autenticado, mostrar Login
+    if (!currentUser) {
+        return (
+            <Login 
+                onLoginSuccess={(user) => {
+                    setCurrentUser(user);
+                    // Recargar la página para inicializar todo con el usuario autenticado
+                    window.location.reload();
+                }} 
+            />
+        );
+    }
 
     // Solo mostrar loading si estamos cargando delivery roadmap Y no es la vista de product
     // El Product Roadmap se carga independientemente
