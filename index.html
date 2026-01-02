@@ -1,119 +1,19 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Dashboard</title>
+    <title>Strata Dashboard</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Tailwind -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Outfit', 'sans-serif'] },
-                    colors: {
-                        background: "#020617",
-                        card: "rgba(30, 41, 59, 0.5)",
-                    },
-                    animation: {
-                        'shimmer': 'shimmer 2s infinite',
-                    },
-                    keyframes: {
-                        shimmer: {
-                            '0%': { transform: 'translateX(-100%)' },
-                            '100%': { transform: 'translateX(100%)' }
-                        },
-                        spin: {
-                            '0%': { transform: 'rotate(0deg)' },
-                            '100%': { transform: 'rotate(360deg)' }
-                        },
-                        pulse: {
-                            '0%, 100%': { opacity: 1 },
-                            '50%': { opacity: 0.7 }
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-
-    <!-- Error Handling Styles -->
-    <style>
-        #error-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            color: #ff5555;
-            z-index: 9999;
-            padding: 2rem;
-            font-family: monospace;
-            white-space: pre-wrap;
-            overflow: auto;
-        }
-
-        body {
-            background-color: #0a0e17;
-            color: #f8fafc;
-            background-image:
-                radial-gradient(at 0% 0%, hsla(215, 28%, 12%, 1) 0, transparent 50%),
-                radial-gradient(at 50% 0%, hsla(215, 20%, 15%, 1) 0, transparent 50%),
-                radial-gradient(at 100% 0%, hsla(215, 25%, 13%, 1) 0, transparent 50%);
-            min-height: 100vh;
-        }
-
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: rgba(148, 163, 184, 0.2);
-            border-radius: 4px;
-        }
-    </style>
-
-    <!-- Global Error Handler -->
-    <script>
-        window.onerror = function (msg, url, line, col, error) {
-            const overlay = document.getElementById('error-overlay');
-            if (overlay) {
-                overlay.style.display = 'block';
-                overlay.innerHTML += `Error: ${msg}\nLine: ${line}:${col}\nStack: ${error?.stack || 'N/A'}\n\n`;
-            }
-            return false;
-        };
-    </script>
-  <script type="module" crossorigin src="/delivery-dashboard/assets/index-DsXw0Nz7.js"></script>
-  <link rel="stylesheet" crossorigin href="/delivery-dashboard/assets/index-D53J9VS-.css">
+  <script type="module" crossorigin src="/delivery-dashboard/assets/index-zzFyhS3F.js"></script>
+  <link rel="stylesheet" crossorigin href="/delivery-dashboard/assets/index-D6vaUI3m.css">
 </head>
 
 <body>
-    <div id="error-overlay"></div>
-    <div id="root"></div>
-
-    <!-- Use Vite's module system -->
+    <div id="root"></div>
 </body>
-
 </html>
