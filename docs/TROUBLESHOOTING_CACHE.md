@@ -41,3 +41,4 @@ Si cambiaste "Avg. SPI" a "avg. SPI!" y lo ves, entonces el código SÍ se está
 
 
 
+

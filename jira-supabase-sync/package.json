@@ -7,6 +7,9 @@
   "scripts": {
     "start": "node src/index.js",
     "sync": "node src/run-sync-once.js",
+    "sync:integration": "node src/run-sync-integration-only.js",
+    "sync:full-daily": "node src/run-full-sync-daily.js",
+    "daily-full-sync": "node src/daily-full-sync-service.js",
     "dev": "node --watch src/index.js",
     "test": "node --test",
     "list-projects": "node scripts/list-jira-projects.js",

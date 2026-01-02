@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Box, Truck, AlertCircle, Map, Users, BarChart, Activity } from 'lucide-react';
+import { Layout, Box, Truck, AlertCircle, Map, Users, BarChart, Activity, Gauge } from 'lucide-react';
 import { getNavbarModules } from '../config/permissions';
 import { getCurrentUser } from '../utils/authService';
 
@@ -11,16 +11,22 @@ const iconMap = {
     Map,
     Users,
     BarChart,
-    Activity
+    Activity,
+    Gauge
 };
 
 const Navbar = ({ activeView, setActiveView }) => {
     // Obtener usuario actual y sus módulos permitidos
     const currentUser = getCurrentUser();
-    const navItems = getNavbarModules(currentUser?.role || 'regular').map(module => ({
+    const userRole = currentUser?.role || 'regular';
+    const navItems = getNavbarModules(userRole).map(module => ({
         ...module,
         icon: iconMap[module.icon] || Layout
     }));
+    
+    // Debug: Log para verificar módulos disponibles
+    console.log('🔵 [Navbar] Usuario:', currentUser?.displayName || 'No autenticado', 'Rol:', userRole);
+    console.log('🔵 [Navbar] Módulos disponibles:', navItems.map(m => m.label));
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-8 py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">

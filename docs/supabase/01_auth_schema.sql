@@ -72,3 +72,4 @@ CREATE POLICY "Allow all on user_sessions" ON user_sessions FOR ALL USING (true)
 
 
 
+

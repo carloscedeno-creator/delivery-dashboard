@@ -1,15 +1,15 @@
-name: Jira → Supabase Sync
+name: Jira → Supabase Sync (Incremental)
 
 on:
   schedule:
-    # Ejecuta cada 30 minutos
+    # Ejecuta cada 30 minutos - sincronización incremental (solo cambios recientes y sprint actual)
     - cron: '*/30 * * * *'
   workflow_dispatch: # Permite ejecución manual desde GitHub UI
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Aumentado a 60 minutos para permitir sincronización completa
+    timeout-minutes: 30  # Sincronización incremental es más rápida (~5-10 min típicamente)
     
     steps:
       - name: Checkout code
@@ -50,7 +50,7 @@ jobs:
             echo "📝 Revisa los logs arriba para más detalles"
           }
       
-      - name: Run sync
+      - name: Run incremental sync
         working-directory: jira-supabase-sync
         id: sync
         continue-on-error: true
@@ -69,8 +69,12 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SYNC_INTERVAL_MINUTES: '30'
         run: |
-          echo "🚀 Iniciando sincronización..."
+          echo "🚀 Iniciando sincronización INCREMENTAL (corta)..."
           echo "📋 Proyectos configurados: $(echo '${{ secrets.PROJECTS_CONFIG }}' | jq -r 'length' 2>/dev/null || echo 'N/A')"
+          echo "⚡ Esta sincronización procesa solo:"
+          echo "   - Issues actualizados desde la última sync"
+          echo "   - Issues del sprint actual activo"
+          echo "   - Optimizado con batch processing (10-30x más rápido)"
           npm run sync 2>&1 | tee sync-output.log || {
             EXIT_CODE=$?
             echo "❌ Sync falló con código: $EXIT_CODE"

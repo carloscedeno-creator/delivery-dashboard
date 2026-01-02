@@ -128,14 +128,22 @@ export async function incrementalSync() {
 
     // 2. Obtener última sincronización
     const lastSync = await supabaseClient.getLastSync(squadId);
-    const sinceDate = lastSync || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Últimos 7 días si no hay sync previa
+    
+    // Si no hay sync previa, usar una ventana más pequeña (últimas 24 horas) para evitar traer demasiados datos
+    // Si hay sync previa, usar esa fecha exacta
+    const sinceDate = lastSync || new Date(Date.now() - 24 * 60 * 60 * 1000); // Últimas 24 horas si no hay sync previa
 
-    logger.info(`📅 Sincronizando cambios desde: ${sinceDate.toISOString()}`);
+    if (lastSync) {
+      logger.info(`📅 Sincronización incremental desde última sync: ${sinceDate.toISOString()}`);
+    } else {
+      logger.info(`📅 Primera sincronización incremental: usando ventana de 24 horas desde ${sinceDate.toISOString()}`);
+    }
 
     // 3. Registrar inicio
     await supabaseClient.logSync(squadId, 'incremental', 'running', 0);
 
-    // 4. Obtener issues actualizados
+    // 4. Obtener issues actualizados O creados (delta completo)
+    // Usar fetchUpdatedIssues que ahora busca tanto updated como created
     const jiraIssues = await jiraClient.fetchUpdatedIssues(sinceDate);
 
     if (jiraIssues.length === 0) {

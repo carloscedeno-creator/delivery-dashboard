@@ -63,8 +63,10 @@ export async function fullSyncForProject(project, squadId, jiraClient) {
       }
     }
 
-    // 4. Procesar issues
-    const { successCount, errorCount } = await processIssuesWithClient(squadId, jiraIssues, jiraClient);
+    // 4. Procesar issues (usar modo batch optimizado)
+    logger.info(`🔄 Procesando ${jiraIssues.length} issues (modo BATCH optimizado)...`);
+    const { processIssuesWithClientBatch } = await import('../processors/issue-processor.js');
+    const { successCount, errorCount } = await processIssuesWithClientBatch(squadId, jiraIssues, jiraClient);
 
     // 5. Registrar finalización
     await supabaseClient.logSync(squadId, 'full', 'completed', successCount);
@@ -110,88 +112,138 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
   try {
     // 1. Obtener última sincronización
     const lastSync = await supabaseClient.getLastSync(squadId);
-    const sinceDate = lastSync || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Últimos 7 días si no hay sync previa
+    
+    // Si no hay sync previa, usar una ventana más pequeña (últimas 24 horas) para evitar traer demasiados datos
+    // Si hay sync previa, usar esa fecha exacta
+    const sinceDate = lastSync || new Date(Date.now() - 24 * 60 * 60 * 1000); // Últimas 24 horas si no hay sync previa
 
-    logger.info(`📅 Sincronizando cambios desde: ${sinceDate.toISOString()}`);
+    if (lastSync) {
+      logger.info(`📅 Sincronización incremental desde última sync: ${sinceDate.toISOString()}`);
+    } else {
+      logger.info(`📅 Primera sincronización incremental: usando ventana de 24 horas desde ${sinceDate.toISOString()}`);
+    }
 
     // 2. Registrar inicio
     await supabaseClient.logSync(squadId, 'incremental', 'running', 0);
 
-    // 3. Obtener issues actualizados
-    const jqlQuery = `project = "${project.projectKey.toUpperCase()}" AND updated >= "${sinceDate.toISOString().split('T')[0]}" AND issuetype != "Sub-task" ORDER BY updated DESC`;
+    // 3. Obtener issues actualizados O creados (delta completo)
+    // Esto asegura que capturamos tanto tickets modificados como tickets nuevos
+    const dateStr = sinceDate.toISOString().split('T')[0];
+    const baseJqlQuery = `project = "${project.projectKey.toUpperCase()}" AND issuetype != "Sub-task"`;
+    const deltaCondition = `(updated >= "${dateStr}" OR created >= "${dateStr}")`;
+    const jqlQuery = `${baseJqlQuery} AND ${deltaCondition} ORDER BY updated DESC`;
+    
+    logger.info(`📥 Buscando tickets delta desde ${dateStr} (actualizados O creados)...`);
     const jiraIssues = await jiraClient.fetchAllIssues(jqlQuery);
     
-    logger.info(`📥 Issues actualizados encontrados: ${jiraIssues.length}`);
+    logger.info(`📥 Issues encontrados en delta: ${jiraIssues.length} (actualizados o creados desde ${dateStr})`);
 
-    // 4. Obtener issues de sprints activos para sincronizar sus estados
-    // Esto asegura que los estados de issues en sprints activos siempre estén actualizados
-    const activeSprintIssues = [];
+    // 4. Obtener issues del SPRINT ACTUAL (solo el que está en curso ahora) para sincronizar sus estados
+    // Esto asegura que los estados de issues en el sprint actual siempre estén actualizados
+    // OPTIMIZACIÓN: Solo sincronizar el sprint actual, no todos los sprints activos
+    const currentSprintIssues = [];
     try {
-      const now = new Date().toISOString();
-      // Obtener sprints activos: sin fecha de fin o con fecha de fin >= hoy
-      const { data: activeSprints, error: sprintsError } = await supabaseClient.client
-        .from('sprints')
-        .select('id, sprint_key, sprint_name, end_date')
-        .eq('squad_id', squadId)
-        .or(`end_date.is.null,end_date.gte.${now.split('T')[0]}`); // Sprints activos o sin fecha de fin
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
       
-      if (!sprintsError && activeSprints && activeSprints.length > 0) {
-        logger.info(`🏃 Encontrados ${activeSprints.length} sprints activos, sincronizando sus issues...`);
+      // Obtener solo el sprint ACTUAL: el que tiene start_date <= hoy <= end_date y está activo
+      // Ordenar por start_date DESC para obtener el más reciente primero
+      const { data: currentSprints, error: sprintsError } = await supabaseClient.client
+        .from('sprints')
+        .select('id, sprint_key, sprint_name, start_date, end_date')
+        .eq('squad_id', squadId)
+        .lte('start_date', today) // Sprint ya inició
+        .or(`end_date.is.null,end_date.gte.${today}`) // Sprint no ha terminado o no tiene fecha de fin
+        .order('start_date', { ascending: false }) // El más reciente primero
+        .limit(1); // Solo el sprint actual más reciente
+      
+      if (!sprintsError && currentSprints && currentSprints.length > 0) {
+        const currentSprint = currentSprints[0];
+        logger.info(`🏃 Sincronizando issues del SPRINT ACTUAL: ${currentSprint.sprint_name}`);
         
-        for (const sprint of activeSprints) {
-          const { data: sprintIssues, error: sprintIssuesError } = await supabaseClient.client
-            .from('issue_sprints')
-            .select('issue_id')
-            .eq('sprint_id', sprint.id);
+        // Usar JQL para obtener issues del sprint actual directamente desde Jira
+        // Esto es más eficiente que buscar en Supabase primero
+        try {
+          // Construir JQL para obtener issues del sprint actual
+          // Buscar por sprintName en el campo de sprint de Jira
+          const sprintJql = `project = "${project.projectKey.toUpperCase()}" AND issuetype != "Sub-task" AND sprint in openSprints() ORDER BY updated DESC`;
           
-          if (!sprintIssuesError && sprintIssues && sprintIssues.length > 0) {
-            const issueIds = sprintIssues.map(si => si.issue_id);
+          logger.info(`   📥 Obteniendo issues del sprint actual desde Jira...`);
+          const sprintIssuesFromJira = await jiraClient.fetchAllIssues(sprintJql);
+          
+          if (sprintIssuesFromJira && sprintIssuesFromJira.length > 0) {
+            logger.info(`   📋 Issues encontrados en sprint actual desde Jira: ${sprintIssuesFromJira.length}`);
             
-            // Obtener issue_keys
-            const { data: issues, error: issuesError } = await supabaseClient.client
-              .from('issues')
-              .select('issue_key')
-              .in('id', issueIds);
+            // Filtrar solo los que no están ya en el delta
+            for (const sprintIssue of sprintIssuesFromJira) {
+              const alreadyIncluded = jiraIssues.some(ji => ji.key === sprintIssue.key);
+              if (!alreadyIncluded) {
+                currentSprintIssues.push(sprintIssue);
+                logger.debug(`   📋 Issue de sprint actual agregado a cola: ${sprintIssue.key} (se comparará antes de actualizar)`);
+              } else {
+                logger.debug(`   ⏭️  Issue ${sprintIssue.key} ya está en el delta, omitiendo duplicado`);
+              }
+            }
+          } else {
+            logger.info(`   ⚠️ No se encontraron issues del sprint actual desde Jira (puede que el sprint no tenga issues o JQL no funcione)`);
             
-            if (!issuesError && issues) {
-              const issueKeys = issues.map(i => i.issue_key).filter(Boolean);
+            // Fallback: buscar en Supabase si JQL no funciona
+            const { data: sprintIssues, error: sprintIssuesError } = await supabaseClient.client
+              .from('issue_sprints')
+              .select('issue_id')
+              .eq('sprint_id', currentSprint.id);
+            
+            if (!sprintIssuesError && sprintIssues && sprintIssues.length > 0) {
+              const issueIds = sprintIssues.map(si => si.issue_id);
               
-              logger.info(`   📋 Sprint ${sprint.sprint_name}: ${issueKeys.length} issues`);
+              const { data: issues, error: issuesError } = await supabaseClient.client
+                .from('issues')
+                .select('issue_key')
+                .in('id', issueIds);
               
-              // Obtener detalles de cada issue desde Jira
-              for (const issueKey of issueKeys) {
-                try {
-                  const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
-                  if (issueDetails) {
-                    // Verificar si ya está en la lista de issues actualizados
-                    const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
-                    if (!alreadyIncluded) {
-                      activeSprintIssues.push(issueDetails);
-                      logger.debug(`   ✅ Agregado issue de sprint activo: ${issueKey}`);
+              if (!issuesError && issues) {
+                const issueKeys = issues.map(i => i.issue_key).filter(Boolean);
+                logger.info(`   📋 Sprint ${currentSprint.sprint_name}: ${issueKeys.length} issues (fallback desde Supabase)`);
+                
+                // Obtener detalles de cada issue desde Jira
+                for (const issueKey of issueKeys) {
+                  try {
+                    const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
+                    if (issueDetails) {
+                      const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
+                      if (!alreadyIncluded) {
+                        currentSprintIssues.push(issueDetails);
+                        logger.debug(`   📋 Issue de sprint actual agregado a cola: ${issueKey} (se comparará antes de actualizar)`);
+                      }
                     }
-                  }
-                } catch (error) {
-                  // Ignorar errores 404 (issues que no existen o sin permisos)
-                  if (error.status !== 404) {
-                    logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                  } catch (error) {
+                    if (error.status !== 404) {
+                      logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                    }
                   }
                 }
               }
             }
           }
+        } catch (jqlError) {
+          logger.warn(`⚠️ Error obteniendo issues del sprint actual desde Jira (JQL): ${jqlError.message}`);
+          logger.info(`   💡 Continuando solo con issues del delta (sin issues del sprint actual)`);
         }
         
-        logger.info(`📊 Issues de sprints activos a sincronizar: ${activeSprintIssues.length}`);
+        logger.info(`📊 Issues del sprint actual a sincronizar: ${currentSprintIssues.length}`);
+      } else {
+        logger.info(`ℹ️ No se encontró sprint actual para ${project.projectKey}, solo se sincronizarán issues del delta`);
       }
     } catch (error) {
-      logger.warn(`⚠️ Error obteniendo issues de sprints activos: ${error.message}`);
+      logger.warn(`⚠️ Error obteniendo issues del sprint actual: ${error.message}`);
+      logger.info(`   💡 Continuando solo con issues del delta`);
     }
 
-    // Combinar issues actualizados con issues de sprints activos
+    // Combinar issues actualizados con issues del sprint actual
     const allIssues = [...jiraIssues];
     const existingKeys = new Set(jiraIssues.map(ji => ji.key));
     
-    for (const sprintIssue of activeSprintIssues) {
+    for (const sprintIssue of currentSprintIssues) {
       if (!existingKeys.has(sprintIssue.key)) {
         allIssues.push(sprintIssue);
         existingKeys.add(sprintIssue.key);
@@ -204,7 +256,7 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
       return { success: true, issuesProcessed: 0 };
     }
     
-    logger.info(`📊 Total de issues a procesar: ${allIssues.length} (${jiraIssues.length} actualizados + ${activeSprintIssues.length} de sprints activos)`);
+    logger.info(`📊 Total de issues a procesar: ${allIssues.length} (${jiraIssues.length} actualizados + ${currentSprintIssues.length} del sprint actual)`);
 
     // 5. Procesar épicas actualizadas
     const updatedEpics = allIssues.filter(issue => 
@@ -238,8 +290,11 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
       }
     }
 
-    // 6. Procesar issues (incluyendo los de sprints activos)
-    const { successCount, errorCount } = await processIssuesWithClient(squadId, allIssues, jiraClient);
+    // 6. Procesar issues (incluyendo los del sprint actual)
+    // Usar modo batch optimizado para mejor rendimiento
+    logger.info(`🔄 Procesando ${allIssues.length} issues del delta (modo BATCH optimizado)...`);
+    const { processIssuesWithClientBatch } = await import('../processors/issue-processor.js');
+    const { successCount, errorCount } = await processIssuesWithClientBatch(squadId, allIssues, jiraClient);
 
     // 7. Registrar finalización
     await supabaseClient.logSync(squadId, 'incremental', 'completed', successCount);
@@ -247,6 +302,7 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.success(`✅ Sincronización incremental finalizada para ${project.projectKey} en ${duration}s`);
     logger.success(`   📊 Issues procesados: ${successCount} exitosos, ${errorCount} errores`);
+    logger.info(`   📈 Solo se actualizaron issues con cambios reales (comparación inteligente)`);
 
     return {
       success: true,

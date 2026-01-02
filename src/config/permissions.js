@@ -10,7 +10,9 @@ export const MODULES = {
   STRATA: 'strata',
   USER_ADMIN: 'user-admin',
   PROJECTS_METRICS: 'projects-metrics',
-  DEVELOPER_METRICS: 'developer-metrics'
+  DEVELOPER_METRICS: 'developer-metrics',
+  KPIS: 'kpis',
+  SOFTWARE_ENGINEERING_BENCHMARKS: 'software-engineering-benchmarks'
 };
 
 /**
@@ -26,7 +28,9 @@ export const ROLE_PERMISSIONS = {
     MODULES.STRATA,
     MODULES.USER_ADMIN,
     MODULES.PROJECTS_METRICS,
-    MODULES.DEVELOPER_METRICS
+    MODULES.DEVELOPER_METRICS,
+    MODULES.KPIS,
+    MODULES.SOFTWARE_ENGINEERING_BENCHMARKS
   ],
   
   // stakeholder: puede ver todo EXCEPTO User Administration
@@ -36,12 +40,15 @@ export const ROLE_PERMISSIONS = {
     MODULES.DELIVERY,
     MODULES.STRATA,
     MODULES.PROJECTS_METRICS,
-    MODULES.DEVELOPER_METRICS
+    MODULES.DEVELOPER_METRICS,
+    MODULES.KPIS,
+    MODULES.SOFTWARE_ENGINEERING_BENCHMARKS
   ],
   
-  // regular: solo puede ver Overview
+  // regular: solo puede ver Overview (temporalmente incluye KPIs para desarrollo)
   regular: [
-    MODULES.OVERALL
+    MODULES.OVERALL,
+    MODULES.KPIS  // Temporal para desarrollo - remover en producción
   ],
   
   // 3amigos: puede ver todo EXCEPTO User Administration
@@ -51,7 +58,9 @@ export const ROLE_PERMISSIONS = {
     MODULES.DELIVERY,
     MODULES.STRATA,
     MODULES.PROJECTS_METRICS,
-    MODULES.DEVELOPER_METRICS
+    MODULES.DEVELOPER_METRICS,
+    MODULES.KPIS,
+    MODULES.SOFTWARE_ENGINEERING_BENCHMARKS
   ],
   
   // pm: puede ver todo EXCEPTO User Administration, y tiene acceso a Projects Metrics y Developer Metrics
@@ -61,7 +70,9 @@ export const ROLE_PERMISSIONS = {
     MODULES.DELIVERY,
     MODULES.STRATA,
     MODULES.PROJECTS_METRICS,
-    MODULES.DEVELOPER_METRICS
+    MODULES.DEVELOPER_METRICS,
+    MODULES.KPIS,
+    MODULES.SOFTWARE_ENGINEERING_BENCHMARKS
   ]
 };
 
@@ -103,7 +114,9 @@ export const getNavbarModules = (role) => {
     [MODULES.STRATA]: { id: 'strata', label: 'Strata Mapping', icon: 'Map' },
     [MODULES.USER_ADMIN]: { id: 'user-admin', label: 'User Administration', icon: 'Users' },
     [MODULES.PROJECTS_METRICS]: { id: 'projects-metrics', label: 'Projects Metrics', icon: 'BarChart' },
-    [MODULES.DEVELOPER_METRICS]: { id: 'developer-metrics', label: 'Developer Metrics', icon: 'Activity' }
+    [MODULES.DEVELOPER_METRICS]: { id: 'developer-metrics', label: 'Developer Metrics', icon: 'Activity' },
+    [MODULES.KPIS]: { id: 'kpis', label: 'KPIs', icon: 'Gauge' },
+    [MODULES.SOFTWARE_ENGINEERING_BENCHMARKS]: { id: 'software-engineering-benchmarks', label: 'Software Engineering Benchmark', icon: 'TrendingUp' }
   };
   
   return modules.map(module => moduleInfo[module]).filter(Boolean);

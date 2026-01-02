@@ -31,5 +31,7 @@ playwright-report
 playwright/.cache
 
 # Environment
+.env
 .env.local
 .env.*.local
+temp_benchmark.txt

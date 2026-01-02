@@ -8,6 +8,7 @@ const KPICard = ({ title, value, label, icon: Icon, trend, color }) => {
         purple: 'from-purple-500/20 to-purple-600/5 border-purple-500/20 text-purple-400',
         emerald: 'from-emerald-500/20 to-emerald-600/5 border-emerald-500/20 text-emerald-400',
         rose: 'from-rose-500/20 to-rose-600/5 border-rose-500/20 text-rose-400',
+        amber: 'from-amber-500/20 to-amber-600/5 border-amber-500/20 text-amber-400',
     };
 
     const theme = colorMap[color] || colorMap.blue;
@@ -15,12 +16,12 @@ const KPICard = ({ title, value, label, icon: Icon, trend, color }) => {
     return (
         <motion.div
             whileHover={{ y: -5 }}
-            className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${theme} p-6 backdrop-blur-sm`}
+            className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${theme} p-6 backdrop-blur-sm glass`}
         >
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-sm font-medium text-muted-foreground">{title}</p>
-                    <h3 className="text-3xl font-bold mt-2 text-foreground">{value}</h3>
+                    <p className="text-sm font-medium text-slate-400">{title}</p>
+                    <h3 className="text-3xl font-bold mt-2 text-white">{value}</h3>
                 </div>
                 <div className={`p-3 rounded-xl bg-white/5 ${theme.split(' ').pop()}`}>
                     <Icon size={24} />
@@ -34,7 +35,7 @@ const KPICard = ({ title, value, label, icon: Icon, trend, color }) => {
                         {trend === 'positive' ? '+2.5%' : '-1.2%'}
                     </span>
                 )}
-                <span className="text-xs text-muted-foreground">{label}</span>
+                <span className="text-xs text-slate-400">{label}</span>
             </div>
         </motion.div>
     );

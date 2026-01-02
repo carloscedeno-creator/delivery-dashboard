@@ -119,13 +119,24 @@ export const getDevelopersForSquad = async (squadId) => {
 
 /**
  * Obtiene métricas de un desarrollador específico
- * @param {number} developerId - ID del desarrollador
- * @param {number} squadId - ID del squad (opcional)
- * @param {number} sprintId - ID del sprint (opcional)
+ * @param {string} developerId - UUID del desarrollador
+ * @param {string} squadId - UUID del squad (opcional)
+ * @param {string} sprintId - UUID del sprint (opcional)
  */
 export const getDeveloperMetricsData = async (developerId, squadId = null, sprintId = null) => {
   if (!supabase) {
     throw new Error('Supabase no está configurado');
+  }
+
+  if (!developerId) {
+    throw new Error('Developer ID es requerido');
+  }
+
+  // Validar que el ID sea un UUID válido (formato básico)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof developerId !== 'string' || !uuidRegex.test(developerId)) {
+    console.error('[DEVELOPER_METRICS] ID inválido:', developerId, typeof developerId);
+    throw new Error(`ID de desarrollador inválido: ${developerId}. Debe ser un UUID válido.`);
   }
 
   try {
@@ -325,10 +336,22 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
 
 /**
  * Obtiene información de un desarrollador por ID
+ * @param {string} developerId - UUID del desarrollador
  */
 export const getDeveloperById = async (developerId) => {
   if (!supabase) {
     throw new Error('Supabase no está configurado');
+  }
+
+  if (!developerId) {
+    throw new Error('Developer ID es requerido');
+  }
+
+  // Validar que el ID sea un UUID válido (formato básico)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof developerId !== 'string' || !uuidRegex.test(developerId)) {
+    console.error('[DEVELOPER_METRICS] ID inválido:', developerId, typeof developerId);
+    throw new Error(`ID de desarrollador inválido: ${developerId}. Debe ser un UUID válido.`);
   }
 
   try {
