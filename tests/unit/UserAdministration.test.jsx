@@ -2,7 +2,7 @@
  * Tests unitarios para UserAdministration component
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import UserAdministration from '../../src/components/UserAdministration';
 
 // Mock de supabase - debe estar definido antes del vi.mock
@@ -43,7 +43,9 @@ describe('UserAdministration', () => {
             })
         });
 
-        render(<UserAdministration currentUser={mockCurrentUser} />);
+        await act(async () => {
+            render(<UserAdministration currentUser={mockCurrentUser} />);
+        });
         
         await waitFor(() => {
             expect(screen.getByText(/User Administration/i)).toBeInTheDocument();
@@ -51,12 +53,33 @@ describe('UserAdministration', () => {
         }, { timeout: 3000 });
     });
 
-    it('debe mostrar loading inicialmente', () => {
-        render(<UserAdministration currentUser={mockCurrentUser} />);
+    it('debe mostrar loading inicialmente', async () => {
+        const { supabase } = await import('../../src/utils/supabaseApi');
+        // Mock que resuelve lentamente para mantener el estado de loading
+        vi.mocked(supabase.from).mockReturnValue({
+            select: vi.fn().mockReturnValue({
+                order: vi.fn(() => new Promise(resolve => {
+                    // Delay para mantener el estado de loading
+                    setTimeout(() => resolve({ data: [], error: null }), 100);
+                }))
+            })
+        });
+
+        let container;
+        await act(async () => {
+            const result = render(<UserAdministration currentUser={mockCurrentUser} />);
+            container = result.container;
+        });
         
         // El componente muestra un spinner mientras carga
-        const spinner = document.querySelector('.animate-spin');
-        expect(spinner).toBeInTheDocument();
+        // Verificar inmediatamente después del render antes de que termine la carga
+        const spinner = container.querySelector('.animate-spin');
+        expect(spinner).toBeTruthy();
+        
+        // Esperar a que termine la carga
+        await waitFor(() => {
+            expect(screen.queryByText(/User Administration/i)).toBeInTheDocument();
+        }, { timeout: 3000 });
     });
 
     it('debe manejar errores de carga correctamente', async () => {
@@ -67,7 +90,9 @@ describe('UserAdministration', () => {
             })
         });
 
-        render(<UserAdministration currentUser={mockCurrentUser} />);
+        await act(async () => {
+            render(<UserAdministration currentUser={mockCurrentUser} />);
+        });
         
         await waitFor(() => {
             expect(screen.getByText(/Error loading users/i)).toBeInTheDocument();
@@ -106,7 +131,9 @@ describe('UserAdministration', () => {
             })
         });
 
-        render(<UserAdministration currentUser={mockCurrentUser} />);
+        await act(async () => {
+            render(<UserAdministration currentUser={mockCurrentUser} />);
+        });
         
         await waitFor(() => {
             expect(screen.getByText('User One')).toBeInTheDocument();
@@ -137,7 +164,9 @@ describe('UserAdministration', () => {
             })
         });
 
-        render(<UserAdministration currentUser={mockCurrentUser} />);
+        await act(async () => {
+            render(<UserAdministration currentUser={mockCurrentUser} />);
+        });
         
         await waitFor(() => {
             expect(screen.getByText('Test User')).toBeInTheDocument();
@@ -155,7 +184,9 @@ describe('UserAdministration', () => {
             })
         });
 
-        render(<UserAdministration currentUser={mockCurrentUser} />);
+        await act(async () => {
+            render(<UserAdministration currentUser={mockCurrentUser} />);
+        });
         
         await waitFor(() => {
             expect(screen.getByText(/No users found/i)).toBeInTheDocument();

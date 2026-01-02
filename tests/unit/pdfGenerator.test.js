@@ -146,7 +146,7 @@ describe('pdfGenerator', () => {
   describe('getIssuesForPDF', () => {
     it('debe retornar error si supabase no está configurado', async () => {
       await expect(getIssuesForPDF('squad1', 'sprint1', null)).rejects.toThrow(
-        'Supabase no está configurado'
+        'Supabase is not configured'
       );
     });
 
