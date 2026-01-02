@@ -25,25 +25,25 @@ const DeveloperMetrics = () => {
   const [developerInfo, setDeveloperInfo] = useState(null);
   const [error, setError] = useState(null);
 
-  // Cargar squads al inicio
+  // Load squads on start
   useEffect(() => {
     const loadSquads = async () => {
       try {
         setError(null);
         setLoading(true);
-        console.log('🟢 [DeveloperMetrics] Cargando squads...');
+        console.log('🟢 [DeveloperMetrics] Loading squads...');
         const data = await getSquads();
-        console.log('🟢 [DeveloperMetrics] Squads cargados:', data);
+        console.log('🟢 [DeveloperMetrics] Squads loaded:', data);
         setSquads(data);
         if (data.length > 0) {
           setSelectedSquad(data[0].id);
-          console.log('🟢 [DeveloperMetrics] Squad seleccionado:', data[0].id, data[0].squad_name);
+          console.log('🟢 [DeveloperMetrics] Squad selected:', data[0].id, data[0].squad_name);
         } else {
-          setError('No se encontraron squads. Verifica que Supabase esté configurado correctamente.');
+          setError('No squads found. Verify that Supabase is configured correctly.');
         }
       } catch (error) {
-        console.error('🔴 [DeveloperMetrics] Error cargando squads:', error);
-        setError(`Error cargando squads: ${error.message}. Verifica que Supabase esté configurado correctamente.`);
+        console.error('🔴 [DeveloperMetrics] Error loading squads:', error);
+        setError(`Error loading squads: ${error.message}. Verify that Supabase is configured correctly.`);
       } finally {
         setLoading(false);
       }
@@ -51,7 +51,7 @@ const DeveloperMetrics = () => {
     loadSquads();
   }, []);
 
-  // Cargar sprints cuando se selecciona un squad
+  // Load sprints when a squad is selected
   useEffect(() => {
     if (!selectedSquad) {
       setSprints([]);
@@ -61,28 +61,28 @@ const DeveloperMetrics = () => {
 
     const loadSprints = async () => {
       try {
-        console.log('🟢 [DeveloperMetrics] Cargando sprints para squad:', selectedSquad);
+        console.log('🟢 [DeveloperMetrics] Loading sprints for squad:', selectedSquad);
         const data = await getSprintsForSquad(selectedSquad);
-        console.log('🟢 [DeveloperMetrics] Sprints cargados:', data);
+        console.log('🟢 [DeveloperMetrics] Sprints loaded:', data);
         setSprints(data);
-        // Seleccionar sprint actual si existe
+        // Select current sprint if it exists
         const currentSprint = data.find(s => s.is_active);
         if (currentSprint) {
           setSelectedSprint(currentSprint.id);
-          console.log('🟢 [DeveloperMetrics] Sprint actual seleccionado:', currentSprint.id, currentSprint.sprint_name);
+          console.log('🟢 [DeveloperMetrics] Current sprint selected:', currentSprint.id, currentSprint.sprint_name);
         } else if (data.length > 0) {
           setSelectedSprint(data[0].id);
-          console.log('🟢 [DeveloperMetrics] Primer sprint seleccionado:', data[0].id, data[0].sprint_name);
+          console.log('🟢 [DeveloperMetrics] First sprint selected:', data[0].id, data[0].sprint_name);
         }
       } catch (error) {
-        console.error('🔴 [DeveloperMetrics] Error cargando sprints:', error);
+        console.error('🔴 [DeveloperMetrics] Error loading sprints:', error);
         setSprints([]);
       }
     };
     loadSprints();
   }, [selectedSquad]);
 
-  // Cargar developers cuando se selecciona un squad
+  // Load developers when a squad is selected
   useEffect(() => {
     if (!selectedSquad) {
       setDevelopers([]);
@@ -93,28 +93,28 @@ const DeveloperMetrics = () => {
     const loadDevelopers = async () => {
       try {
         setError(null);
-        console.log('🟢 [DeveloperMetrics] Cargando developers para squad:', selectedSquad);
+        console.log('🟢 [DeveloperMetrics] Loading developers for squad:', selectedSquad);
         const data = await getDevelopersForSquad(selectedSquad);
-        console.log('🟢 [DeveloperMetrics] Developers cargados:', data);
+        console.log('🟢 [DeveloperMetrics] Developers loaded:', data);
         setDevelopers(data);
         if (data.length > 0 && !selectedDeveloper) {
           setSelectedDeveloper(data[0].id);
-          console.log('🟢 [DeveloperMetrics] Developer seleccionado:', data[0].id, data[0].display_name);
+          console.log('🟢 [DeveloperMetrics] Developer selected:', data[0].id, data[0].display_name);
         } else if (data.length === 0) {
-          setError('No se encontraron desarrolladores para este squad.');
+          setError('No developers found for this squad.');
         }
         setLoading(false);
       } catch (error) {
-        console.error('🔴 [DeveloperMetrics] Error cargando developers:', error);
+        console.error('🔴 [DeveloperMetrics] Error loading developers:', error);
         setDevelopers([]);
-        setError(`Error cargando desarrolladores: ${error.message}`);
+        setError(`Error loading developers: ${error.message}`);
         setLoading(false);
       }
     };
     loadDevelopers();
   }, [selectedSquad]);
 
-  // Cargar métricas cuando cambian los filtros
+  // Load metrics when filters change
   useEffect(() => {
     if (!selectedDeveloper) {
       setMetricsData(null);
@@ -125,26 +125,26 @@ const DeveloperMetrics = () => {
     const loadMetrics = async () => {
       try {
         setLoading(true);
-        console.log('🟢 [DeveloperMetrics] Cargando métricas para developer:', selectedDeveloper, 'squad:', selectedSquad, 'sprint:', selectedSprint);
+        console.log('🟢 [DeveloperMetrics] Loading metrics for developer:', selectedDeveloper, 'squad:', selectedSquad, 'sprint:', selectedSprint);
         
-        // Obtener info del developer
+        // Get developer info
         const devInfo = await getDeveloperById(selectedDeveloper);
         console.log('🟢 [DeveloperMetrics] Developer info:', devInfo);
         setDeveloperInfo(devInfo);
 
-        // Obtener métricas
+        // Get metrics
         const data = await getDeveloperMetricsData(
           selectedDeveloper,
           selectedSquad,
           selectedSprint
         );
         
-        console.log('🟢 [DeveloperMetrics] Métricas cargadas:', data);
+        console.log('🟢 [DeveloperMetrics] Metrics loaded:', data);
         setMetricsData(data);
       } catch (error) {
-        console.error('🔴 [DeveloperMetrics] Error cargando métricas:', error);
+        console.error('🔴 [DeveloperMetrics] Error loading metrics:', error);
         setMetricsData(null);
-        setError(`Error cargando métricas: ${error.message}`);
+        setError(`Error loading metrics: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -237,7 +237,7 @@ const DeveloperMetrics = () => {
           <div className="flex items-center gap-3 text-rose-400">
             <AlertCircle size={24} />
             <div>
-              <h3 className="text-lg font-semibold">Error cargando métricas</h3>
+              <h3 className="text-lg font-semibold">Error loading metrics</h3>
               <p className="text-sm text-slate-400 mt-1">{error}</p>
             </div>
           </div>

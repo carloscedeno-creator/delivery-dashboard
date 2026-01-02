@@ -8,13 +8,13 @@ import { Q1_2026_TARGETS } from '../config/kpiConfig';
 
 /**
  * Componente de Quality KPIs
- * Muestra el Development Quality Score y sus métricas componentes
+ * Shows the Development Quality Score and its component metrics
  */
 const QualityKPIs = () => {
   const [kpiData, setKpiData] = useState(mockQualityKPIData);
   const [loading, setLoading] = useState(true);
 
-  // TODO: Cargar datos reales desde API
+  // TODO: Load real data from API
   useEffect(() => {
     // Por ahora usamos mock data
     setLoading(false);
@@ -25,13 +25,13 @@ const QualityKPIs = () => {
   const scoreLevel = getScoreLevel(qualityScore);
   const scoreColor = getScoreColor(qualityScore);
 
-  // Determinar si está en target
+  // Determine if it's on target
   const isOnTarget = qualityScore >= Q1_2026_TARGETS.DEVELOPMENT_QUALITY;
   const isCritical = qualityScore < 60;
 
   return (
     <div className="space-y-6">
-      {/* Alerta si está en nivel crítico */}
+      {/* Alert if at critical level */}
       {isCritical && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -40,9 +40,9 @@ const QualityKPIs = () => {
         >
           <AlertCircle className="text-rose-400" size={24} />
           <div>
-            <p className="text-rose-400 font-semibold">Atención Requerida</p>
+            <p className="text-rose-400 font-semibold">Attention Required</p>
             <p className="text-slate-300 text-sm">
-              El Development Quality Score está por debajo de 60. Se requiere acción correctiva urgente.
+              Development Quality Score is below 60. Urgent corrective action required.
             </p>
           </div>
         </motion.div>
@@ -66,7 +66,7 @@ const QualityKPIs = () => {
           </div>
         </div>
 
-        {/* Score grande con semáforo */}
+        {/* Large score with traffic light */}
         <div className="flex items-center gap-8">
           <div className="relative">
             <div className={`text-7xl font-bold ${
@@ -80,7 +80,7 @@ const QualityKPIs = () => {
             <div className="text-slate-400 text-sm mt-1">/ 100</div>
           </div>
 
-          {/* Semáforo visual */}
+          {/* Visual traffic light */}
           <div className="flex gap-2">
             {['emerald', 'blue', 'amber', 'rose'].map((color) => (
               <div
@@ -110,18 +110,18 @@ const QualityKPIs = () => {
           </div>
         </div>
 
-        {/* Descripción del nivel */}
+        {/* Level description */}
         <div className="mt-6 pt-6 border-t border-slate-700/50">
           <p className="text-slate-300 text-sm">
-            {scoreLevel.label === 'Elite' && 'Calidad excepcional. El equipo está entregando código de alta calidad con mínimos errores.'}
-            {scoreLevel.label === 'Good' && 'Cumpliendo con el target. El equipo mantiene buenos estándares de calidad.'}
-            {scoreLevel.label === 'Fair' && 'Necesita mejora. Hay oportunidades para mejorar la calidad del código y reducir errores.'}
-            {scoreLevel.label === 'Poor' && 'Requiere atención urgente. Se necesitan acciones correctivas inmediatas para mejorar la calidad.'}
+            {scoreLevel.label === 'Elite' && 'Exceptional quality. The team is delivering high-quality code with minimal errors.'}
+            {scoreLevel.label === 'Good' && 'Meeting target. The team maintains good quality standards.'}
+            {scoreLevel.label === 'Fair' && 'Needs improvement. There are opportunities to improve code quality and reduce errors.'}
+            {scoreLevel.label === 'Poor' && 'Requires urgent attention. Immediate corrective actions are needed to improve quality.'}
           </p>
         </div>
       </div>
 
-      {/* Métricas Componentes */}
+      {/* Component Metrics */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4">Métricas Componentes</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -18,7 +18,7 @@ const DeliveryKPIs = () => {
   const [kpiData, setKpiData] = useState(mockDeliveryKPIData);
   const [loading, setLoading] = useState(true);
 
-  // Cargar datos reales desde API
+  // Load real data from API
   useEffect(() => {
     const loadKPIData = async () => {
       try {
@@ -48,7 +48,7 @@ const DeliveryKPIs = () => {
   if (loading) {
     return (
       <div className="glass rounded-2xl p-12 text-center">
-        <p className="text-slate-400 text-lg">Cargando métricas de Delivery...</p>
+        <p className="text-slate-400 text-lg">Loading Delivery metrics...</p>
       </div>
     );
   }

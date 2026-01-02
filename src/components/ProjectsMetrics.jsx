@@ -49,12 +49,12 @@ const ProjectsMetrics = () => {
     'Unknown': '#6b7280'        // Gray
   };
 
-  // Cargar squads al montar
+  // Load squads on mount
   useEffect(() => {
     loadSquads();
   }, []);
 
-  // Cargar sprints cuando se selecciona un squad
+  // Load sprints when a squad is selected
   useEffect(() => {
     if (selectedSquad) {
       loadSprints(selectedSquad);
@@ -65,7 +65,7 @@ const ProjectsMetrics = () => {
     }
   }, [selectedSquad]);
 
-  // Cargar métricas cuando cambian los filtros
+  // Load metrics when filters change
   useEffect(() => {
     if (selectedSquad) {
       loadMetrics();
@@ -83,7 +83,7 @@ const ProjectsMetrics = () => {
         setSelectedSquad(data[0].id);
       }
     } catch (error) {
-      console.error('[ProjectsMetrics] Error cargando squads:', error);
+      console.error('[ProjectsMetrics] Error loading squads:', error);
     }
   };
 
@@ -97,7 +97,7 @@ const ProjectsMetrics = () => {
         setSelectedSprint(currentSprint.id);
       }
     } catch (error) {
-      console.error('[ProjectsMetrics] Error cargando sprints:', error);
+      console.error('[ProjectsMetrics] Error loading sprints:', error);
     }
   };
 
@@ -106,7 +106,7 @@ const ProjectsMetrics = () => {
       const data = await getSquadById(squadId);
       setSquadInfo(data);
     } catch (error) {
-      console.error('[ProjectsMetrics] Error cargando info del squad:', error);
+      console.error('[ProjectsMetrics] Error loading squad info:', error);
     }
   };
 
@@ -115,7 +115,7 @@ const ProjectsMetrics = () => {
       const data = await getSprintById(sprintId);
       setSprintInfo(data);
     } catch (error) {
-      console.error('[ProjectsMetrics] Error cargando info del sprint:', error);
+      console.error('[ProjectsMetrics] Error loading sprint info:', error);
     }
   };
 
@@ -125,7 +125,7 @@ const ProjectsMetrics = () => {
       const data = await getProjectMetricsData(selectedSquad, selectedSprint);
       setMetricsData(data);
     } catch (error) {
-      console.error('[ProjectsMetrics] Error cargando métricas:', error);
+      console.error('[ProjectsMetrics] Error loading metrics:', error);
     } finally {
       setLoading(false);
     }
@@ -180,7 +180,7 @@ const ProjectsMetrics = () => {
     return `Dev Team Metrics - ${squadInfo.squad_name}`;
   }, [squadInfo, sprintInfo]);
 
-  // Función para descargar el PDF
+  // Function to download PDF
   const handleDownloadPDF = async () => {
     if (!selectedSquad || !selectedSprint || !metricsData) {
       return;

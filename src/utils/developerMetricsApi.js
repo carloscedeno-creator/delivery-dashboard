@@ -10,7 +10,7 @@ import { supabase } from './supabaseApi';
  */
 export const getSquads = async () => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -22,7 +22,7 @@ export const getSquads = async () => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo squads:', error);
+    console.error('[DEVELOPER_METRICS] Error getting squads:', error);
     throw error;
   }
 };
@@ -32,7 +32,7 @@ export const getSquads = async () => {
  */
 export const getSprintsForSquad = async (squadId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -54,7 +54,7 @@ export const getSprintsForSquad = async (squadId) => {
     
     return sprintsWithCurrent;
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo sprints:', error);
+    console.error('[DEVELOPER_METRICS] Error getting sprints:', error);
     throw error;
   }
 };
@@ -64,7 +64,7 @@ export const getSprintsForSquad = async (squadId) => {
  */
 export const getDevelopersForSquad = async (squadId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -112,24 +112,24 @@ export const getDevelopersForSquad = async (squadId) => {
 
     return (developers || []).filter(d => squadAssigneeIds.includes(d.id));
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo developers:', error);
+    console.error('[DEVELOPER_METRICS] Error getting developers:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene métricas de un desarrollador específico
+ * Gets metrics for a specific developer
  * @param {string} developerId - UUID del desarrollador
  * @param {string} squadId - UUID del squad (opcional)
  * @param {string} sprintId - UUID del sprint (opcional)
  */
 export const getDeveloperMetricsData = async (developerId, squadId = null, sprintId = null) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   if (!developerId) {
-    throw new Error('Developer ID es requerido');
+    throw new Error('Developer ID is required');
   }
 
   // Validar que el ID sea un UUID válido (formato básico)
@@ -152,7 +152,7 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       if (sprintError) throw sprintError;
       sprintName = sprint?.sprint_name?.trim();
       
-      console.log('[DEVELOPER_METRICS] Sprint seleccionado:', {
+      console.log('[DEVELOPER_METRICS] Selected sprint:', {
         sprintId,
         sprintName,
         sprintNameLength: sprintName?.length
@@ -216,7 +216,7 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       // Usar el nombre trimmeado para la comparación
       query = query.eq('current_sprint', trimmedSprintName);
     } else {
-      console.log('[DEVELOPER_METRICS] ⚠️ No hay sprint seleccionado, obteniendo TODOS los issues del developer (sin filtrar por sprint)');
+      console.log('[DEVELOPER_METRICS] ⚠️ No sprint selected, getting ALL developer issues (without sprint filter)');
     }
 
     const { data: issues, error } = await query;
@@ -247,7 +247,7 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       });
     }
     
-    console.log('[DEVELOPER_METRICS] Issues después de filtrar por squad:', {
+    console.log('[DEVELOPER_METRICS] Issues after filtering by squad:', {
       total: filteredIssues.length,
       sprintNameFilter: sprintName,
       uniqueCurrentSprints: [...new Set(filteredIssues.map(i => i.current_sprint).filter(Boolean))],
@@ -329,7 +329,7 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       statusBreakdown
     };
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo métricas:', error);
+    console.error('[DEVELOPER_METRICS] Error getting metrics:', error);
     throw error;
   }
 };
@@ -340,11 +340,11 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
  */
 export const getDeveloperById = async (developerId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   if (!developerId) {
-    throw new Error('Developer ID es requerido');
+    throw new Error('Developer ID is required');
   }
 
   // Validar que el ID sea un UUID válido (formato básico)
@@ -364,7 +364,7 @@ export const getDeveloperById = async (developerId) => {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo developer:', error);
+    console.error('[DEVELOPER_METRICS] Error getting developer:', error);
     throw error;
   }
 };

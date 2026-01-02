@@ -24,9 +24,9 @@ const Navbar = ({ activeView, setActiveView }) => {
         icon: iconMap[module.icon] || Layout
     }));
     
-    // Debug: Log para verificar módulos disponibles
-    console.log('🔵 [Navbar] Usuario:', currentUser?.displayName || 'No autenticado', 'Rol:', userRole);
-    console.log('🔵 [Navbar] Módulos disponibles:', navItems.map(m => m.label));
+    // Debug: Log to verify available modules
+    console.log('🔵 [Navbar] User:', currentUser?.displayName || 'Not authenticated', 'Role:', userRole);
+    console.log('🔵 [Navbar] Available modules:', navItems.map(m => m.label));
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 px-8 py-4 flex justify-between items-center backdrop-blur-md bg-slate-900/80">

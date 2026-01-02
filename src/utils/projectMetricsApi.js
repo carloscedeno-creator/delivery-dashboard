@@ -75,7 +75,7 @@ function normalizeStatus(status) {
  */
 export const getSquads = async () => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -87,7 +87,7 @@ export const getSquads = async () => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('[PROJECT_METRICS] Error obteniendo squads:', error);
+    console.error('[PROJECT_METRICS] Error getting squads:', error);
     throw error;
   }
 };
@@ -97,7 +97,7 @@ export const getSquads = async () => {
  */
 export const getSprintsForSquad = async (squadId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -122,22 +122,22 @@ export const getSprintsForSquad = async (squadId) => {
 
     return sprintsWithCurrent;
   } catch (error) {
-    console.error('[PROJECT_METRICS] Error obteniendo sprints:', error);
+    console.error('[PROJECT_METRICS] Error getting sprints:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene métricas de issues por squad y sprint
- * Agrupa por Board State (current_status) sin filtrar por developer
+ * Gets issue metrics by squad and sprint
+ * Groups by Board State (current_status) without filtering by developer
  */
 export const getProjectMetricsData = async (squadId, sprintId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
-    console.log(`[PROJECT_METRICS] Obteniendo métricas para squad: ${squadId}, sprint: ${sprintId}`);
+    console.log(`[PROJECT_METRICS] Getting metrics for squad: ${squadId}, sprint: ${sprintId}`);
 
     // Obtener initiative_ids del squad si está seleccionado
     let initiativeIds = null;
@@ -297,7 +297,7 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       epicMetrics: epicMetrics // Métricas por épica
     };
   } catch (error) {
-    console.error('[PROJECT_METRICS] Error obteniendo métricas:', error);
+    console.error('[PROJECT_METRICS] Error getting metrics:', error);
     throw error;
   }
 };
@@ -357,7 +357,7 @@ async function calculateEpicMetrics(issues, sprintName, squadId) {
         }
       }
     } catch (error) {
-      console.error('[PROJECT_METRICS] Error obteniendo issues lifetime:', error);
+      console.error('[PROJECT_METRICS] Error getting issues lifetime:', error);
       // Continuar con solo los issues del sprint si falla
     }
   }
@@ -365,14 +365,14 @@ async function calculateEpicMetrics(issues, sprintName, squadId) {
   // Agrupar issues por iniciativa para lifetime
   const epicMap = new Map();
 
-  // Identificar épicas que tienen tickets en el sprint seleccionado
+  // Identify epics that have tickets in the selected sprint
   const epicIdsInSprint = new Set(issues.map(i => i.initiative_id).filter(Boolean));
   
   // Primero, procesar todos los issues (lifetime) - solo épicas que tienen tickets en el sprint
   // Para evitar mostrar épicas que no tienen trabajo en el sprint
   allEpicIssues.forEach(issue => {
     const epicId = issue.initiative_id;
-    // Solo procesar épicas que tienen tickets en el sprint seleccionado
+    // Only process epics that have tickets in the selected sprint
     if (!epicId || !epicIdsInSprint.has(epicId)) return;
     
     const epicName = issue.initiatives?.initiative_name || 'Sin Iniciativa';
@@ -433,7 +433,7 @@ async function calculateEpicMetrics(issues, sprintName, squadId) {
     const currentStatus = issue.current_status || 'Unknown';
     const isCompleted = isDevDone(currentStatus);
 
-    // Métricas del sprint (solo si hay sprint seleccionado y el ticket está en el sprint)
+    // Sprint metrics (only if sprint is selected and ticket is in sprint)
     if (sprintName && issue.current_sprint === sprintName) {
       // Verificar si se completó durante este sprint usando status_by_sprint
       const statusBySprint = issue.status_by_sprint || {};
@@ -488,7 +488,7 @@ async function calculateEpicMetrics(issues, sprintName, squadId) {
  */
 export const getSquadById = async (squadId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -501,7 +501,7 @@ export const getSquadById = async (squadId) => {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('[PROJECT_METRICS] Error obteniendo squad:', error);
+    console.error('[PROJECT_METRICS] Error getting squad:', error);
     throw error;
   }
 };
@@ -511,7 +511,7 @@ export const getSquadById = async (squadId) => {
  */
 export const getSprintById = async (sprintId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -524,7 +524,7 @@ export const getSprintById = async (sprintId) => {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('[PROJECT_METRICS] Error obteniendo sprint:', error);
+    console.error('[PROJECT_METRICS] Error getting sprint:', error);
     throw error;
   }
 };

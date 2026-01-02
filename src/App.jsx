@@ -66,14 +66,14 @@ function App() {
         
         if (!allowedModules.includes(activeView)) {
             // Si el módulo actual no está permitido, redirigir al primer módulo permitido
-            console.warn(`[APP] Módulo ${activeView} no permitido para rol ${userRole}, redirigiendo a ${allowedModules[0]}`);
+            console.warn(`[APP] Module ${activeView} not allowed for role ${userRole}, redirecting to ${allowedModules[0]}`);
             setActiveView(allowedModules[0] || 'overall');
         }
     }, []);
     
     // Debug: Log cuando projectData cambia
     useEffect(() => {
-        console.log('🟡 [APP] projectData CAMBIÓ:', {
+        console.log('🟡 [APP] projectData CHANGED:', {
             length: projectData?.length || 0,
             isArray: Array.isArray(projectData),
             activeView,
@@ -106,12 +106,12 @@ function App() {
                 if (source === 'db') {
                     // Cargar desde Supabase (Base de Datos)
                     try {
-                        console.log('[APP] 🔄 Cargando datos desde Base de Datos (Supabase)...');
+                        console.log('[APP] 🔄 Loading data from Database (Supabase)...');
                         
-                        // Verificar que Supabase esté configurado antes de intentar cargar
+                        // Verify that Supabase is configured before attempting to load
                         const { supabase } = await import('./utils/supabaseApi.js');
                         if (!supabase) {
-                            throw new Error('Supabase no está configurado. Verifica las variables de entorno VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
+                            throw new Error('Supabase is not configured. Check environment variables VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
                         }
                         
                         const [deliveryData, allocationData] = await Promise.all([
@@ -121,7 +121,7 @@ function App() {
                         
                         // Validar que realmente hay datos
                         if (!deliveryData || deliveryData.length === 0) {
-                            throw new Error('Base de datos retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
+                            throw new Error('Database returned empty data. Verify that the sync service has run.');
                         }
                         
                         console.log('[APP] 🔵 ANTES de setProjectData:', {
@@ -132,7 +132,7 @@ function App() {
                         setProjectData(deliveryData);
                         setDevAllocationData(allocationData);
                         setDataSource('db');
-                        console.log('[APP] ✅ Datos de delivery cargados desde Base de Datos:', {
+                        console.log('[APP] ✅ Delivery data loaded from Database:', {
                             projects: deliveryData.length,
                             allocations: allocationData.length,
                             sampleProject: deliveryData[0]?.initiative || 'N/A',
@@ -140,27 +140,27 @@ function App() {
                             sampleDelivery: deliveryData[0]?.delivery || 'N/A'
                         });
                     } catch (dbError) {
-                        // Si Supabase no está configurado o hay error, hacer fallback a CSV
-                        const isSupabaseNotConfigured = dbError.message?.includes('Supabase no está configurado') || 
-                                                       dbError.message?.includes('no está configurado');
+                        // If Supabase is not configured or there's an error, fallback to CSV
+                        const isSupabaseNotConfigured = dbError.message?.includes('Supabase is not configured') || 
+                                                       dbError.message?.includes('not configured');
                         
-                        console.warn('[APP] ⚠️ Error cargando desde Base de Datos:', dbError.message);
+                        console.warn('[APP] ⚠️ Error loading from Database:', dbError.message);
                         
                         if (isSupabaseNotConfigured) {
-                            console.info('[APP] ℹ️ Supabase no configurado, haciendo fallback a CSV...');
-                            // Hacer fallback automático a CSV
+                            console.info('[APP] ℹ️ Supabase not configured, falling back to CSV...');
+                            // Automatic fallback to CSV
                             throw new Error('FALLBACK_TO_CSV');
                         } else {
-                            // Para otros errores, mostrar mensaje pero también intentar fallback
-                            console.error('[APP] ❌ Error cargando desde Base de Datos:', dbError);
-                            setError(`Error cargando desde Base de Datos: ${dbError.message}. Intentando cargar desde CSV...`);
+                            // For other errors, show message but also try fallback
+                            console.error('[APP] ❌ Error loading from Database:', dbError);
+                            setError(`Error loading from Database: ${dbError.message}. Attempting to load from CSV...`);
                             throw new Error('FALLBACK_TO_CSV');
                         }
                     }
                 } else {
-                    // Cargar desde CSV
+                    // Load from CSV
                     try {
-                        console.log('[APP] 🔄 Cargando datos desde CSV...');
+                        console.log('[APP] 🔄 Loading data from CSV...');
                         const [projText, allocText] = await Promise.all([
                             fetchWithFallback(SHEET_URLS.project),
                             fetchWithFallback(SHEET_URLS.allocation)
@@ -170,19 +170,19 @@ function App() {
                         setDataSource('csv');
                         console.log('[APP] ✅ Datos de delivery cargados desde CSV');
                     } catch (csvError) {
-                        console.error('[APP] ❌ Error cargando CSV:', csvError);
-                        setError(`Error cargando CSV: ${csvError.message}`);
+                        console.error('[APP] ❌ Error loading CSV:', csvError);
+                        setError(`Error loading CSV: ${csvError.message}`);
                         throw csvError;
                     }
                 }
 
                 setLoading(false);
             } catch (err) {
-                // Si Supabase no está configurado, no establecer error aquí
-                // Dejar que el catch externo maneje el fallback a CSV
-                const isSupabaseNotConfigured = err.message?.includes('Supabase no está configurado');
+                // If Supabase is not configured, don't set error here
+                // Let external catch handle CSV fallback
+                const isSupabaseNotConfigured = err.message?.includes('Supabase is not configured');
                 if (!isSupabaseNotConfigured) {
-                    console.error("[APP] Error cargando datos:", err);
+                    console.error("[APP] Error loading data:", err);
                     setError(`Error: ${err.message}`);
                 }
                 setLoading(false);
@@ -197,7 +197,7 @@ function App() {
         
         const loadProductRoadmap = async () => {
             try {
-                console.log('[APP] 🔄 Cargando Product Roadmap desde CSV...');
+                console.log('[APP] 🔄 Loading Product Roadmap from CSV...');
                 const [prodInitText, prodBugText] = await Promise.all([
                     fetchWithFallback(SHEET_URLS.productInitiatives),
                     fetchWithFallback(SHEET_URLS.productBugRelease)
@@ -219,7 +219,7 @@ function App() {
                     setProductBugRelease(bugs);
                 }
             } catch (err) {
-                console.error('[APP] ❌ Error cargando Product Roadmap desde CSV:', err);
+                console.error('[APP] ❌ Error loading Product Roadmap from CSV:', err);
                 console.error('[APP] ❌ Error details:', {
                     message: err.message,
                     stack: err.stack,
@@ -246,21 +246,21 @@ function App() {
             try {
                 await loadData('db');
             } catch (dbError) {
-                // Si Supabase no está configurado, usar CSV silenciosamente
-                const isSupabaseNotConfigured = dbError.message?.includes('Supabase no está configurado');
+                // If Supabase is not configured, use CSV silently
+                const isSupabaseNotConfigured = dbError.message?.includes('Supabase is not configured');
                 if (isSupabaseNotConfigured) {
-                    console.info('[APP] ℹ️ Supabase no configurado, usando CSV como fuente de datos');
+                    console.info('[APP] ℹ️ Supabase not configured, using CSV as data source');
                 } else {
-                    console.warn('[APP] ⚠️ No se pudo cargar desde BD, intentando CSV...', dbError.message);
+                    console.warn('[APP] ⚠️ Could not load from DB, trying CSV...', dbError.message);
                 }
                 try {
                     // Limpiar error anterior antes de intentar CSV
                     setError(null);
                     await loadData('csv');
                 } catch (csvError) {
-                    console.error('[APP] ❌ Error cargando CSV:', csvError);
-                    // Si CSV también falla, mostrar error
-                    setError(`No se pudo cargar datos. Error: ${csvError.message}`);
+                    console.error('[APP] ❌ Error loading CSV:', csvError);
+                    // If CSV also fails, show error
+                    setError(`Could not load data. Error: ${csvError.message}`);
                 }
             }
         };
@@ -274,26 +274,26 @@ function App() {
             console.log(`[APP] 🔄 Cambiando fuente de datos de ${dataSource} a ${newSource}`);
             setError(null); // Limpiar errores anteriores
             
-            // Verificar si Supabase está configurado antes de intentar usar BD
+            // Verify if Supabase is configured before attempting to use DB
             if (newSource === 'db') {
                 try {
                     const { supabase } = await import('./utils/supabaseApi.js');
                     if (!supabase) {
-                        console.warn('[APP] ⚠️ Supabase no está configurado');
-                        setError('Supabase no está configurado. Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en tu archivo .env');
+                        console.warn('[APP] ⚠️ Supabase is not configured');
+                        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
                         // No cambiar el dataSource, mantener el actual
                         return;
                     }
                     // Intentar una consulta simple para verificar que funciona
                     const { error: testError } = await supabase.from('squads').select('id').limit(1);
                     if (testError && (testError.message?.includes('Invalid API key') || testError.message?.includes('JWT'))) {
-                        console.warn('[APP] ⚠️ Supabase configurado pero con credenciales inválidas');
-                        setError('Las credenciales de Supabase son inválidas. Verifica VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY');
+                        console.warn('[APP] ⚠️ Supabase configured but with invalid credentials');
+                        setError('Supabase credentials are invalid. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
                         return;
                     }
                 } catch (importError) {
                     console.error('[APP] ❌ Error importando Supabase:', importError);
-                    setError('No se pudo verificar la configuración de Supabase');
+                    setError('Could not verify Supabase configuration');
                     return;
                 }
             }
@@ -304,7 +304,7 @@ function App() {
             } catch (err) {
                 // Si hay un error y se solicitó fallback a CSV, hacerlo automáticamente
                 if (err.message === 'FALLBACK_TO_CSV' && newSource === 'db') {
-                    console.info('[APP] ℹ️ Haciendo fallback automático a CSV');
+                    console.info('[APP] ℹ️ Automatically falling back to CSV');
                     setDataSource('csv');
                     try {
                         await loadData('csv');
@@ -312,10 +312,10 @@ function App() {
                         setTimeout(() => setError(null), 3000);
                     } catch (csvError) {
                         console.error('[APP] ❌ Error en fallback a CSV:', csvError);
-                        setError(`Error cargando CSV: ${csvError.message}`);
+                        setError(`Error loading CSV: ${csvError.message}`);
                     }
-                } else if (err.message?.includes('Supabase no está configurado') && newSource === 'db') {
-                    // Si Supabase no está configurado, cambiar a CSV automáticamente
+                } else if (err.message?.includes('Supabase is not configured') && newSource === 'db') {
+                    // If Supabase is not configured, automatically switch to CSV
                     console.info('[APP] ℹ️ Supabase no configurado, cambiando a CSV');
                     setDataSource('csv');
                     try {
@@ -323,7 +323,7 @@ function App() {
                         // Limpiar el error después de cargar CSV exitosamente
                         setTimeout(() => setError(null), 3000);
                     } catch (csvError) {
-                        setError(`Error cargando CSV: ${csvError.message}`);
+                        setError(`Error loading CSV: ${csvError.message}`);
                     }
                 } else {
                     // Para otros errores, mostrar mensaje
@@ -340,14 +340,14 @@ function App() {
             <Login 
                 onLoginSuccess={(user) => {
                     setCurrentUser(user);
-                    // Recargar la página para inicializar todo con el usuario autenticado
+                    // Reload page to initialize everything with authenticated user
                     window.location.reload();
                 }} 
             />
         );
     }
 
-    // Solo mostrar loading si estamos cargando delivery roadmap Y no es la vista de product
+    // Only show loading if we're loading delivery roadmap AND it's not the product view
     // El Product Roadmap se carga independientemente
     if (loading && activeView !== 'product') {
         return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div></div>;
@@ -482,7 +482,7 @@ function App() {
                                 </div>
                             </div>
                         )}
-                        {/* Verificar si el usuario intenta acceder a un módulo no permitido */}
+                        {/* Check if user is trying to access a non-allowed module */}
                         {!canAccessModule(currentUser?.role || 'regular', activeView) && (
                             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
                                 <AlertCircle size={48} className="text-rose-400" />

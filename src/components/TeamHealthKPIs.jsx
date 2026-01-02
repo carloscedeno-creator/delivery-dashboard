@@ -14,7 +14,7 @@ const TeamHealthKPIs = () => {
   const [kpiData, setKpiData] = useState(mockTeamHealthKPIData);
   const [loading, setLoading] = useState(true);
 
-  // TODO: Cargar datos reales desde API
+  // TODO: Load real data from API
   useEffect(() => {
     // Por ahora usamos mock data
     setLoading(false);
