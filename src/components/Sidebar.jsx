@@ -47,7 +47,7 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                         {isOpen ? (
                             <div className="flex items-center gap-3">
                                 <img 
-                                    src="/logo.png" 
+                                    src={`${import.meta.env.BASE_URL}logo.png`}
                                     alt="Agentic Logo" 
                                     className="w-8 h-8 rounded-lg object-contain"
                                 />
@@ -55,7 +55,7 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                             </div>
                         ) : (
                             <img 
-                                src="/logo.png" 
+                                src={`${import.meta.env.BASE_URL}logo.png`}
                                 alt="Agentic Logo" 
                                 className="w-8 h-8 rounded-lg object-contain"
                             />

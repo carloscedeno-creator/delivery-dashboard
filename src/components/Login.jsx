@@ -37,7 +37,7 @@ const Login = ({ onLoginSuccess }) => {
                     {/* Logo y título */}
                     <div className="text-center mb-8">
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
-                            <img src="logo.png" alt="Logo" className="h-12 w-auto object-contain" />
+                            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Logo" className="h-12 w-auto object-contain" />
                         </div>
                         <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
                             Strata Dashboard
