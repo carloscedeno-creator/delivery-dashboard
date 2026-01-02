@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { ChevronDown, Star } from 'lucide-react';
+import { ChevronDown, Star, Download } from 'lucide-react';
 import { 
   getSquads, 
   getSprintsForSquad, 
@@ -8,6 +8,8 @@ import {
   getSquadById,
   getSprintById
 } from '../utils/projectMetricsApi';
+import { generateProjectMetricsPDF, getIssuesForPDF, getSprintGoal } from '../utils/pdfGenerator';
+import { supabase } from '../utils/supabaseApi';
 
 const ProjectsMetrics = () => {
   const [squads, setSquads] = useState([]);
@@ -18,6 +20,11 @@ const ProjectsMetrics = () => {
   const [loading, setLoading] = useState(true);
   const [squadInfo, setSquadInfo] = useState(null);
   const [sprintInfo, setSprintInfo] = useState(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  
+  // Refs para los gráficos
+  const pieChartRef = useRef(null);
+  const barChartRef = useRef(null);
 
   // Colores para los Board States (basados en la imagen)
   // Nota: Los estados ahora están normalizados a mayúsculas
@@ -173,6 +180,51 @@ const ProjectsMetrics = () => {
     return `Dev Team Metrics - ${squadInfo.squad_name}`;
   }, [squadInfo, sprintInfo]);
 
+  // Función para descargar el PDF
+  const handleDownloadPDF = async () => {
+    if (!selectedSquad || !selectedSprint || !metricsData) {
+      return;
+    }
+
+    try {
+      setGeneratingPDF(true);
+
+      // Obtener datos adicionales para el PDF
+      const [issues, sprintGoal] = await Promise.all([
+        getIssuesForPDF(selectedSquad, selectedSprint, supabase),
+        getSprintGoal(selectedSprint, supabase)
+      ]);
+
+      console.log(`[ProjectsMetrics] Issues para PDF: ${issues?.length || 0}`);
+
+      // Obtener referencias a los elementos de los gráficos
+      // Buscar los contenedores de los gráficos específicamente
+      const pieChartContainer = pieChartRef.current?.querySelector('.recharts-wrapper');
+      const barChartContainer = barChartRef.current?.querySelector('.recharts-wrapper');
+
+      const chartElements = [];
+      if (pieChartContainer) chartElements.push(pieChartContainer);
+      if (barChartContainer) chartElements.push(barChartContainer);
+
+      // Generar el PDF
+      await generateProjectMetricsPDF({
+        squadName: squadInfo?.squad_name || 'Unknown Squad',
+        sprintName: sprintInfo?.sprint_name || 'Unknown Sprint',
+        sprintGoal: sprintGoal,
+        chartElements: chartElements,
+        issues: issues,
+        metricsData: metricsData,
+        squadId: selectedSquad,
+        sprintId: selectedSprint
+      });
+    } catch (error) {
+      console.error('[ProjectsMetrics] Error generando PDF:', error);
+      alert('Error al generar el PDF. Por favor, intenta nuevamente.');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
   if (loading && !metricsData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -191,6 +243,16 @@ const ProjectsMetrics = () => {
           </h1>
           <p className="text-slate-400 mt-2">Project metrics by squad and sprint</p>
         </div>
+        {selectedSquad && selectedSprint && metricsData && metricsData.totalTickets > 0 && (
+          <button
+            onClick={handleDownloadPDF}
+            disabled={generatingPDF}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={20} />
+            {generatingPDF ? 'Generating PDF...' : 'Download PDF Report'}
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -247,7 +309,7 @@ const ProjectsMetrics = () => {
       {metricsData && metricsData.totalTickets > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Pie Chart - Board State Distribution */}
-          <div className="glass rounded-2xl p-6">
+          <div className="glass rounded-2xl p-6" ref={pieChartRef}>
             <h3 className="text-xl font-semibold text-white mb-6">Board State Distribution</h3>
             <ResponsiveContainer width="100%" height={400}>
               <PieChart>
@@ -302,7 +364,7 @@ const ProjectsMetrics = () => {
           </div>
 
           {/* Bar Chart - Board State Counts */}
-          <div className="glass rounded-2xl p-6">
+          <div className="glass rounded-2xl p-6" ref={barChartRef}>
             <h3 className="text-xl font-semibold text-white mb-6">Board State Counts</h3>
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={chartData} layout="vertical">

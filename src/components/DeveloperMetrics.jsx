@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { ChevronDown, Star } from 'lucide-react';
+import { ChevronDown, Star, AlertCircle, CheckCircle2, Circle } from 'lucide-react';
 import { 
   getSquads, 
   getSprintsForSquad, 
@@ -23,11 +23,14 @@ const DeveloperMetrics = () => {
   const [metricsData, setMetricsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [developerInfo, setDeveloperInfo] = useState(null);
+  const [error, setError] = useState(null);
 
   // Cargar squads al inicio
   useEffect(() => {
     const loadSquads = async () => {
       try {
+        setError(null);
+        setLoading(true);
         console.log('🟢 [DeveloperMetrics] Cargando squads...');
         const data = await getSquads();
         console.log('🟢 [DeveloperMetrics] Squads cargados:', data);
@@ -35,9 +38,13 @@ const DeveloperMetrics = () => {
         if (data.length > 0) {
           setSelectedSquad(data[0].id);
           console.log('🟢 [DeveloperMetrics] Squad seleccionado:', data[0].id, data[0].squad_name);
+        } else {
+          setError('No se encontraron squads. Verifica que Supabase esté configurado correctamente.');
         }
       } catch (error) {
         console.error('🔴 [DeveloperMetrics] Error cargando squads:', error);
+        setError(`Error cargando squads: ${error.message}. Verifica que Supabase esté configurado correctamente.`);
+      } finally {
         setLoading(false);
       }
     };
@@ -85,6 +92,7 @@ const DeveloperMetrics = () => {
 
     const loadDevelopers = async () => {
       try {
+        setError(null);
         console.log('🟢 [DeveloperMetrics] Cargando developers para squad:', selectedSquad);
         const data = await getDevelopersForSquad(selectedSquad);
         console.log('🟢 [DeveloperMetrics] Developers cargados:', data);
@@ -92,11 +100,14 @@ const DeveloperMetrics = () => {
         if (data.length > 0 && !selectedDeveloper) {
           setSelectedDeveloper(data[0].id);
           console.log('🟢 [DeveloperMetrics] Developer seleccionado:', data[0].id, data[0].display_name);
+        } else if (data.length === 0) {
+          setError('No se encontraron desarrolladores para este squad.');
         }
         setLoading(false);
       } catch (error) {
         console.error('🔴 [DeveloperMetrics] Error cargando developers:', error);
         setDevelopers([]);
+        setError(`Error cargando desarrolladores: ${error.message}`);
         setLoading(false);
       }
     };
@@ -133,6 +144,7 @@ const DeveloperMetrics = () => {
       } catch (error) {
         console.error('🔴 [DeveloperMetrics] Error cargando métricas:', error);
         setMetricsData(null);
+        setError(`Error cargando métricas: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -151,10 +163,24 @@ const DeveloperMetrics = () => {
   const statusChartData = React.useMemo(() => {
     if (!metricsData?.statusBreakdown) return [];
     
-    return Object.entries(metricsData.statusBreakdown).map(([status, data]) => ({
+    const colors = [
+      '#3b82f6', // Blue
+      '#10b981', // Green
+      '#f59e0b', // Amber
+      '#ef4444', // Red
+      '#8b5cf6', // Purple
+      '#ec4899', // Pink
+      '#06b6d4', // Cyan
+      '#84cc16', // Lime
+      '#f97316', // Orange
+      '#6366f1', // Indigo
+    ];
+    
+    return Object.entries(metricsData.statusBreakdown).map(([status, data], index) => ({
       name: status,
       value: data.count,
-      percentage: data.percentage
+      percentage: data.percentage,
+      color: colors[index % colors.length]
     }));
   }, [metricsData]);
 
@@ -192,6 +218,34 @@ const DeveloperMetrics = () => {
     developersCount: developers.length
   });
 
+  // Mostrar loading inicial
+  if (loading && squads.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar error si hay uno
+  if (error && !loading) {
+    return (
+      <div className="space-y-6">
+        <div className="glass rounded-2xl p-6 border border-rose-500/50">
+          <div className="flex items-center gap-3 text-rose-400">
+            <AlertCircle size={24} />
+            <div>
+              <h3 className="text-lg font-semibold">Error cargando métricas</h3>
+              <p className="text-sm text-slate-400 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -202,7 +256,7 @@ const DeveloperMetrics = () => {
             className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[180px]"
             value={selectedSquad || ''}
             onChange={(e) => {
-              setSelectedSquad(e.target.value ? parseInt(e.target.value) : null);
+              setSelectedSquad(e.target.value || null);
               setSelectedSprint(null);
               setSelectedDeveloper(null);
             }}
@@ -223,7 +277,7 @@ const DeveloperMetrics = () => {
             className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[200px]"
             value={selectedSprint || ''}
             onChange={(e) => {
-              setSelectedSprint(e.target.value ? parseInt(e.target.value) : null);
+              setSelectedSprint(e.target.value || null);
             }}
             disabled={!selectedSquad || sprints.length === 0}
           >
@@ -246,7 +300,7 @@ const DeveloperMetrics = () => {
             className="appearance-none bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 pr-10 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors cursor-pointer min-w-[200px]"
             value={selectedDeveloper || ''}
             onChange={(e) => {
-              setSelectedDeveloper(e.target.value ? parseInt(e.target.value) : null);
+              setSelectedDeveloper(e.target.value || null);
             }}
             disabled={!selectedSquad || developers.length === 0}
           >
@@ -389,7 +443,7 @@ const DeveloperMetrics = () => {
                     dataKey="value"
                   >
                     {statusChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={`hsl(${index * 60}, 70%, 50%)`} />
+                      <Cell key={`cell-${index}`} fill={entry.color || `hsl(${index * 60}, 70%, 50%)`} />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -398,6 +452,15 @@ const DeveloperMetrics = () => {
                       border: '1px solid #374151',
                       borderRadius: '8px'
                     }} 
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="circle"
+                    formatter={(value, entry) => (
+                      <span style={{ color: '#e2e8f0', fontSize: '12px' }}>
+                        {value}: {entry.payload.value} ({entry.payload.percentage}%)
+                      </span>
+                    )}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -427,6 +490,69 @@ const DeveloperMetrics = () => {
               </ResponsiveContainer>
             </div>
           </div>
+
+          {/* Lista de Tickets */}
+          {metricsData?.tickets && metricsData.tickets.length > 0 && (
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-xl font-semibold text-white mb-6">
+                Tickets Trabajados en el Sprint ({metricsData.tickets.length})
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Key</th>
+                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Summary</th>
+                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Status</th>
+                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Story Points</th>
+                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Squad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metricsData.tickets.map((ticket) => {
+                      const isDevDone = ticket.status && (
+                        ticket.status.toUpperCase() === 'DONE' ||
+                        ticket.status.toUpperCase() === 'DEVELOPMENT DONE' ||
+                        ticket.status.toUpperCase().includes('DEVELOPMENT DONE') ||
+                        ticket.status.toUpperCase().includes('DEV DONE') ||
+                        (ticket.status.toUpperCase().includes('DONE') && 
+                         !ticket.status.toUpperCase().includes('TO DO') && 
+                         !ticket.status.toUpperCase().includes('TODO')) ||
+                        ticket.status.toUpperCase() === 'CLOSED' ||
+                        ticket.status.toUpperCase() === 'RESOLVED' ||
+                        ticket.status.toUpperCase() === 'COMPLETED'
+                      );
+                      
+                      return (
+                        <tr key={ticket.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="py-3 px-4 text-cyan-400 font-mono text-sm">{ticket.key}</td>
+                          <td className="py-3 px-4 text-slate-300">{ticket.summary}</td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg text-xs font-medium ${
+                              isDevDone 
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                : 'bg-slate-700/50 text-slate-300 border border-slate-600/30'
+                            }`}>
+                              {isDevDone ? <CheckCircle2 size={12} /> : <Circle size={12} />}
+                              {ticket.status || 'Unknown'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {ticket.hasSP ? (
+                              <span className="text-white font-semibold">{ticket.storyPoints}</span>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400 text-sm">{ticket.squad}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -434,4 +560,7 @@ const DeveloperMetrics = () => {
 };
 
 export default DeveloperMetrics;
+
+
+
 

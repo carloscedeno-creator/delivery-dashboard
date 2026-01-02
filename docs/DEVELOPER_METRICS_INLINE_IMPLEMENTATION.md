@@ -22,3 +22,7 @@ El componente está implementado completamente en el código inline de `index.ht
 - Usa `window.Recharts` para los gráficos
 - Los iconos están definidos en el objeto `Icons` global
 
+
+
+
+

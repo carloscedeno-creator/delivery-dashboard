@@ -123,11 +123,16 @@ class JiraClient {
   }
 
   /**
-   * Obtiene issues actualizados desde una fecha específica
+   * Obtiene issues actualizados o creados desde una fecha específica (delta completo)
+   * Esto captura tanto tickets actualizados como tickets nuevos creados
    */
-  async fetchUpdatedIssues(sinceDate) {
+  async fetchUpdatedIssues(sinceDate, jqlQuery = null) {
     const dateStr = sinceDate.toISOString().split('T')[0];
-    const query = `${config.sync.jqlQuery} AND updated >= "${dateStr}"`;
+    const baseQuery = jqlQuery || config.sync.jqlQuery;
+    // Buscar tickets actualizados O creados (delta completo)
+    const deltaCondition = `(updated >= "${dateStr}" OR created >= "${dateStr}")`;
+    const query = `${baseQuery} AND ${deltaCondition}`;
+    logger.info(`🔍 Buscando tickets delta desde ${dateStr}: actualizados O creados`);
     return this.fetchAllIssues(query);
   }
 

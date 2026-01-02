@@ -440,8 +440,13 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
       logger.info(`🔍 [${jiraIssue.key}] Status object completo:`, JSON.stringify(fields.status, null, 2));
     }
 
-    // Upsert issue
+    // Upsert issue (retorna null si no hay cambios)
     const issueId = await supabaseClient.upsertIssue(squadId, issueData);
+    
+    // Si no hay cambios, retornar null para indicar que se omitió
+    if (issueId === null) {
+      return null;
+    }
     
     // Verificar que se actualizó correctamente
     if (jiraIssue.key === 'ODSO-297' || jiraIssue.key === 'ODSO-313') {
@@ -528,22 +533,405 @@ export async function processIssues(squadId, jiraIssues) {
   return processIssuesWithClient(squadId, jiraIssues, jiraClient);
 }
 
+/**
+ * Procesa issues en modo batch optimizado (más rápido)
+ * Compara todos los issues de una vez y hace batch upsert
+ */
+export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClient) {
+  logger.info(`🔄 Procesando ${jiraIssues.length} issues en modo BATCH optimizado...`);
+  logger.info(`   📋 Comparando cambios antes de actualizar (solo se actualizarán issues con cambios reales)`);
+  
+  // Limpiar cache de épicas al inicio de cada sincronización para evitar datos obsoletos
+  epicDetailsCache.clear();
+  
+  // 1. Procesar todos los issues primero (transformar datos de Jira a formato Supabase)
+  const issuesData = [];
+  const processingErrors = [];
+  
+  logger.info(`   🔄 Transformando ${jiraIssues.length} issues de Jira a formato Supabase...`);
+  
+  for (let i = 0; i < jiraIssues.length; i++) {
+    const issue = jiraIssues[i];
+    try {
+      const issueData = await transformIssueToSupabaseFormat(squadId, issue, jiraClient);
+      if (issueData) {
+        issuesData.push(issueData);
+      }
+      
+      if ((i + 1) % 50 === 0) {
+        logger.info(`   📊 Progreso transformación: ${i + 1}/${jiraIssues.length}`);
+      }
+    } catch (error) {
+      processingErrors.push({ key: issue.key, error: error.message });
+      logger.error(`   ❌ Error transformando issue ${issue.key}:`, error.message);
+    }
+  }
+  
+  if (issuesData.length === 0) {
+    logger.warn(`⚠️ No se pudo transformar ningún issue`);
+    return { successCount: 0, errorCount: processingErrors.length, skippedCount: 0 };
+  }
+  
+  logger.info(`   ✅ Transformación completa: ${issuesData.length} issues listos para batch upsert`);
+  
+  // 2. Batch upsert: comparar y actualizar todos de una vez
+  logger.info(`   🚀 Ejecutando batch upsert optimizado...`);
+  const batchResult = await supabaseClient.upsertIssuesBatch(squadId, issuesData);
+  
+  // 3. Crear mapa de issue_key -> issue_id para los actualizados
+  // El batch upsert ya retorna los IDs con sus keys, así que los mapeamos directamente
+  const issueKeyToIdMap = new Map();
+  if (batchResult.updated && batchResult.updated.length > 0) {
+    batchResult.updated.forEach(({ id, key }) => {
+      if (id && key) {
+        issueKeyToIdMap.set(key, id);
+      }
+    });
+  }
+  
+  // 4. Guardar relaciones de sprints e historial para los issues actualizados
+  logger.info(`   🔗 Guardando relaciones de sprints e historial...`);
+  let relationsSaved = 0;
+  
+  for (const issueData of issuesData) {
+    // Solo guardar relaciones para issues que fueron actualizados (no skipped)
+    if (batchResult.skipped.includes(issueData.key)) {
+      continue;
+    }
+    
+    const issueId = issueKeyToIdMap.get(issueData.key);
+    if (!issueId) {
+      continue;
+    }
+    
+    try {
+      // Guardar relaciones issue-sprints
+      if (issueData.sprintIds && issueData.sprintIds.length > 0) {
+        const normalizedStatus = issueData.status;
+        
+        for (const { sprintId, sprint } of issueData.sprintIds) {
+          let statusAtSprintClose = null;
+          const sprintCloseDate = sprint.completeDate || sprint.endDate;
+          
+          if (sprintCloseDate && issueData.statusHistory && issueData.statusHistory.length > 0) {
+            const closeDate = new Date(sprintCloseDate);
+            for (const status of [...issueData.statusHistory].reverse()) {
+              if (status.date <= closeDate) {
+                statusAtSprintClose = normalizeStatus(status.to);
+                break;
+              }
+            }
+          }
+          
+          await supabaseClient.client
+            .from('issue_sprints')
+            .upsert({
+              issue_id: issueId,
+              sprint_id: sprintId,
+              status_at_sprint_close: statusAtSprintClose || normalizedStatus,
+              story_points_at_start: issueData.storyPoints,
+              story_points_at_close: issueData.storyPoints,
+            }, {
+              onConflict: 'issue_id,sprint_id',
+            });
+        }
+      }
+      
+      // Guardar historial de cambios
+      if (issueData.statusHistory && issueData.statusHistory.length > 0) {
+        const historyRecords = issueData.statusHistory.map(status => ({
+          issue_id: issueId,
+          field_name: 'status',
+          field_type: 'status',
+          from_value: status.from,
+          to_value: status.to,
+          changed_at: status.date.toISOString(),
+        }));
+        
+        if (historyRecords.length > 0) {
+          await supabaseClient.client
+            .from('issue_history')
+            .upsert(historyRecords, {
+              onConflict: 'issue_id,field_name,changed_at',
+            });
+        }
+      }
+      
+      relationsSaved++;
+    } catch (error) {
+      logger.warn(`⚠️ Error guardando relaciones para ${issueData.key}:`, error.message);
+    }
+  }
+  
+  const successCount = batchResult.updated?.length || 0;
+  const skippedCount = batchResult.skipped?.length || 0;
+  const errorCount = processingErrors.length + (batchResult.errors?.length || 0);
+  
+  logger.success(`✅ Procesamiento batch completo:`);
+  logger.success(`   📊 Issues actualizados: ${successCount}`);
+  logger.success(`   ⏭️  Issues sin cambios (omitidos): ${skippedCount}`);
+  logger.success(`   🔗 Relaciones guardadas: ${relationsSaved}`);
+  logger.success(`   ❌ Errores: ${errorCount}`);
+  logger.info(`   💡 Total procesados: ${successCount + skippedCount + errorCount}/${jiraIssues.length}`);
+  logger.info(`   ⚡ Optimización: Reducción de ~${jiraIssues.length * 2} queries individuales a ~${Math.ceil(issuesData.length / 1000) + 2} queries batch`);
+  
+  return { successCount, errorCount, skippedCount };
+}
+
+/**
+ * Transforma un issue de Jira al formato de Supabase (sin hacer upsert)
+ * Retorna null si hay error
+ */
+async function transformIssueToSupabaseFormat(squadId, jiraIssue, jiraClient) {
+  try {
+    const fields = jiraIssue.fields;
+    
+    // Obtener o crear desarrollador
+    let assigneeId = null;
+    if (fields.assignee) {
+      assigneeId = await supabaseClient.getOrCreateDeveloper(
+        fields.assignee.displayName || 'Unassigned',
+        fields.assignee.emailAddress || null,
+        fields.assignee.accountId || null
+      );
+    }
+
+    // Obtener o crear epic con fechas del timeline
+    let epicId = null;
+    if (fields.parent && fields.parent.fields?.issuetype?.name === 'Epic') {
+      const epicKey = fields.parent.key;
+      
+      let epicDetails = epicDetailsCache.get(epicKey);
+      
+      if (!epicDetails) {
+        try {
+          epicDetails = await jiraClient.fetchIssueDetails(epicKey);
+          if (epicDetails) {
+            epicDetailsCache.set(epicKey, epicDetails);
+          }
+        } catch (error) {
+          logger.warn(`⚠️ Error obteniendo fechas de timeline para épica ${epicKey}:`, error.message);
+        }
+      }
+      
+      let epicStartDate = null;
+      let epicEndDate = null;
+      
+      if (epicDetails && epicDetails.fields) {
+        const timelineDates = jiraClient.extractTimelineDates(epicDetails.fields);
+        epicStartDate = timelineDates.startDate;
+        epicEndDate = timelineDates.endDate;
+      }
+      
+      epicId = await supabaseClient.getOrCreateEpic(
+        squadId,
+        epicKey,
+        fields.parent.fields.summary || 'N/A',
+        epicStartDate,
+        epicEndDate
+      );
+    }
+
+    // Procesar sprints
+    const sprintData = fields[config.jira.sprintFieldId] || [];
+    const sprintIds = [];
+    let currentSprint = 'Backlog';
+    
+    if (Array.isArray(sprintData) && sprintData.length > 0) {
+      const activeSprint = sprintData.find(sprint => sprint.state === 'active');
+      
+      if (activeSprint) {
+        currentSprint = activeSprint.name;
+      } else {
+        const lastSprint = sprintData[sprintData.length - 1];
+        if (lastSprint) currentSprint = lastSprint.name;
+      }
+      
+      for (const sprint of sprintData) {
+        const sprintId = await supabaseClient.getOrCreateSprint(squadId, {
+          name: sprint.name,
+          id: sprint.id,
+          startDate: sprint.startDate,
+          endDate: sprint.endDate,
+          completeDate: sprint.completeDate,
+          state: sprint.state,
+        });
+        if (sprintId) sprintIds.push({ sprintId, sprint });
+      }
+    }
+
+    // Procesar changelog
+    let devStartDate = null;
+    let devCloseDate = null;
+    const statusHistory = [];
+
+    if (jiraIssue.changelog && jiraIssue.changelog.histories) {
+      for (const history of jiraIssue.changelog.histories) {
+        for (const item of history.items || []) {
+          if (item.field === 'status') {
+            statusHistory.push({
+              from: item.fromString,
+              to: item.toString,
+              date: new Date(history.created),
+            });
+
+            if (!devStartDate && 
+                (item.toString?.toLowerCase().includes('in progress') ||
+                 item.toString?.toLowerCase().includes('en progreso'))) {
+              devStartDate = new Date(history.created);
+            }
+
+            if (!devCloseDate && 
+                (item.toString?.toLowerCase() === 'done' ||
+                 item.toString?.toLowerCase() === 'development done')) {
+              devCloseDate = new Date(history.created);
+            }
+          }
+        }
+      }
+    }
+
+    // Normalizar estado
+    const jiraStatus = fields.status?.name || 'Unknown';
+    const normalizedStatus = normalizeStatus(jiraStatus);
+
+    // Calcular campos históricos
+    let sprintHistory = 'N/A';
+    const statusBySprint = {};
+    const storyPointsBySprint = {};
+    let statusHistoryDays = 'N/A';
+    let epicName = null;
+
+    if (Array.isArray(sprintData) && sprintData.length > 0) {
+      sprintHistory = sprintData.map(sprint => sprint.name).join('; ');
+    }
+
+    if (fields.parent && fields.parent.fields?.issuetype?.name === 'Epic') {
+      epicName = fields.parent.fields.summary || null;
+    }
+
+    if (jiraIssue.changelog && sprintData && Array.isArray(sprintData) && sprintData.length > 0) {
+      const currentSP = fields[config.jira.storyPointsFieldId] || 0;
+      const issueCreated = fields.created ? new Date(fields.created) : null;
+
+      for (const sprint of sprintData) {
+        const sprintName = sprint.name;
+        let fotoDate = null;
+
+        if (sprint.completeDate) {
+          fotoDate = sprint.completeDate;
+        } else if (sprint.state === 'closed' && sprint.endDate) {
+          fotoDate = sprint.endDate;
+        } else if (sprint.endDate && new Date(sprint.endDate) < new Date()) {
+          fotoDate = sprint.endDate;
+        }
+
+        if (fotoDate) {
+          const statusAtClose = findHistoryValueAtDate(
+            jiraIssue.changelog,
+            ['status'],
+            fotoDate,
+            null
+          );
+          if (statusAtClose) {
+            statusBySprint[sprintName] = normalizeStatus(statusAtClose);
+          } else {
+            statusBySprint[sprintName] = 'N/A (Sin Historial)';
+          }
+        } else if (sprint.state === 'active') {
+          statusBySprint[sprintName] = normalizedStatus;
+        }
+
+        if (sprint.startDate) {
+          const sprintStart = new Date(sprint.startDate);
+          let spAtStart = 0;
+
+          if (issueCreated && issueCreated.getTime() > sprintStart.getTime()) {
+            spAtStart = 0;
+          } else {
+            const spFieldNames = ['Story Points', 'Story point estimate', 'Puntos de historia', 'customfield_10016'];
+            const foundSP = findHistoryValueAtDate(
+              jiraIssue.changelog,
+              spFieldNames,
+              sprint.startDate,
+              currentSP
+            );
+            spAtStart = foundSP ? Number(foundSP) : (issueCreated && issueCreated.getTime() <= sprintStart.getTime() ? currentSP : 0);
+          }
+          storyPointsBySprint[sprintName] = spAtStart;
+        }
+      }
+    }
+
+    if (jiraIssue.changelog && fields.created) {
+      statusHistoryDays = calculateTimeInStatus(
+        jiraIssue.changelog,
+        fields.created,
+        fields.resolutiondate || null,
+        normalizedStatus
+      );
+    }
+    
+    return {
+      key: jiraIssue.key,
+      issueType: fields.issuetype?.name || 'Unknown',
+      summary: fields.summary || '',
+      assigneeId,
+      priority: fields.priority?.name || null,
+      status: normalizedStatus,
+      storyPoints: fields[config.jira.storyPointsFieldId] || 0,
+      resolution: fields.resolution?.name || null,
+      createdDate: fields.created ? new Date(fields.created) : null,
+      resolvedDate: fields.resolutiondate ? new Date(fields.resolutiondate) : null,
+      updatedDate: fields.updated ? new Date(fields.updated) : null,
+      devStartDate,
+      devCloseDate,
+      epicId,
+      epicName,
+      sprintHistory,
+      currentSprint,
+      statusBySprint: Object.keys(statusBySprint).length > 0 ? statusBySprint : null,
+      storyPointsBySprint: Object.keys(storyPointsBySprint).length > 0 ? storyPointsBySprint : null,
+      statusHistoryDays,
+      rawData: jiraIssue,
+      sprintIds, // Necesario para guardar relaciones después
+      statusHistory, // Necesario para guardar historial después
+    };
+  } catch (error) {
+    logger.error(`❌ Error transformando issue ${jiraIssue.key}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Versión original (mantener para compatibilidad)
+ * @deprecated Use processIssuesWithClientBatch for better performance
+ */
 export async function processIssuesWithClient(squadId, jiraIssues, jiraClient) {
-  logger.info(`🔄 Procesando ${jiraIssues.length} issues...`);
+  logger.info(`🔄 Procesando ${jiraIssues.length} issues del delta...`);
+  logger.info(`   📋 Comparando cambios antes de actualizar (solo se actualizarán issues con cambios reales)`);
+  logger.warn(`   ⚠️ Usando modo individual (más lento). Considera usar processIssuesWithClientBatch para mejor rendimiento.`);
   
   // Limpiar cache de épicas al inicio de cada sincronización para evitar datos obsoletos
   epicDetailsCache.clear();
   
   let successCount = 0;
   let errorCount = 0;
+  let skippedCount = 0; // Issues sin cambios que se omitieron
 
   for (const issue of jiraIssues) {
     try {
-      await processIssue(squadId, issue, jiraClient);
-      successCount++;
+      const result = await processIssue(squadId, issue, jiraClient);
       
-      if (successCount % 10 === 0) {
-        logger.info(`   ✅ Procesados: ${successCount}/${jiraIssues.length}`);
+      // Si processIssue retorna null, significa que no había cambios
+      if (result === null) {
+        skippedCount++;
+      } else {
+        successCount++;
+      }
+      
+      if ((successCount + skippedCount) % 20 === 0) {
+        logger.info(`   📊 Progreso: ${successCount} actualizados, ${skippedCount} sin cambios, ${successCount + skippedCount}/${jiraIssues.length}`);
       }
     } catch (error) {
       errorCount++;
@@ -551,7 +939,12 @@ export async function processIssuesWithClient(squadId, jiraIssues, jiraClient) {
     }
   }
 
-  logger.success(`✅ Procesamiento completo: ${successCount} exitosos, ${errorCount} errores`);
-  return { successCount, errorCount };
+  logger.success(`✅ Procesamiento completo:`);
+  logger.success(`   📊 Issues actualizados: ${successCount}`);
+  logger.success(`   ⏭️  Issues sin cambios (omitidos): ${skippedCount}`);
+  logger.success(`   ❌ Errores: ${errorCount}`);
+  logger.info(`   💡 Total procesados: ${successCount + skippedCount + errorCount}/${jiraIssues.length}`);
+  
+  return { successCount, errorCount, skippedCount };
 }
 

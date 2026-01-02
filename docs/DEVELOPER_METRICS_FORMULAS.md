@@ -346,3 +346,8 @@ statusBreakdown = {
 - **Archivo de API**: `src/utils/developerMetricsApi.js`
 - **Componente de UI**: `src/components/DeveloperMetrics.jsx`
 - **Lógica de filtrado**: Usa `current_sprint` de la tabla `issues`
+
+
+
+
+

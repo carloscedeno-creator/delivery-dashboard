@@ -6,17 +6,75 @@ import GanttChart from './GanttChart';
 import KPICard from './KPICard';
 
 const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] }) => {
+    // Debug logging
+    console.log('🔵 [ProductRoadmapView] Componente renderizado:', {
+        initiativesCount: productInitiatives.length,
+        bugsCount: productBugRelease.length,
+        sampleInitiative: productInitiatives[0],
+        sampleBug: productBugRelease[0],
+        allInitiatives: productInitiatives.slice(0, 5).map(i => ({
+            initiative: i.initiative,
+            effort: i.effort,
+            completion: i.completion,
+            status: i.status,
+            startDate: i.startDate,
+            expectedDate: i.expectedDate,
+            endDate: i.endDate,
+            team: i.team,
+            quarter: i.quarter
+        })),
+        fieldsAvailable: productInitiatives.length > 0 ? Object.keys(productInitiatives[0]) : []
+    });
+    
     // Calculate KPI stats
     const stats = useMemo(() => {
         const totalInitiatives = productInitiatives.length;
+        const totalEffort = productInitiatives.reduce((acc, curr) => acc + (parseFloat(curr.effort) || 0), 0);
+        
+        // Calculate completion: use completion field if available, otherwise estimate from status
+        const completionValues = productInitiatives.map(item => {
+            const completion = parseFloat(item.completion);
+            if (!isNaN(completion) && completion > 0) {
+                return completion;
+            }
+            // Estimate completion based on status
+            const status = (item.status || '').toLowerCase();
+            if (status === 'complete') return 100;
+            if (status === 'early' || status === 'on time') return 75;
+            if (status === 'delay') return 50;
+            if (status === 'incomplete') return 25;
+            return 0;
+        });
+        
         const avgCompletion = totalInitiatives > 0
-            ? Math.round(productInitiatives.reduce((acc, curr) => acc + (curr.completion || 0), 0) / totalInitiatives)
+            ? Math.round(completionValues.reduce((acc, curr) => acc + curr, 0) / totalInitiatives)
             : 0;
+        
+        // Calculate completed initiatives (status is "Complete" or completion >= 100)
+        const completed = productInitiatives.filter(item => {
+            const status = (item.status || '').toLowerCase();
+            const completion = parseFloat(item.completion) || 0;
+            // Recognize "Complete" status or completion >= 100
+            return status === 'complete' || status.includes('done') || status.includes('completed') || completion >= 100;
+        }).length;
+        
+        // Calculate in progress initiatives (status is "Early", "On Time", "Delay", or "Incomplete" with progress)
+        const inProgress = productInitiatives.filter(item => {
+            const status = (item.status || '').toLowerCase();
+            const completion = parseFloat(item.completion) || 0;
+            const effort = parseFloat(item.effort) || 0;
+            // In progress: not complete, not "Not Started", and has some effort/completion
+            return status !== 'complete' && 
+                   !status.includes('not started') && 
+                   status !== '' &&
+                   (completion > 0 || effort > 0);
+        }).length;
+        
         const totalBugs = productBugRelease.filter(item => item.type === 'Bug').length;
         const releases = productBugRelease.filter(item => item.release).map(item => item.release);
         const nextRelease = releases.length > 0 ? releases[0] : 'TBD';
 
-        return { totalInitiatives, avgCompletion, totalBugs, nextRelease };
+        return { totalInitiatives, totalEffort, avgCompletion, completed, inProgress, totalBugs, nextRelease };
     }, [productInitiatives, productBugRelease]);
 
     // Group initiatives by quarter
@@ -61,49 +119,70 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
         return Object.entries(load).map(([name, value]) => ({ name, value }));
     }, [productInitiatives]);
 
-    // Prepare data for Gantt Chart (convert to delivery format)
+    // Prepare data for Gantt Chart - GanttChart now handles normalization automatically
     const ganttData = useMemo(() => {
-        return productInitiatives
-            .filter(item => {
-                // Need at least a start date and either expectedDate or endDate
-                return item.startDate && (item.expectedDate || item.endDate);
-            })
-            .map(item => {
-                // Use endDate if available, otherwise expectedDate
-                const endDate = item.endDate || item.expectedDate;
-                
-                return {
-                    initiative: item.initiative,
-                    squad: item.team || 'Product',
-                    start: item.startDate,
-                    delivery: endDate,
-                    status: item.completion || 0,
-                    spi: 1.0 // Default SPI for product initiatives
-                };
-            })
-            .filter(item => {
-                // Additional validation: ensure dates are valid strings
-                return item.start && item.delivery && 
-                       item.start.trim() !== '' && 
-                       item.delivery.trim() !== '';
-            });
+        const filtered = productInitiatives.filter(item => {
+            // Filter out items with "Not Started" status or no valid dates
+            const status = (item.status || '').toLowerCase();
+            if (status.includes('not started') || status === '') {
+                return false;
+            }
+            
+            // Need at least a start date OR expected date, and an end date OR expected date
+            const hasStartDate = item.startDate && item.startDate.trim() !== '';
+            const hasEndDate = item.endDate && item.endDate.trim() !== '';
+            const hasExpectedDate = item.expectedDate && item.expectedDate.trim() !== '';
+            
+            // Must have at least one start indicator and one end indicator
+            return (hasStartDate || hasExpectedDate) && (hasEndDate || hasExpectedDate);
+        }).map(item => {
+            // Ensure we have both start and end dates for the Gantt chart
+            // If startDate is missing but expectedDate exists, use expectedDate as fallback
+            // If endDate is missing, use expectedDate or endDate
+            return {
+                ...item,
+                startDate: item.startDate || item.expectedDate || null,
+                endDate: item.endDate || item.expectedDate || null
+            };
+        }).filter(item => {
+            // Final validation: ensure we have valid dates after mapping
+            return item.startDate && item.endDate && 
+                   item.startDate.trim() !== '' && 
+                   item.endDate.trim() !== '';
+        });
+        
+        console.log('🔵 [ProductRoadmapView] Gantt data preparado:', {
+            totalInitiatives: productInitiatives.length,
+            filteredCount: filtered.length,
+            sampleFiltered: filtered.slice(0, 3).map(i => ({
+                initiative: i.initiative,
+                startDate: i.startDate,
+                endDate: i.endDate,
+                status: i.status
+            }))
+        });
+        
+        return filtered;
     }, [productInitiatives]);
 
     const COLORS = ['#00D9FF', '#0EA5E9', '#22D3EE', '#67e8f9'];
 
+    // Mostrar mensaje si no hay datos, pero siempre renderizar el componente
     if (productInitiatives.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
-                <div className="p-6 rounded-full bg-slate-800/50 border border-white/5">
-                    <Box size={48} className="text-slate-500" />
-                </div>
-                <div>
-                    <h2 className="text-3xl font-bold text-white mb-2">Product Roadmap</h2>
-                    <p className="text-slate-400 max-w-md mx-auto">
-                        No product initiatives data available.
-                        <br />
-                        <span className="text-cyan-400 text-sm font-medium mt-2 block">Check your data source configuration</span>
-                    </p>
+            <div className="space-y-8">
+                <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                    <div className="p-6 rounded-full bg-slate-800/50 border border-white/5">
+                        <Box size={48} className="text-slate-500" />
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-bold text-white mb-2">Product Roadmap</h2>
+                        <p className="text-slate-400 max-w-md mx-auto">
+                            No product initiatives data available.
+                            <br />
+                            <span className="text-cyan-400 text-sm font-medium mt-2 block">Loading from CSV...</span>
+                        </p>
+                    </div>
                 </div>
             </div>
         );
@@ -112,38 +191,46 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
     return (
         <div className="space-y-8 animate-shimmer" style={{ animation: 'fadeIn 0.5s ease-out' }}>
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <KPICard
                     title="Total Initiatives"
                     value={stats.totalInitiatives}
-                    label="Active Roadmap Items"
+                    label="On Track Active projects"
                     trend="positive"
                     color="blue"
                     icon={Box}
                 />
                 <KPICard
+                    title="Total Effort"
+                    value={`${stats.totalEffort}d`}
+                    label="On Track Days estimated"
+                    trend="positive"
+                    color="blue"
+                    icon={Calendar}
+                />
+                <KPICard
                     title="Avg. Completion"
                     value={`${stats.avgCompletion}%`}
-                    label="Overall Progress"
+                    label="On Track Overall progress"
                     trend="positive"
                     color="emerald"
                     icon={Activity}
                 />
                 <KPICard
-                    title="Total Bugs"
-                    value={stats.totalBugs}
-                    label="Reported Issues"
-                    trend={stats.totalBugs > 5 ? 'negative' : 'positive'}
-                    color="rose"
-                    icon={AlertCircle}
+                    title="Completed"
+                    value={stats.completed}
+                    label="On Track Done initiatives"
+                    trend="positive"
+                    color="emerald"
+                    icon={CheckCircle2}
                 />
                 <KPICard
-                    title="Next Release"
-                    value={stats.nextRelease}
-                    label="Upcoming Milestone"
+                    title="In Progress"
+                    value={stats.inProgress}
+                    label="On Track Active work"
                     trend="positive"
-                    color="purple"
-                    icon={Truck}
+                    color="blue"
+                    icon={Activity}
                 />
             </div>
 
@@ -153,9 +240,8 @@ const ProductRoadmapView = ({ productInitiatives = [], productBugRelease = [] })
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-xl font-semibold text-white flex items-center gap-2">
                             <Calendar className="w-5 h-5 text-cyan-400" />
-                            Timeline Overview
+                            Product Roadmap Timeline
                         </h3>
-                        <span className="text-sm text-slate-400">{ganttData.length} items on timeline</span>
                     </div>
                     <GanttChart data={ganttData} />
                 </div>

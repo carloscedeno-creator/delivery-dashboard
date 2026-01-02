@@ -116,3 +116,7 @@ async function checkIssueStatus(issueKeys = ['ODSO-297', 'ODSO-313']) {
 const issueKeys = process.argv.slice(2);
 checkIssueStatus(issueKeys.length > 0 ? issueKeys : ['ODSO-297', 'ODSO-313']);
 
+
+
+
+

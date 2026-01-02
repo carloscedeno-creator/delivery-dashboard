@@ -19,5 +19,14 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    hmr: {
+      overlay: true,
+    },
+    watch: {
+      usePolling: false,
+    },
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'lucide-react'],
   },
 })

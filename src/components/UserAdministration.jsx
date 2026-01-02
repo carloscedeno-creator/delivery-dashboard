@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, CheckCircle, XCircle, Shield, Mail, User, Clock } from 'lucide-react';
+import { supabase } from '../utils/supabaseApi';
 
 const UserAdministration = ({ currentUser }) => {
     const [users, setUsers] = useState([]);
@@ -15,21 +16,81 @@ const UserAdministration = ({ currentUser }) => {
         setLoading(true);
         setError('');
         try {
-            if (!window.supabaseClient) {
-                setError('Supabase is not configured');
+            if (!supabase) {
+                setError('Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env');
+                setLoading(false);
                 return;
             }
 
-            const { data, error: fetchError } = await window.supabaseClient.rpc('get_all_users');
+            console.log('[USER ADMIN] 🔍 Intentando cargar usuarios desde producción...');
+
+            // Intentar primero con app_users (mencionado en el hint de producción)
+            console.log('[USER ADMIN] 1️⃣ Intentando tabla app_users...');
+            let { data, error: fetchError } = await supabase
+                .from('app_users')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            console.log('[USER ADMIN] app_users Result:', { 
+                hasData: !!data, 
+                dataLength: data?.length || 0,
+                error: fetchError ? {
+                    message: fetchError.message,
+                    code: fetchError.code,
+                    hint: fetchError.hint
+                } : null
+            });
+
+            // Si app_users funciona, mapear al formato esperado
+            if (!fetchError && data) {
+                console.log('[USER ADMIN] ✅ Usando app_users!');
+                data = data.map(user => ({
+                    id: user.id,
+                    email: user.email,
+                    display_name: user.display_name || user.name || user.email?.split('@')[0] || 'Unknown',
+                    role: user.role || 'Regular',
+                    is_active: user.is_active !== undefined ? user.is_active : (user.status === 'active'),
+                    last_login_at: user.last_login_at || user.last_sign_in_at || user.updated_at,
+                    created_at: user.created_at
+                }));
+            } else {
+                // Si falla, intentar RPC (por si existe en producción)
+                console.log('[USER ADMIN] 2️⃣ app_users falló, intentando RPC get_all_users...');
+                const rpcResult = await supabase.rpc('get_all_users');
+                
+                if (!rpcResult.error && rpcResult.data) {
+                    console.log('[USER ADMIN] ✅ Usando RPC!');
+                    data = rpcResult.data;
+                    fetchError = null;
+                } else {
+                    fetchError = rpcResult.error || fetchError;
+                }
+            }
 
             if (fetchError) {
-                setError(fetchError.message);
+                const errorMsg = fetchError.message || 'Unknown error';
+                const errorCode = fetchError.code || '';
+                
+                console.error('[USER ADMIN] ❌ Error completo:', {
+                    message: errorMsg,
+                    code: errorCode,
+                    hint: fetchError.hint
+                });
+
+                // Mensaje simple sin sugerencias de modificar la BD
+                setError(
+                    `No se pudo cargar usuarios desde Supabase.\n\n` +
+                    `Error: ${errorCode} - ${errorMsg}\n\n` +
+                    `Verifica que la tabla 'app_users' exista en producción\n` +
+                    `o que la función RPC 'get_all_users' esté disponible.`
+                );
                 return;
             }
 
+            console.log('[USER ADMIN] ✅ Usuarios cargados:', data?.length || 0);
             setUsers(data || []);
         } catch (err) {
-            console.error('[USER ADMIN] Error loading users:', err);
+            console.error('[USER ADMIN] ❌ Exception:', err);
             setError('Error loading users: ' + (err.message || 'Unknown error'));
         } finally {
             setLoading(false);
@@ -40,12 +101,7 @@ const UserAdministration = ({ currentUser }) => {
         setError('');
         setSuccess('');
         try {
-            if (!window.supabaseClient) {
-                setError('Supabase is not configured');
-                return;
-            }
-
-            const { error: approveError } = await window.supabaseClient.rpc('approve_user', {
+            const { error: approveError } = await supabase.rpc('approve_user', {
                 p_user_id: userId
             });
 
@@ -71,12 +127,7 @@ const UserAdministration = ({ currentUser }) => {
         }
 
         try {
-            if (!window.supabaseClient) {
-                setError('Supabase is not configured');
-                return;
-            }
-
-            const { error: deactivateError } = await window.supabaseClient.rpc('deactivate_user', {
+            const { error: deactivateError } = await supabase.rpc('deactivate_user', {
                 p_user_id: userId
             });
 
@@ -98,12 +149,7 @@ const UserAdministration = ({ currentUser }) => {
         setError('');
         setSuccess('');
         try {
-            if (!window.supabaseClient) {
-                setError('Supabase is not configured');
-                return;
-            }
-
-            const { error: roleError } = await window.supabaseClient.rpc('update_user_role', {
+            const { error: roleError } = await supabase.rpc('update_user_role', {
                 p_user_id: userId,
                 p_new_role: newRole
             });
@@ -152,9 +198,20 @@ const UserAdministration = ({ currentUser }) => {
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-sm">
-                    <XCircle size={16} />
-                    <span>{error}</span>
+                <div className="flex flex-col gap-3 p-4 bg-rose-500/10 border border-rose-500/30 rounded-lg">
+                    <div className="flex items-start gap-2 text-rose-400 text-sm">
+                        <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 whitespace-pre-line">{error}</div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            setError('');
+                            loadUsers();
+                        }}
+                        className="self-start px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 rounded-lg text-rose-300 text-sm transition-colors"
+                    >
+                        Retry
+                    </button>
                 </div>
             )}
 
