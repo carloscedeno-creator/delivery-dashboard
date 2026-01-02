@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
-import { AlertCircle, Menu } from 'lucide-react';
+import { AlertCircle, Menu, TrendingUp } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DataSourceSelector from './components/DataSourceSelector';
 import Login from './components/Login';
@@ -384,6 +384,7 @@ function App() {
                              activeView === 'developer-metrics' ? 'Developer Metrics' :
                              activeView === 'user-admin' ? 'User Administration' :
                              activeView === 'kpis' ? 'KPIs Dashboard' :
+                             activeView === 'software-engineering-benchmarks' ? 'Software Engineering Benchmark' :
                              'Dashboard'}
                         </h1>
                         <p className="text-slate-400 mt-2">
@@ -394,6 +395,7 @@ function App() {
                              activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
                              activeView === 'user-admin' ? 'User management and administration' :
                              activeView === 'kpis' ? 'Engineering metrics and performance indicators' :
+                             activeView === 'software-engineering-benchmarks' ? 'Compare engineering metrics and team benchmarks' :
                              'Dashboard'}
                         </p>
                     </div>
@@ -464,6 +466,21 @@ function App() {
                         )}
                         {activeView === 'kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.KPIS) && (
                             <KPIsView />
+                        )}
+                        {activeView === 'software-engineering-benchmarks' && canAccessModule(currentUser?.role || 'regular', MODULES.SOFTWARE_ENGINEERING_BENCHMARKS) && (
+                            <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/30">
+                                    <TrendingUp size={48} className="text-cyan-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-3">
+                                        Coming Soon
+                                    </h2>
+                                    <p className="text-slate-400 max-w-md mx-auto text-lg">
+                                        Software Engineering Benchmark está en desarrollo. Pronto podrás comparar métricas de ingeniería y ver benchmarks del equipo.
+                                    </p>
+                                </div>
+                            </div>
                         )}
                         {/* Verificar si el usuario intenta acceder a un módulo no permitido */}
                         {!canAccessModule(currentUser?.role || 'regular', activeView) && (

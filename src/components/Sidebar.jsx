@@ -44,11 +44,21 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                 <div className="flex flex-col h-full">
                     {/* Header del Sidebar */}
                     <div className={`flex items-center ${isOpen ? 'justify-between' : 'justify-center'} p-4 border-b border-white/10`}>
-                        {isOpen && (
+                        {isOpen ? (
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold">A</div>
+                                <img 
+                                    src="/logo.png" 
+                                    alt="Agentic Logo" 
+                                    className="w-8 h-8 rounded-lg object-contain"
+                                />
                                 <span className="text-white font-semibold text-sm">Dashboard</span>
                             </div>
+                        ) : (
+                            <img 
+                                src="/logo.png" 
+                                alt="Agentic Logo" 
+                                className="w-8 h-8 rounded-lg object-contain"
+                            />
                         )}
                         <button
                             onClick={() => setIsOpen(!isOpen)}
