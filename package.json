@@ -20,10 +20,14 @@
     "query": "node scripts/query-example.js",
     "compare-formats": "node scripts/compare-csv-vs-supabase.js",
     "check-sprint": "node scripts/check-sprint-issues.js",
-    "check-status": "node scripts/check-issue-status.js",
-    "force-sync-issues": "node scripts/force-sync-issues.js",
-    "update-status": "node scripts/update-issue-status.js",
-    "apply-migration": "node scripts/verify-and-apply-migration.js"
+        "check-status": "node scripts/check-issue-status.js",
+        "force-sync-issues": "node scripts/force-sync-issues.js",
+        "update-status": "node scripts/update-issue-status.js",
+        "apply-migration": "node scripts/verify-and-apply-migration.js",
+        "apply-kpi-migrations": "node scripts/apply-kpi-migrations.js",
+        "populate-kpi-data": "node scripts/populate-initial-data.js",
+        "diagnose-kpi": "node scripts/diagnose-kpi-data.js",
+        "apply-role-permission-migration": "node scripts/apply-role-permission-migration.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",

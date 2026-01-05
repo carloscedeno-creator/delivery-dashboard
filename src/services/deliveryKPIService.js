@@ -107,10 +107,15 @@ const calculateDeployFrequencyFromMetrics = (sprintMetrics) => {
 export const getDeliveryKPIData = async (options = {}) => {
   const { projectKey = 'OBD', useMockData = false } = options;
 
-  // Si se solicita explícitamente mock data, retornarlo
-  if (useMockData || !supabase) {
-    console.log('[DELIVERY_KPI] Using mock data');
+  // Si se solicita explícitamente mock data, retornarlo (solo para testing)
+  if (useMockData) {
+    console.log('[DELIVERY_KPI] Using mock data (explicitly requested)');
     return mockDeliveryKPIData;
+  }
+
+  if (!supabase) {
+    console.warn('[DELIVERY_KPI] Supabase not configured - no data available');
+    return null;
   }
 
   try {
@@ -135,31 +140,50 @@ export const getDeliveryKPIData = async (options = {}) => {
     }
 
     if (!sprintMetrics || sprintMetrics.length === 0) {
-      console.warn('[DELIVERY_KPI] No sprint metrics found, using mock data');
-      return mockDeliveryKPIData;
+      console.warn('[DELIVERY_KPI] ⚠️ No sprint metrics found');
+      console.warn('[DELIVERY_KPI] 💡 Solution: Ensure sprint metrics are calculated from Jira data');
+      return null;
     }
+
+    console.log(`[DELIVERY_KPI] ✅ Found ${sprintMetrics.length} sprint metrics`);
 
     // Calcular Cycle Time
     const cycleTime = calculateCycleTimeFromMetrics(sprintMetrics);
+    if (cycleTime) {
+      console.log(`[DELIVERY_KPI] ✅ Using REAL data for Cycle Time: ${cycleTime.hours} hours`);
+    } else {
+      console.warn('[DELIVERY_KPI] ⚠️ Could not calculate Cycle Time - missing avg_lead_time_days');
+    }
     
     // Calcular Deploy Frequency
     const deployFrequency = calculateDeployFrequencyFromMetrics(sprintMetrics);
-
-    // PR Size no está disponible en Supabase, usar valor mock
-    // (En el futuro podría integrarse con GitHub/GitLab API)
-    const prSize = mockDeliveryKPIData.prSize;
-
-    // Si no se pueden calcular Cycle Time o Deploy Frequency, usar mock data
-    if (!cycleTime || !deployFrequency) {
-      console.warn('[DELIVERY_KPI] Could not calculate all metrics, using mock data');
-      return mockDeliveryKPIData;
+    if (deployFrequency) {
+      console.log(`[DELIVERY_KPI] ✅ Using REAL data for Deploy Frequency: ${deployFrequency.deploysPerDay} deploys/day`);
+    } else {
+      console.warn('[DELIVERY_KPI] ⚠️ Could not calculate Deploy Frequency - no recent closed sprints');
     }
 
+    // PR Size no está disponible en Supabase (requiere integración Git)
+    const prSize = null;
+    console.warn('[DELIVERY_KPI] ⚠️ PR Size not available (requires Git repository integration)');
+
+    // Si no se pueden calcular Cycle Time o Deploy Frequency, retornar null
+    if (!cycleTime && !deployFrequency) {
+      console.warn('[DELIVERY_KPI] ❌ No real data available for any metric - returning null');
+      return null;
+    }
+
+    // Use default scores for missing metrics (0 score = no impact on final score)
+    const cycleTimeScore = cycleTime?.score || 0;
+    const deployFreqScore = deployFrequency?.score || 0;
+    const prSizeScore = prSize?.score || 0;
+
     // Calcular Delivery Success Score
+    // Note: If a metric is missing, its weight is effectively 0
     const deliverySuccessScore = calculateDeliverySuccessScore(
-      cycleTime.score,
-      deployFrequency.score,
-      prSize.score
+      cycleTimeScore,
+      deployFreqScore,
+      prSizeScore
     );
 
     // Generar tendencias (últimas 8 semanas)
@@ -188,41 +212,37 @@ export const getDeliveryKPIData = async (options = {}) => {
         const weekCycleTime = calculateCycleTimeFromMetrics(weekSprints);
         const weekDeployFreq = calculateDeployFrequencyFromMetrics(weekSprints);
         
-        if (weekCycleTime && weekDeployFreq) {
-          const weekScore = calculateDeliverySuccessScore(
-            weekCycleTime.score,
-            weekDeployFreq.score,
-            prSize.score
-          );
-          
-          trends.push({
-            week: `Wk ${8 - i}`,
-            deliveryScore: weekScore,
-            cycleTime: weekCycleTime.score,
-            deployFreq: weekDeployFreq.score,
-            prSize: prSize.score
-          });
-        }
+        // Use current period data if week data not available
+        const weekCycleTimeScore = weekCycleTime?.score || cycleTimeScore;
+        const weekDeployFreqScore = weekDeployFreq?.score || deployFreqScore;
+        
+        const weekScore = calculateDeliverySuccessScore(
+          weekCycleTimeScore,
+          weekDeployFreqScore,
+          prSizeScore
+        );
+        
+        trends.push({
+          week: `Wk ${8 - i}`,
+          deliveryScore: weekScore,
+          cycleTime: weekCycleTime?.score || cycleTime?.score || null,
+          deployFreq: weekDeployFreq?.score || deployFrequency?.score || null,
+          prSize: null // PR Size not available
+        });
       }
-    }
-
-    // Si no hay suficientes tendencias, completar con datos mock
-    while (trends.length < 8) {
-      const mockTrend = mockDeliveryKPIData.trends[trends.length] || mockDeliveryKPIData.trends[0];
-      trends.push(mockTrend);
     }
 
     return {
       deliverySuccessScore,
-      cycleTime,
-      deployFrequency,
-      prSize,
+      cycleTime: cycleTime || null,
+      deployFrequency: deployFrequency || null,
+      prSize: null, // PR Size requires Git integration
       trends: trends.slice(0, 8) // Asegurar máximo 8 semanas
     };
   } catch (error) {
     console.error('[DELIVERY_KPI] Error calculating KPIs:', error);
-    console.log('[DELIVERY_KPI] Falling back to mock data');
-    return mockDeliveryKPIData;
+    console.warn('[DELIVERY_KPI] No data available due to error');
+    return null;
   }
 };
 

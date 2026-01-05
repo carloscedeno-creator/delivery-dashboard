@@ -17,9 +17,30 @@ vi.mock('../../src/utils/authService', () => ({
 // Mock de permissions
 vi.mock('../../src/config/permissions', () => ({
     getNavbarModules: vi.fn(() => [
-        { id: 'overall', label: 'Overall Dashboard', icon: 'Layout' },
+        { id: 'overall', label: 'Overall', icon: 'Layout' },
         { id: 'product', label: 'Product Roadmap', icon: 'Box' },
-        { id: 'delivery', label: 'Delivery Roadmap', icon: 'Truck' }
+        { id: 'delivery', label: 'Delivery Roadmap', icon: 'Truck' },
+        { 
+            id: 'pm', 
+            label: 'PM', 
+            icon: 'BarChart',
+            hasSubmenu: true,
+            submodules: [
+                { id: 'projects-metrics', label: 'Project Metrics', icon: 'BarChart' },
+                { id: 'developer-metrics', label: 'Developer Metrics', icon: 'Activity' },
+                { id: 'team-capacity', label: 'Team Capacity', icon: 'UserCheck' }
+            ]
+        },
+        { 
+            id: 'admin', 
+            label: 'Admin', 
+            icon: 'Shield',
+            hasSubmenu: true,
+            submodules: [
+                { id: 'user-admin', label: 'User Administration', icon: 'Users' },
+                { id: 'role-access', label: 'Role Access', icon: 'Shield' }
+            ]
+        }
     ])
 }));
 
@@ -48,9 +69,45 @@ describe('Sidebar', () => {
     it('debe mostrar los módulos de navegación', () => {
         render(<Sidebar {...defaultProps} />);
         
-        expect(screen.getByText(/Overall Dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Overall/i)).toBeInTheDocument();
         expect(screen.getByText(/Product Roadmap/i)).toBeInTheDocument();
         expect(screen.getByText(/Delivery Roadmap/i)).toBeInTheDocument();
+    });
+
+    it('debe mostrar módulos con submenús cuando están disponibles', () => {
+        render(<Sidebar {...defaultProps} />);
+        
+        expect(screen.getByText(/PM/i)).toBeInTheDocument();
+        // Admin appears multiple times (label and role badge), use getAllByText
+        expect(screen.getAllByText(/Admin/i).length).toBeGreaterThan(0);
+    });
+
+    it('debe expandir submenú cuando se hace clic en un módulo con submenú', () => {
+        render(<Sidebar {...defaultProps} />);
+        
+        const pmButton = screen.getByText(/PM/i).closest('button');
+        if (pmButton) {
+            fireEvent.click(pmButton);
+            // After expansion, submenu items should be visible
+            expect(screen.getByText(/Project Metrics/i)).toBeInTheDocument();
+            expect(screen.getByText(/Developer Metrics/i)).toBeInTheDocument();
+            expect(screen.getByText(/Team Capacity/i)).toBeInTheDocument();
+        }
+    });
+
+    it('debe llamar setActiveView cuando se hace clic en un submenú', () => {
+        render(<Sidebar {...defaultProps} />);
+        
+        const pmButton = screen.getByText(/PM/i).closest('button');
+        if (pmButton) {
+            fireEvent.click(pmButton); // Expand submenu
+            
+            const projectMetricsButton = screen.getByText(/Project Metrics/i).closest('button');
+            if (projectMetricsButton) {
+                fireEvent.click(projectMetricsButton);
+                expect(mockSetActiveView).toHaveBeenCalledWith('projects-metrics');
+            }
+        }
     });
 
     it('debe llamar setActiveView cuando se hace clic en un módulo', () => {

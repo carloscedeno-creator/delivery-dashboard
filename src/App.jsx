@@ -10,12 +10,20 @@ const ProductRoadmapView = lazy(() => import('./components/ProductRoadmapView'))
 const DeliveryRoadmapView = lazy(() => import('./components/DeliveryRoadmapView'));
 const ProjectsMetrics = lazy(() => import('./components/ProjectsMetrics'));
 const DeveloperMetrics = lazy(() => import('./components/DeveloperMetrics'));
+const TeamCapacity = lazy(() => import('./components/TeamCapacity'));
+const TeamAllocation = lazy(() => import('./components/TeamAllocation'));
+const ProductDepartmentKPIs = lazy(() => import('./components/ProductDepartmentKPIs'));
 const UserAdministration = lazy(() => import('./components/UserAdministration'));
+const RoleAccess = lazy(() => import('./components/RoleAccess'));
 const KPIsView = lazy(() => import('./components/KPIsView'));
+const DeliveryKPIs = lazy(() => import('./components/DeliveryKPIs'));
+const QualityKPIs = lazy(() => import('./components/QualityKPIs'));
+const ENPSSurvey = lazy(() => import('./components/ENPSSurvey'));
+const ENPSSurveyManagement = lazy(() => import('./components/ENPSSurveyManagement'));
 import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
 import { getDeliveryRoadmapData, getDeveloperAllocationData } from './utils/supabaseApi';
-import { canAccessModule, getModulesForRole, MODULES } from './config/permissions';
+import { canAccessModule, getModulesForRoleSync, MODULES } from './config/permissions';
 import { getCurrentUser } from './utils/authService';
 
 // URLs de las hojas usando la configuración centralizada
@@ -50,6 +58,17 @@ function App() {
     const [currentUser, setCurrentUser] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     
+    // Listen for navigation to survey from login page
+    useEffect(() => {
+        const handleNavigateToSurvey = () => {
+            setActiveView('enps-survey');
+        };
+        window.addEventListener('navigateToSurvey', handleNavigateToSurvey);
+        return () => {
+            window.removeEventListener('navigateToSurvey', handleNavigateToSurvey);
+        };
+    }, []);
+    
     // Obtener usuario actual y verificar permisos
     useEffect(() => {
         const user = getCurrentUser();
@@ -62,9 +81,9 @@ function App() {
         
         // Verificar que el activeView sea accesible para el rol del usuario
         const userRole = user?.role || 'regular';
-        const allowedModules = getModulesForRole(userRole);
+        const allowedModules = getModulesForRoleSync(userRole);
         
-        if (!allowedModules.includes(activeView)) {
+        if (Array.isArray(allowedModules) && !allowedModules.includes(activeView)) {
             // Si el módulo actual no está permitido, redirigir al primer módulo permitido
             console.warn(`[APP] Module ${activeView} not allowed for role ${userRole}, redirecting to ${allowedModules[0]}`);
             setActiveView(allowedModules[0] || 'overall');
@@ -82,6 +101,7 @@ function App() {
     }, [projectData, activeView]);
     const [productInitiatives, setProductInitiatives] = useState([]);
     const [productBugRelease, setProductBugRelease] = useState([]);
+    const [productRoadmapLastUpdate, setProductRoadmapLastUpdate] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [dataSource, setDataSource] = useState('csv'); // 'db' (Supabase) o 'csv'
@@ -104,7 +124,7 @@ function App() {
                 setError(null);
                 
                 if (source === 'db') {
-                    // Cargar desde Supabase (Base de Datos)
+                    // Load from Supabase (Database)
                     try {
                         console.log('[APP] 🔄 Loading data from Database (Supabase)...');
                         
@@ -191,44 +211,72 @@ function App() {
             }
     }, [fetchWithFallback]);
 
-    // Cargar Product Roadmap desde CSV siempre (independiente de la fuente de datos de delivery)
+    // Cargar Product Roadmap desde base de datos (product_department_kpis table)
     useEffect(() => {
         let isMounted = true;
         
         const loadProductRoadmap = async () => {
             try {
-                console.log('[APP] 🔄 Loading Product Roadmap from CSV...');
-                const [prodInitText, prodBugText] = await Promise.all([
-                    fetchWithFallback(SHEET_URLS.productInitiatives),
-                    fetchWithFallback(SHEET_URLS.productBugRelease)
+                console.log('[APP] 🔄 Loading Product Roadmap from database...');
+                
+                // Importar dinámicamente para evitar problemas de circular dependencies
+                const { getProductRoadmapInitiatives, getLastUpdateTimestamp } = await import('./services/productDepartmentKPIService');
+                const [initiatives, lastUpdate] = await Promise.all([
+                    getProductRoadmapInitiatives(),
+                    getLastUpdateTimestamp()
                 ]);
                 
                 if (!isMounted) return;
                 
-                const initiatives = parseCSV(prodInitText, 'productInitiatives');
-                const bugs = parseCSV(prodBugText, 'productBugRelease');
-                
-                console.log('[APP] ✅ Product Roadmap cargado desde CSV:', {
+                console.log('[APP] ✅ Product Roadmap cargado desde base de datos:', {
                     initiatives: initiatives.length,
-                    bugs: bugs.length,
-                    sampleInitiative: initiatives[0]
+                    bugs: 0, // productBugRelease no está en la base de datos aún
+                    sampleInitiative: initiatives[0],
+                    lastUpdate
                 });
                 
                 if (isMounted) {
                     setProductInitiatives(initiatives);
-                    setProductBugRelease(bugs);
+                    setProductBugRelease([]); // Empty array - bug/release data not in database yet
+                    setProductRoadmapLastUpdate(lastUpdate);
                 }
             } catch (err) {
-                console.error('[APP] ❌ Error loading Product Roadmap from CSV:', err);
+                console.error('[APP] ❌ Error loading Product Roadmap from database:', err);
                 console.error('[APP] ❌ Error details:', {
                     message: err.message,
                     stack: err.stack,
                     name: err.name
                 });
-                // Aún así establecer arrays vacíos para que el componente se renderice
-                if (isMounted) {
-                    setProductInitiatives([]);
-                    setProductBugRelease([]);
+                
+                // Fallback: try CSV if database fails
+                try {
+                    console.log('[APP] 🔄 Fallback: Loading Product Roadmap from CSV...');
+                    const [prodInitText, prodBugText] = await Promise.all([
+                        fetchWithFallback(SHEET_URLS.productInitiatives),
+                        fetchWithFallback(SHEET_URLS.productBugRelease)
+                    ]);
+                    
+                    if (!isMounted) return;
+                    
+                    const initiatives = parseCSV(prodInitText, 'productInitiatives');
+                    const bugs = parseCSV(prodBugText, 'productBugRelease');
+                    
+                    console.log('[APP] ✅ Product Roadmap cargado desde CSV (fallback):', {
+                        initiatives: initiatives.length,
+                        bugs: bugs.length
+                    });
+                    
+                    if (isMounted) {
+                        setProductInitiatives(initiatives);
+                        setProductBugRelease(bugs);
+                    }
+                } catch (csvErr) {
+                    console.error('[APP] ❌ Error loading Product Roadmap from CSV fallback:', csvErr);
+                    // Aún así establecer arrays vacíos para que el componente se renderice
+                    if (isMounted) {
+                        setProductInitiatives([]);
+                        setProductBugRelease([]);
+                    }
                 }
             }
         };
@@ -334,8 +382,8 @@ function App() {
         }
     }, [dataSource, loadData]);
 
-    // Si no hay usuario autenticado, mostrar Login
-    if (!currentUser) {
+    // Si no hay usuario autenticado, mostrar Login o encuesta pública
+    if (!currentUser && activeView !== 'enps-survey') {
         return (
             <Login 
                 onLoginSuccess={(user) => {
@@ -366,24 +414,46 @@ function App() {
                 isOpen={sidebarOpen}
                 setIsOpen={setSidebarOpen}
             />
-            <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'} pt-8 px-8 pb-12`}>
+            <div className={`flex-1 transition-all duration-300 ${currentUser ? (sidebarOpen ? 'md:ml-64' : 'md:ml-16') : ''} pt-8 px-8 pb-12`}>
                 <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
-                    <button
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
-                        className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
-                        aria-label="Toggle sidebar"
-                    >
-                        <Menu size={24} />
-                    </button>
+                    {currentUser && (
+                        <button
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
+                            aria-label="Toggle sidebar"
+                        >
+                            <Menu size={24} />
+                        </button>
+                    )}
+                    {!currentUser && activeView === 'enps-survey' && (
+                        <a
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setActiveView('overall');
+                            }}
+                            className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors"
+                        >
+                            ← Back to Login
+                        </a>
+                    )}
                     <div className="flex-1">
                         <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
                             {activeView === 'overall' ? 'Overall Dashboard' : 
                              activeView === 'product' ? 'Product Roadmap' : 
                              activeView === 'delivery' ? 'Delivery Roadmap' :
-                             activeView === 'projects-metrics' ? 'Projects Metrics' :
+                             activeView === 'projects-metrics' ? 'Project Metrics' :
                              activeView === 'developer-metrics' ? 'Developer Metrics' :
-                             activeView === 'user-admin' ? 'User Administration' :
+                             activeView === 'team-capacity' ? 'Team Capacity' :
+                            activeView === 'team-allocation' ? 'Team Allocation' :
+                            activeView === 'product-department-kpis' ? 'Product Raw Manual Raw Data' :
+                            activeView === 'user-admin' ? 'User Administration' :
+                             activeView === 'role-access' ? 'Role Access' :
                              activeView === 'kpis' ? 'KPIs Dashboard' :
+                             activeView === 'delivery-kpis' ? 'Delivery KPIs' :
+                             activeView === 'technical-kpis' ? 'Technical KPIs' :
+                             activeView === 'product-kpis' ? 'Product KPIs' :
+                             activeView === 'enps-survey' ? 'Team Satisfaction Survey' :
                              activeView === 'software-engineering-benchmarks' ? 'Software Engineering Benchmark' :
                              'Dashboard'}
                         </h1>
@@ -393,8 +463,17 @@ function App() {
                              activeView === 'delivery' ? 'Execution & Resource Allocation' :
                              activeView === 'projects-metrics' ? 'Comprehensive project performance analytics' :
                              activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
-                             activeView === 'user-admin' ? 'User management and administration' :
+                             activeView === 'team-capacity' ? 'Configure team capacity for sprints' :
+                            activeView === 'team-allocation' ? 'View team allocation report by squad and sprint' :
+                            activeView === 'product-department-kpis' ? 'Manage Product Raw Manual Raw Data' :
+                            activeView === 'enps-survey-management' ? 'Create and manage periodic eNPS surveys' :
+                            activeView === 'user-admin' ? 'User management and administration' :
+                             activeView === 'role-access' ? 'Manage user roles and permissions' :
                              activeView === 'kpis' ? 'Engineering metrics and performance indicators' :
+                             activeView === 'delivery-kpis' ? 'Delivery performance metrics with filters' :
+                             activeView === 'technical-kpis' ? 'Technical quality and performance metrics' :
+                             activeView === 'product-kpis' ? 'Product department KPIs and metrics' :
+                             activeView === 'enps-survey' ? 'Share your feedback about working in this team' :
                              activeView === 'software-engineering-benchmarks' ? 'Compare engineering metrics and team benchmarks' :
                              'Dashboard'}
                         </p>
@@ -411,7 +490,7 @@ function App() {
                                 {dataSource === 'db' ? (
                                     <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                        <span>Base de Datos</span>
+                                        <span>Database</span>
                                     </div>
                                 ) : (
                                     <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
@@ -421,11 +500,22 @@ function App() {
                                 )}
                             </>
                         )}
-                        {/* Indicador fijo para Product Roadmap - siempre CSV */}
+                        {/* Indicador fijo para Product Roadmap - ahora usa base de datos */}
                         {activeView === 'product' && (
                             <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300 border border-amber-500/30">
                                 <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                                <span>Product Roadmap (CSV)</span>
+                                <span>
+                                    {productRoadmapLastUpdate 
+                                        ? `Last updated: ${new Date(productRoadmapLastUpdate).toLocaleString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric', 
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}`
+                                        : 'Product Roadmap (Database)'
+                                    }
+                                </span>
                             </div>
                         )}
                     </div>
@@ -439,8 +529,8 @@ function App() {
                     }>
                         {activeView === 'overall' && <OverallView />}
                         {activeView === 'product' && (() => {
-                            // Debug: Verificar que Product Roadmap solo use datos de CSV
-                            console.log('[APP] 🟢 Renderizando Product Roadmap con datos CSV:', {
+                            // Debug: Verificar que Product Roadmap use datos de base de datos
+                            console.log('[APP] 🟢 Renderizando Product Roadmap con datos de base de datos:', {
                                 initiativesCount: productInitiatives.length,
                                 bugsCount: productBugRelease.length,
                                 sampleInitiative: productInitiatives[0],
@@ -455,17 +545,65 @@ function App() {
                             );
                         })()}
                         {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
-                        {activeView === 'projects-metrics' && canAccessModule(currentUser?.role || 'regular', 'projects-metrics') && (
+                        {activeView === 'projects-metrics' && canAccessModule(currentUser?.role || 'regular', MODULES.PROJECTS_METRICS) && (
                             <ProjectsMetrics />
                         )}
-                        {activeView === 'developer-metrics' && canAccessModule(currentUser?.role || 'regular', 'developer-metrics') && (
+                        {activeView === 'developer-metrics' && canAccessModule(currentUser?.role || 'regular', MODULES.DEVELOPER_METRICS) && (
                             <DeveloperMetrics />
                         )}
-                        {activeView === 'user-admin' && canAccessModule(currentUser?.role || 'regular', 'user-admin') && (
+                        {activeView === 'team-capacity' && canAccessModule(currentUser?.role || 'regular', MODULES.TEAM_CAPACITY) && (
+                            <TeamCapacity />
+                        )}
+                        {activeView === 'team-allocation' && canAccessModule(currentUser?.role || 'regular', MODULES.TEAM_ALLOCATION) && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading...</p></div>}>
+                                <TeamAllocation />
+                            </Suspense>
+                        )}
+                        {activeView === 'product-department-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.PRODUCT_DEPARTMENT_KPIS) && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading Product Raw Manual Raw Data...</p></div>}>
+                                <ProductDepartmentKPIs />
+                            </Suspense>
+                        )}
+                        {activeView === 'enps-survey-management' && canAccessModule(currentUser?.role || 'regular', MODULES.ENPS_SURVEY_MANAGEMENT) && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading eNPS Survey Management...</p></div>}>
+                                <ENPSSurveyManagement />
+                            </Suspense>
+                        )}
+                        {activeView === 'user-admin' && canAccessModule(currentUser?.role || 'regular', MODULES.USER_ADMIN) && (
                             <UserAdministration currentUser={currentUser} />
+                        )}
+                        {activeView === 'role-access' && canAccessModule(currentUser?.role || 'regular', MODULES.ROLE_ACCESS) && (
+                            <RoleAccess />
                         )}
                         {activeView === 'kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.KPIS) && (
                             <KPIsView />
+                        )}
+                        {activeView === 'delivery-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.DELIVERY_KPIS) && (
+                            <KPIsView initialTab="delivery" />
+                        )}
+                        {activeView === 'technical-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.TECHNICAL_KPIS) && (
+                            <KPIsView initialTab="quality" />
+                        )}
+                        {activeView === 'product-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.PRODUCT_KPIS) && (
+                            <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/30">
+                                    <TrendingUp size={48} className="text-cyan-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-3">
+                                        Coming Soon
+                                    </h2>
+                                    <p className="text-slate-400 max-w-md mx-auto text-lg">
+                                        Product KPIs está en desarrollo. Pronto podrás ver métricas y KPIs relacionados con productos.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        {/* eNPS Survey - accessible without authentication */}
+                        {activeView === 'enps-survey' && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading survey...</p></div>}>
+                                <ENPSSurvey />
+                            </Suspense>
                         )}
                         {activeView === 'software-engineering-benchmarks' && canAccessModule(currentUser?.role || 'regular', MODULES.SOFTWARE_ENGINEERING_BENCHMARKS) && (
                             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">

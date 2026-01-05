@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, MessageSquare } from 'lucide-react';
 
 const Login = ({ onLoginSuccess }) => {
     const [email, setEmail] = useState('');
@@ -113,8 +113,24 @@ const Login = ({ onLoginSuccess }) => {
                         </button>
                     </form>
 
+                    {/* Link to Survey */}
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                        <a
+                            href="#enps-survey"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                // Set activeView to enps-survey via window event or parent callback
+                                window.dispatchEvent(new CustomEvent('navigateToSurvey'));
+                            }}
+                            className="flex items-center justify-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors"
+                        >
+                            <MessageSquare size={16} />
+                            <span>Take Team Satisfaction Survey (No login required)</span>
+                        </a>
+                    </div>
+
                     {/* Footer */}
-                    <div className="mt-6 text-center text-xs text-slate-500">
+                    <div className="mt-4 text-center text-xs text-slate-500">
                         <p>Available roles: admin, 3amigos, Stakeholder, PM, Regular</p>
                     </div>
                 </div>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Layout, Box, Truck, Map, Users, BarChart, Activity, Gauge, TrendingUp, ChevronLeft, ChevronRight, LogOut, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layout, Box, Truck, Map, Users, BarChart, Activity, Gauge, TrendingUp, ChevronLeft, ChevronRight, ChevronDown, LogOut, AlertCircle, UserCheck, Shield, MessageSquare } from 'lucide-react';
 import { getNavbarModules } from '../config/permissions';
 import { getCurrentUser } from '../utils/authService';
 
@@ -13,7 +13,10 @@ const iconMap = {
     BarChart,
     Activity,
     Gauge,
-    TrendingUp
+    TrendingUp,
+    UserCheck,
+    Shield,
+    MessageSquare
 };
 
 /**
@@ -22,10 +25,51 @@ const iconMap = {
  */
 const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => {
     const currentUser = getCurrentUser();
-    const navItems = getNavbarModules(currentUser?.role || 'regular').map(module => ({
-        ...module,
-        icon: iconMap[module.icon] || Layout
-    }));
+    const [expandedMenus, setExpandedMenus] = useState({});
+    const [navItems, setNavItems] = useState([]);
+    
+    // Update nav items when user or permissions change
+    useEffect(() => {
+        const updateNavItems = () => {
+            const modules = getNavbarModules(currentUser?.role || 'regular');
+            const items = modules.map(module => ({
+                ...module,
+                icon: iconMap[module.icon] || Layout,
+                submodules: module.submodules?.map(sub => ({
+                    ...sub,
+                    icon: iconMap[sub.icon] || Layout
+                }))
+            }));
+            setNavItems(items);
+            console.log('[Sidebar] Updated nav items:', items.map(i => i.id));
+        };
+        
+        updateNavItems();
+        
+        // Listen for custom permission update events
+        const handlePermissionsUpdate = () => {
+            console.log('[Sidebar] Permissions updated, refreshing nav items...');
+            updateNavItems();
+        };
+        
+        window.addEventListener('permissionsUpdated', handlePermissionsUpdate);
+        
+        return () => {
+            window.removeEventListener('permissionsUpdated', handlePermissionsUpdate);
+        };
+    }, [currentUser?.role]);
+    
+    const toggleSubmenu = (menuId) => {
+        setExpandedMenus(prev => ({
+            ...prev,
+            [menuId]: !prev[menuId]
+        }));
+    };
+    
+    const isSubmenuActive = (submodules) => {
+        if (!submodules) return false;
+        return submodules.some(sub => activeView === sub.id);
+    };
 
     return (
         <>
@@ -75,26 +119,72 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                             {navItems.map(item => {
                                 const Icon = item.icon;
                                 const isActive = activeView === item.id;
+                                const hasSubmenu = item.hasSubmenu && item.submodules && item.submodules.length > 0;
+                                const isSubmenuExpanded = expandedMenus[item.id] || false;
+                                const isSubmenuItemActive = hasSubmenu && isSubmenuActive(item.submodules);
                                 
                                 return (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => {
-                                            console.log('🟢 [Sidebar] Click en:', item.id, item.label);
-                                            setActiveView(item.id);
-                                        }}
-                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                                            isActive
-                                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
-                                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                                        }`}
-                                        title={!isOpen ? item.label : ''}
-                                    >
-                                        <Icon size={20} className="flex-shrink-0" />
-                                        {isOpen && (
-                                            <span className="text-sm font-medium truncate">{item.label}</span>
+                                    <div key={item.id}>
+                                        <button
+                                            onClick={() => {
+                                                if (hasSubmenu) {
+                                                    toggleSubmenu(item.id);
+                                                } else {
+                                                    console.log('🟢 [Sidebar] Click en:', item.id, item.label);
+                                                    setActiveView(item.id);
+                                                }
+                                            }}
+                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                                                isActive || isSubmenuItemActive
+                                                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                                            }`}
+                                            title={!isOpen ? item.label : ''}
+                                        >
+                                            <Icon size={20} className="flex-shrink-0" />
+                                            {isOpen && (
+                                                <>
+                                                    <span className="text-sm font-medium truncate flex-1 text-left">{item.label}</span>
+                                                    {hasSubmenu && (
+                                                        <ChevronDown 
+                                                            size={16} 
+                                                            className={`transition-transform flex-shrink-0 ${
+                                                                isSubmenuExpanded ? 'rotate-180' : ''
+                                                            }`}
+                                                        />
+                                                    )}
+                                                </>
+                                            )}
+                                        </button>
+                                        
+                                        {/* Submenu items */}
+                                        {hasSubmenu && isOpen && isSubmenuExpanded && (
+                                            <div className="ml-4 mt-1 space-y-1 border-l border-slate-700/50 pl-2">
+                                                {item.submodules.map(subItem => {
+                                                    const SubIcon = subItem.icon;
+                                                    const isSubActive = activeView === subItem.id;
+                                                    
+                                                    return (
+                                                        <button
+                                                            key={subItem.id}
+                                                            onClick={() => {
+                                                                console.log('🟢 [Sidebar] Click en submenu:', subItem.id, subItem.label);
+                                                                setActiveView(subItem.id);
+                                                            }}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                                                                isSubActive
+                                                                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                                                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                                                            }`}
+                                                        >
+                                                            <SubIcon size={18} className="flex-shrink-0" />
+                                                            <span className="text-sm font-medium truncate">{subItem.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         )}
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
