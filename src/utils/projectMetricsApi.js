@@ -103,17 +103,22 @@ export const getSprintsForSquad = async (squadId) => {
   try {
     const { data, error } = await supabase
       .from('sprints')
-      .select('id, sprint_key, sprint_name, start_date, end_date, squad_id')
+      .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state, squad_id')
       .eq('squad_id', squadId)
+      .ilike('sprint_name', '%Sprint%')
       .order('start_date', { ascending: false });
 
     if (error) throw error;
     
-    // Determinar sprint actual (el más reciente que no ha terminado)
+    // Determinar sprint actual (active state o el más reciente que no ha terminado)
     const now = new Date();
     const sprintsWithCurrent = (data || []).map(sprint => {
-      const endDate = sprint.end_date ? new Date(sprint.end_date) : null;
-      const isActive = endDate ? endDate >= now : false;
+      // Un sprint está activo si:
+      // 1. Tiene state === 'active', O
+      // 2. No tiene end_date o end_date es en el futuro (y no está cerrado)
+      const isActive = sprint.state === 'active' || 
+        (sprint.state !== 'closed' && (!sprint.end_date || new Date(sprint.end_date) >= now));
+      
       return {
         ...sprint,
         is_active: isActive
@@ -162,20 +167,25 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       }
     }
 
-    // Obtener el nombre del sprint si está seleccionado para filtrar por current_sprint
+    // Obtener el nombre del sprint y fechas si está seleccionado para filtrar por current_sprint
     let sprintName = null;
+    let sprintCloseDate = null;
+    let isSprintClosed = false;
     if (sprintId) {
       const { data: sprint, error: sprintError } = await supabase
         .from('sprints')
-        .select('sprint_name')
+        .select('sprint_name, end_date, complete_date, state')
         .eq('id', sprintId)
         .single();
 
       if (sprintError) throw sprintError;
       sprintName = sprint?.sprint_name;
+      sprintCloseDate = sprint?.complete_date || sprint?.end_date || null;
+      isSprintClosed = sprint?.state === 'closed' || (sprintCloseDate && new Date(sprintCloseDate) < new Date());
       
-      if (!sprintName) {
-        // Si no se encuentra el sprint, retornar datos vacíos
+      // IMPORTANT: Only consider sprints with "Sprint" in the name (exclude "Backlog" and other non-sprint values)
+      if (!sprintName || !sprintName.includes('Sprint')) {
+        // Si no se encuentra el sprint o no tiene "Sprint" en el nombre, retornar datos vacíos
         return {
           tickets: [],
           statusBreakdown: {},
@@ -215,16 +225,134 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       query = query.in('initiative_id', initiativeIds);
     }
 
-    // Filtrar por current_sprint (métrica real que define si está en el sprint seleccionado)
-    if (sprintName) {
-      query = query.eq('current_sprint', sprintName);
+    // Filtrar por sprint usando issue_sprints (sprint snapshot) o status_by_sprint como fallback
+    let issues = [];
+    if (sprintId && sprintName) {
+      // Estrategia 1: Usar issue_sprints para obtener tickets que pertenecían al sprint
+      // Esto es la fuente de verdad para sprints cerrados (la "foto" al cierre)
+      const { data: issueSprints, error: issueSprintsError } = await supabase
+        .from('issue_sprints')
+        .select(`
+          issue_id,
+          status_at_sprint_close,
+          story_points_at_start,
+          story_points_at_close,
+          issues!inner(
+            id,
+            issue_key,
+            summary,
+            current_status,
+            current_story_points,
+            current_sprint,
+            status_by_sprint,
+            story_points_by_sprint,
+            initiative_id,
+            initiatives(
+              id,
+              initiative_name,
+              squad_id,
+              squads(
+                id,
+                squad_key,
+                squad_name
+              )
+            )
+          )
+        `)
+        .eq('sprint_id', sprintId);
+
+      if (!issueSprintsError && issueSprints && issueSprints.length > 0) {
+        // Extraer issues y mapear status_at_sprint_close y story_points_at_start
+        const issueIds = [];
+        const statusMap = new Map();
+        const spAtCloseMap = new Map();
+        
+        issueSprints.forEach(is => {
+          if (is.issues && is.issues.id) {
+            issueIds.push(is.issues.id);
+            if (is.status_at_sprint_close) {
+              statusMap.set(is.issues.id, is.status_at_sprint_close);
+            } else {
+              console.warn(`[PROJECT_METRICS] ⚠️ Issue ${is.issues.issue_key || is.issues.id} has null status_at_sprint_close in issue_sprints`);
+            }
+            // Para sprints cerrados, usar story_points_at_close (SP al final del sprint)
+            if (is.story_points_at_close !== null && is.story_points_at_close !== undefined) {
+              spAtCloseMap.set(is.issues.id, is.story_points_at_close);
+            }
+          }
+        });
+        
+        console.log(`[PROJECT_METRICS] 📊 Mapped ${statusMap.size} issues with status_at_sprint_close from issue_sprints`);
+
+        // Filtrar por initiatives del squad si aplica
+        let filteredIssues = issueSprints.map(is => is.issues).filter(Boolean);
+        
+        if (initiativeIds && initiativeIds.length > 0) {
+          filteredIssues = filteredIssues.filter(issue => 
+            issue.initiative_id && initiativeIds.includes(issue.initiative_id)
+          );
+        }
+
+        // Agregar status_at_sprint_close y story_points_at_close a cada issue para uso posterior
+        // IMPORTANT: Para sprints cerrados, excluir tickets removidos antes del cierre (status_at_sprint_close es null)
+        filteredIssues.forEach(issue => {
+          if (statusMap.has(issue.id)) {
+            issue.status_at_sprint_close = statusMap.get(issue.id);
+          } else {
+            console.warn(`[PROJECT_METRICS] ⚠️ Issue ${issue.issue_key || issue.id} has no status_at_sprint_close in statusMap`);
+          }
+          // Para sprints cerrados, usar story_points_at_close (SP al final del sprint) en lugar de current_story_points
+          if (spAtCloseMap.has(issue.id)) {
+            issue.story_points_at_close = spAtCloseMap.get(issue.id);
+          }
+        });
+        
+        // Log para debug: verificar cuántos issues tienen status_at_sprint_close
+        const issuesWithStatus = filteredIssues.filter(issue => issue.status_at_sprint_close).length;
+        console.log(`[PROJECT_METRICS] 📊 Issues with status_at_sprint_close: ${issuesWithStatus}/${filteredIssues.length}`);
+
+        // Para sprints cerrados, excluir tickets que fueron removidos antes del cierre
+        if (isSprintClosed && sprintCloseDate) {
+          filteredIssues = filteredIssues.filter(issue => {
+            // Si tiene status_at_sprint_close, estaba en el sprint al cierre
+            // Si no tiene pero el sprint está cerrado, fue removido antes del cierre
+            return issue.status_at_sprint_close !== null && issue.status_at_sprint_close !== undefined;
+          });
+          console.log(`[PROJECT_METRICS] Filtered out tickets removed before sprint close. Remaining: ${filteredIssues.length}`);
+        }
+
+        issues = filteredIssues;
+        console.log(`[PROJECT_METRICS] Issues encontrados via issue_sprints: ${issues.length}${isSprintClosed ? ' (sprint cerrado, usando status_at_sprint_close)' : ''}`);
+      }
+
+      // Estrategia 2: Si no hay resultados en issue_sprints, usar status_by_sprint como fallback
+      if (issues.length === 0) {
+        console.log(`[PROJECT_METRICS] No issues found via issue_sprints, trying status_by_sprint fallback`);
+        
+        // Filtrar por current_sprint O por status_by_sprint que contenga el sprint
+        query = query.or(`current_sprint.eq.${sprintName},status_by_sprint->>${sprintName}.not.is.null`);
+        
+        const { data: fallbackIssues, error: fallbackError } = await query;
+        
+        if (!fallbackError && fallbackIssues) {
+          // Filtrar solo los que realmente tienen el sprint en status_by_sprint o current_sprint
+          issues = fallbackIssues.filter(issue => {
+            const hasInCurrentSprint = issue.current_sprint === sprintName;
+            const hasInStatusBySprint = issue.status_by_sprint && 
+                                       typeof issue.status_by_sprint === 'object' &&
+                                       Object.prototype.hasOwnProperty.call(issue.status_by_sprint, sprintName);
+            return hasInCurrentSprint || hasInStatusBySprint;
+          });
+          console.log(`[PROJECT_METRICS] Issues encontrados via status_by_sprint fallback: ${issues.length}`);
+        }
+      }
+    } else {
+      // Sin filtro de sprint, usar query normal
+      const { data: allIssues, error: allError } = await query;
+      if (allError) throw allError;
+      issues = allIssues || [];
+      console.log(`[PROJECT_METRICS] Issues encontrados: ${issues.length}`);
     }
-
-    const { data: issues, error } = await query;
-
-    if (error) throw error;
-
-    console.log(`[PROJECT_METRICS] Issues encontrados: ${(issues || []).length}`);
 
     // Función para determinar si un estado es "Dev Done"
     const isDevDone = (status) => {
@@ -240,13 +368,56 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
              statusUpper === 'COMPLETED';
     };
 
-    // Agrupar por Board State (current_status) con normalización
+    // Construir mapa de status_at_sprint_close desde los issues que ya lo tienen
+    const issueStatusMap = new Map();
+    if (sprintId && issues.length > 0) {
+      issues.forEach(issue => {
+        if (issue.status_at_sprint_close) {
+          issueStatusMap.set(issue.id, issue.status_at_sprint_close);
+        }
+      });
+    }
+
+    // Agrupar por Board State usando estado del sprint si está disponible
     const statusBreakdown = {};
     let totalSP = 0;
     let completedSP = 0; // SP de tickets completados
 
     (issues || []).forEach(issue => {
-      const rawStatus = issue.current_status || 'Unknown';
+      // Para sprints cerrados: usar SOLO status_at_sprint_close o status_by_sprint (histórico)
+      // Para sprints activos: usar current_status
+      let rawStatus = null;
+      
+      if (sprintId && sprintName) {
+        if (isSprintClosed) {
+          // Sprint cerrado: SIEMPRE usar status_at_sprint_close (la foto al cierre)
+          // NUNCA usar current_status para sprints cerrados - eso sería incorrecto
+          const statusAtClose = issueStatusMap.get(issue.id) || issue.status_at_sprint_close;
+          if (statusAtClose) {
+            rawStatus = statusAtClose;
+          } else if (issue.status_by_sprint && typeof issue.status_by_sprint === 'object') {
+            // Fallback: status_by_sprint[sprintName] si no hay status_at_sprint_close
+            const sprintStatus = issue.status_by_sprint[sprintName];
+            if (sprintStatus) {
+              rawStatus = sprintStatus;
+            }
+          }
+          
+          // Si no hay status_at_sprint_close ni status_by_sprint, saltar este ticket
+          // (no debería pasar porque ya filtramos antes, pero por seguridad)
+          if (!rawStatus) {
+            console.warn(`[PROJECT_METRICS] ⚠️ Skipping issue ${issue.issue_key || issue.id} - no historical status for closed sprint`);
+            return; // Skip this issue
+          }
+        } else {
+          // Sprint activo: usar current_status (estado actual)
+          rawStatus = issue.current_status || 'Unknown';
+        }
+      } else {
+        // Sin filtro de sprint: usar current_status
+        rawStatus = issue.current_status || 'Unknown';
+      }
+      
       const status = normalizeStatus(rawStatus);
       
       if (!statusBreakdown[status]) {
@@ -257,7 +428,12 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
         };
       }
       statusBreakdown[status].count++;
-      const sp = issue.current_story_points || 0;
+      // Para sprints cerrados, usar story_points_at_close (SP al final del sprint)
+      // Para sprints activos, usar current_story_points
+      let sp = issue.current_story_points || 0;
+      if (isSprintClosed && issue.story_points_at_close !== null && issue.story_points_at_close !== undefined) {
+        sp = issue.story_points_at_close;
+      }
       statusBreakdown[status].sp += sp;
       totalSP += sp;
       

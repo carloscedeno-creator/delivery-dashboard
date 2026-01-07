@@ -4,7 +4,7 @@ import {
   getCapacityForSquadSprint,
   getAllSquads,
   getAllSprints,
-  getDevelopersForSquad,
+  getAllDevelopers,
   getAllDevelopersForCapacity
 } from '../services/teamCapacityService';
 
@@ -45,7 +45,9 @@ const TeamAllocation = () => {
         getAllSprints()
       ]);
       setSquads(squadsData);
-      setSprints(sprintsData);
+      // IMPORTANT: Filter to only include sprints with "Sprint" in the name (already filtered in API, but double-check)
+      const validSprints = (sprintsData || []).filter(s => s.sprint_name && s.sprint_name.includes('Sprint'));
+      setSprints(validSprints);
     } catch (error) {
       console.error('[TeamAllocation] Error loading initial data:', error);
     } finally {
@@ -69,9 +71,9 @@ const TeamAllocation = () => {
         setDeveloperParticipations([]);
       }
       
-      // Load all developers for the squad
-      const squadDevelopers = await getDevelopersForSquad(selectedSquad);
-      setDevelopers(squadDevelopers);
+      // Load all developers (multisquad support)
+      const allDevelopers = await getAllDevelopers();
+      setDevelopers(allDevelopers);
       
     } catch (error) {
       console.error('[TeamAllocation] Error loading capacity and developers:', error);
@@ -167,7 +169,7 @@ const TeamAllocation = () => {
                 .filter(sprint => !selectedSquad || sprint.squad_id === selectedSquad)
                 .map(sprint => (
                   <option key={sprint.id} value={sprint.id}>
-                    {sprint.sprint_name} ({sprint.start_date ? new Date(sprint.start_date).toLocaleDateString() : 'N/A'} - {sprint.end_date ? new Date(sprint.end_date).toLocaleDateString() : 'N/A'})
+                    {sprint.is_active ? '⭐ ' : ''}{sprint.sprint_name} ({sprint.start_date ? new Date(sprint.start_date).toLocaleDateString() : 'N/A'} - {sprint.end_date ? new Date(sprint.end_date).toLocaleDateString() : 'N/A'})
                   </option>
                 ))}
             </select>
@@ -196,18 +198,18 @@ const TeamAllocation = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="glass rounded-lg p-4 border border-slate-700/50">
                 <div className="text-sm text-slate-400 mb-1">Goal SP</div>
-                <div className="text-2xl font-bold text-white">{capacityData.capacity_goal_sp.toFixed(1)}</div>
+                <div className="text-2xl font-bold text-white">{(capacityData.capacity_goal_sp || 0).toFixed(1)}</div>
               </div>
               <div className="glass rounded-lg p-4 border border-slate-700/50">
                 <div className="text-sm text-slate-400 mb-1">Available SP</div>
-                <div className="text-2xl font-bold text-white">{capacityData.capacity_available_sp.toFixed(1)}</div>
+                <div className="text-2xl font-bold text-white">{(capacityData.capacity_available_sp || 0).toFixed(1)}</div>
               </div>
               <div className="glass rounded-lg p-4 border border-slate-700/50">
                 <div className="text-sm text-slate-400 mb-1">SP Done</div>
                 <div className={`text-2xl font-bold ${
-                  capacityData.sp_done > 0 ? 'text-emerald-400' : 'text-slate-400'
+                  (capacityData.sp_done || 0) > 0 ? 'text-emerald-400' : 'text-slate-400'
                 }`}>
-                  {capacityData.sp_done.toFixed(1)}
+                  {(capacityData.sp_done || 0).toFixed(1)}
                 </div>
               </div>
               <div className="glass rounded-lg p-4 border border-slate-700/50">

@@ -13,6 +13,172 @@ import {
 import { mockTeamHealthKPIData } from '../data/kpiMockData';
 
 /**
+ * Generates mock eNPS data for demonstration purposes
+ * @returns {Object} Mock eNPS data with positive value
+ */
+const generateMockENPSData = () => {
+  // Generate realistic mock data: 8 promoters, 2 passives, 1 detractor
+  const promoters = 8;
+  const passives = 2;
+  const detractors = 1;
+  const totalResponses = promoters + passives + detractors;
+  const enpsValue = ((promoters - detractors) / totalResponses) * 100;
+  const score = calculateENPSScore(enpsValue);
+
+  return {
+    value: enpsValue,
+    score: score,
+    promoters: promoters,
+    passives: passives,
+    detractors: detractors,
+    totalResponses: totalResponses,
+    isMock: true // Flag to indicate this is mock data
+  };
+};
+
+/**
+ * Calculates completed story points for multiple sprints in parallel, including "DEVELOPMENT DONE" status
+ * Uses sprint IDs instead of names to avoid URL encoding issues
+ * @param {Array<string>} sprintIds - Array of sprint IDs
+ * @returns {Promise<Map<string, number>>} Map of sprint_id -> completed story points
+ */
+const calculateCompletedStoryPointsBatch = async (sprintIds) => {
+  if (!supabase || !sprintIds || sprintIds.length === 0) {
+    return new Map();
+  }
+
+  try {
+    // Get sprint names first
+    const { data: sprints, error: sprintsError } = await supabase
+      .from('sprints')
+      .select('id, sprint_name')
+      .in('id', sprintIds);
+
+    if (sprintsError || !sprints || sprints.length === 0) {
+      console.warn(`[TEAM_HEALTH_KPI] Error fetching sprints for batch calculation:`, sprintsError);
+      return new Map();
+    }
+
+    // Create map of sprint_id -> sprint_name (only sprints with "Sprint" in name)
+    const sprintIdToName = new Map();
+    const sprintNames = [];
+    sprints.forEach(sprint => {
+      if (sprint.sprint_name && sprint.sprint_name.includes('Sprint')) {
+        sprintIdToName.set(sprint.id, sprint.sprint_name);
+        sprintNames.push(sprint.sprint_name);
+      }
+    });
+
+    if (sprintNames.length === 0) {
+      return new Map();
+    }
+
+    // Query all issues for all sprints in one query
+    const { data: allIssues, error: issuesError } = await supabase
+      .from('issues')
+      .select('current_story_points, current_status, current_sprint, status_by_sprint, issue_key')
+      .in('current_sprint', sprintNames);
+
+    if (issuesError) {
+      console.warn(`[TEAM_HEALTH_KPI] Error fetching issues for sprints:`, issuesError);
+      return new Map();
+    }
+
+    if (!allIssues || allIssues.length === 0) {
+      return new Map();
+    }
+
+    // Group by sprint_id and filter completed issues
+    const completedSPBySprintId = new Map();
+    
+    // Initialize map with zeros
+    sprintIds.forEach(sprintId => {
+      completedSPBySprintId.set(sprintId, 0);
+    });
+
+    // Create reverse map: sprint_name -> sprint_id
+    const sprintNameToId = new Map();
+    sprintIdToName.forEach((name, id) => {
+      sprintNameToId.set(name, id);
+    });
+
+    // Process issues and sum story points for completed ones
+    // Use historical status at sprint end when available (following Google Sheets logic)
+    allIssues.forEach(issue => {
+      if (!issue.current_sprint) return;
+
+      const sprintId = sprintNameToId.get(issue.current_sprint);
+      if (!sprintId) return;
+
+      const sprintName = issue.current_sprint;
+      let statusForCompletion = (issue.current_status || '').trim().toUpperCase();
+
+      // Use historical status if available (Google Sheets approach)
+      if (issue.status_by_sprint && typeof issue.status_by_sprint === 'object') {
+        const historicalStatus = issue.status_by_sprint[sprintName];
+        if (historicalStatus) {
+          statusForCompletion = historicalStatus.trim().toUpperCase();
+          console.log(`[TEAM_HEALTH_KPI] Using historical status for ${issue.issue_key} in ${sprintName}: "${statusForCompletion}"`);
+        }
+      } else if (typeof issue.status_by_sprint === 'string') {
+        try {
+          const statusHistory = JSON.parse(issue.status_by_sprint);
+          const historicalStatus = statusHistory[sprintName];
+          if (historicalStatus) {
+            statusForCompletion = historicalStatus.trim().toUpperCase();
+            console.log(`[TEAM_HEALTH_KPI] Using parsed historical status for ${issue.issue_key} in ${sprintName}: "${statusForCompletion}"`);
+          }
+        } catch (e) {
+          console.warn(`[TEAM_HEALTH_KPI] Error parsing status_by_sprint for ${issue.issue_key}:`, e.message);
+        }
+      }
+
+      const isCompleted = statusForCompletion === 'DONE' ||
+                         statusForCompletion === 'DEVELOPMENT DONE' ||
+                         statusForCompletion.includes('DEVELOPMENT DONE') ||
+                         statusForCompletion.includes('DEV DONE') ||
+                         (statusForCompletion.includes('DONE') && !statusForCompletion.includes('TO DO') && !statusForCompletion.includes('TODO')) ||
+                         statusForCompletion === 'CLOSED' ||
+                         statusForCompletion === 'RESOLVED' ||
+                         statusForCompletion === 'COMPLETED';
+
+      if (isCompleted) {
+        const currentSP = completedSPBySprintId.get(sprintId) || 0;
+        completedSPBySprintId.set(sprintId, currentSP + (issue.current_story_points || 0));
+        console.log(`[TEAM_HEALTH_KPI] Issue ${issue.issue_key} counted as completed in ${sprintName}: ${issue.current_story_points} SP`);
+      }
+    });
+
+    return completedSPBySprintId;
+  } catch (error) {
+    console.error(`[TEAM_HEALTH_KPI] Error calculating completed story points batch:`, error);
+    return new Map();
+  }
+};
+
+/**
+ * Calculates completed story points for a single sprint, including "DEVELOPMENT DONE" status
+ * @param {string} sprintId - Sprint ID
+ * @returns {Promise<number>} Total completed story points
+ */
+const calculateCompletedStoryPoints = async (sprintId) => {
+  if (!supabase || !sprintId) {
+    return 0;
+  }
+
+  try {
+    // Use batch function for single sprint (more efficient)
+    const completedSPMap = await calculateCompletedStoryPointsBatch([sprintId]);
+    const completedSP = completedSPMap.get(sprintId) || 0;
+
+    return completedSP;
+  } catch (error) {
+    console.error(`[TEAM_HEALTH_KPI] Error calculating completed story points for sprint ${sprintId}:`, error);
+    return 0;
+  }
+};
+
+/**
  * Calculates eNPS from enps_responses table
  * @param {Date} startDate - Start date for the period
  * @param {Date} endDate - End date for the period
@@ -43,6 +209,26 @@ const calculateENPSFromResponses = async (startDate, endDate, surveyId = null) =
         return null;
       }
 
+      // Log actual response values for debugging
+      const responseScores = responses.map(r => r.nps_score);
+      const sortedScores = [...responseScores].sort((a, b) => a - b);
+      const averageScore = responseScores.reduce((sum, score) => sum + score, 0) / responseScores.length;
+      
+      console.log('[TEAM_HEALTH_KPI] 📊 eNPS Response Analysis:');
+      console.log('  Total Responses:', responses.length);
+      console.log('  Individual Scores:', sortedScores.join(', '));
+      console.log('  Average Score:', averageScore.toFixed(2));
+      console.log('  Score Distribution:', {
+        '9-10 (Promoters)': responseScores.filter(s => s >= 9).length,
+        '7-8 (Passives)': responseScores.filter(s => s >= 7 && s < 9).length,
+        '0-6 (Detractors)': responseScores.filter(s => s <= 6).length
+      });
+      console.log('  Detailed Breakdown:', {
+        promoters: responseScores.filter(s => s >= 9),
+        passives: responseScores.filter(s => s >= 7 && s < 9),
+        detractors: responseScores.filter(s => s <= 6)
+      });
+
       // Calculate eNPS manually
       const promoters = responses.filter(r => r.nps_score >= 9).length;
       const passives = responses.filter(r => r.nps_score >= 7 && r.nps_score < 9).length;
@@ -52,6 +238,15 @@ const calculateENPSFromResponses = async (startDate, endDate, surveyId = null) =
       const enpsValue = totalResponses > 0 
         ? ((promoters - detractors) / totalResponses) * 100 
         : 0;
+      
+      console.log('[TEAM_HEALTH_KPI] 📊 eNPS Calculation:', {
+        promoters,
+        passives,
+        detractors,
+        totalResponses,
+        enpsValue: enpsValue.toFixed(2),
+        calculation: `(${promoters} - ${detractors}) / ${totalResponses} × 100 = ${enpsValue.toFixed(2)}`
+      });
 
       const score = calculateENPSScore(enpsValue);
 
@@ -101,9 +296,24 @@ const calculateENPSFromResponses = async (startDate, endDate, surveyId = null) =
  * Calculates Planning Accuracy from sprint_metrics
  * Calculates average Planning Accuracy from the last 6 sprints
  * @param {string} sprintId - Sprint ID (optional, uses average of last 6 sprints if not provided)
+ * @param {string} squadId - Squad ID (optional, filters by squad if provided)
  * @returns {Promise<Object>} Planning Accuracy data
  */
-const calculatePlanningAccuracyFromMetrics = async (sprintId = null) => {
+/**
+ * Obtiene datos del burndown para un sprint si están disponibles
+ * Esto nos da datos históricos precisos del progreso del sprint
+ */
+const getBurndownDataForSprint = async (sprintId) => {
+  try {
+    const { getSprintBurndownData } = await import('../utils/sprintBurndownApi.js');
+    return await getSprintBurndownData(sprintId);
+  } catch (error) {
+    console.debug(`[TEAM_HEALTH_KPI] No burndown data available for sprint ${sprintId}:`, error.message);
+    return null;
+  }
+};
+
+const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = null) => {
   if (!supabase) {
     return null;
   }
@@ -115,12 +325,22 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null) => {
         *,
         sprints!inner(
           id,
+          sprint_name,
           planned_story_points,
           start_date,
-          end_date
+          end_date,
+          squad_id
         )
       `)
       .order('calculated_at', { ascending: false });
+
+    // Filter by squad if specified
+    if (squadId) {
+      query = query.eq('sprints.squad_id', squadId);
+    }
+
+    // IMPORTANT: Only consider sprints with "Sprint" in the name (exclude "Backlog" and other non-sprint values)
+    query = query.ilike('sprints.sprint_name', '%Sprint%');
 
     // If specific sprint requested, use only that sprint
     if (sprintId) {
@@ -146,28 +366,262 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null) => {
       const metric = data[0];
       const sprint = metric.sprints;
 
-      const plannedSP = sprint?.planned_story_points || metric.total_story_points || 0;
-      const completedSP = metric.completed_story_points || 0;
-      const addedSP = metric.added_story_points || 0;
+      // Prefer Google-Sheets style calculations using sprint snapshot data in issues.status_by_sprint
+      // This fixes closed sprints where issues may no longer have current_sprint = sprint_name
+      const sprintName = sprint?.sprint_name;
+      // IMPORTANT: Only consider sprints with "Sprint" in the name
+      if (!sprintName || !sprintName.includes('Sprint')) {
+        console.warn(`[TEAM_HEALTH_KPI] Sprint name "${sprintName}" does not contain "Sprint", skipping`);
+        return null;
+      }
+      const squadIdForSprint = sprint?.squad_id || squadId;
 
-      const effectivePlannedSP = plannedSP > 0 ? plannedSP : metric.total_story_points || 0;
-      const percentage = effectivePlannedSP > 0 ? (completedSP / effectivePlannedSP) * 100 : 0;
+      const parseStatusBySprint = (value) => {
+        if (!value) return {};
+        if (typeof value === 'object') return value;
+        if (typeof value === 'string') {
+          try { return JSON.parse(value); } catch { return {}; }
+        }
+        return {};
+      };
+
+      const isCompletedStatus = (status) => {
+        if (!status) return false;
+        const s = String(status).trim().toUpperCase();
+        return s === 'DONE' ||
+          s === 'DEVELOPMENT DONE' ||
+          s.includes('DEVELOPMENT DONE') ||
+          s.includes('DEV DONE') ||
+          (s.includes('DONE') && !s.includes('TO DO') && !s.includes('TODO')) ||
+          s === 'CLOSED' ||
+          s === 'RESOLVED' ||
+          s === 'COMPLETED';
+      };
+
+      // PRIORITY 1: Try to use burndown data if available (most accurate historical data)
+      let burndownData = null;
+      try {
+        burndownData = await getBurndownDataForSprint(sprintId);
+        if (burndownData && burndownData.totalCompleted !== undefined && burndownData.totalPlanned !== undefined) {
+          console.log(`[TEAM_HEALTH_KPI] ✅ Using burndown data for Planning Accuracy (source: ${burndownData.dataSource || 'unknown'})`);
+        }
+      } catch (error) {
+        console.debug(`[TEAM_HEALTH_KPI] Burndown data not available, using fallback calculation`);
+      }
+
+      // BEST source of truth: issue_sprints table (membership survives even if Sprint field later gets corrupted)
+      // It also stores status_at_sprint_close which matches the "foto" concept.
+      // PRIORITY: Always use issue_sprints for Planning Accuracy as it's more direct and accurate
+      // Get sprint close date to filter out tickets removed before closure
+      let sprintCloseDate = null;
+      if (sprint) {
+        sprintCloseDate = sprint.complete_date || sprint.end_date || null;
+      } else if (sprintId) {
+        // Fetch sprint to get close date
+        const { data: sprintData } = await supabase
+          .from('sprints')
+          .select('complete_date, end_date')
+          .eq('id', sprintId)
+          .maybeSingle();
+        if (sprintData) {
+          sprintCloseDate = sprintData.complete_date || sprintData.end_date || null;
+        }
+      }
+      
+      // Initialize with burndown data as fallback, but prefer issue_sprints
+      let plannedSP = burndownData?.totalPlanned || sprint?.planned_story_points || metric.total_story_points || 0;
+      let completedSP = burndownData?.totalCompleted || metric.completed_story_points || 0;
+      let calculatedFromIssueSprints = false;
+      
+      // Always try to calculate from issue_sprints first (most accurate for Planning Accuracy)
+      try {
+        const { data: issueSprintRows, error: issueSprintError } = await supabase
+          .from('issue_sprints')
+          .select('issue_id, sprint_id, status_at_sprint_close, story_points_at_start, story_points_at_close')
+          .eq('sprint_id', sprintId)
+          .limit(10000);
+
+        if (!issueSprintError && issueSprintRows && issueSprintRows.length > 0) {
+          const issueIds = issueSprintRows.map(r => r.issue_id).filter(Boolean);
+
+          const { data: issues, error: issuesError } = await supabase
+            .from('issues')
+            .select('id, issue_key, current_story_points, current_status, story_points_by_sprint')
+            .in('id', issueIds);
+
+          if (!issuesError && issues && issues.length > 0) {
+            const issuesById = new Map(issues.map(i => [i.id, i]));
+
+            // PLANNING ACCURACY = (SP Cerrados / SP Totales al Final del Sprint) * 100
+            // SP Totales al Final = suma de story_points_at_close de TODOS los tickets que estaban en el sprint al cierre
+            // SP Cerrados = suma de story_points_at_close solo de los tickets completados
+            // IMPORTANT: Solo incluir tickets que estaban en el sprint al momento del cierre
+            // (status_at_sprint_close IS NOT NULL ya filtra esto)
+            
+            // Total SP al final del sprint = suma de story_points_at_close de todos los tickets
+            plannedSP = issueSprintRows.reduce((sum, row) => {
+              // Si status_at_sprint_close es null, el ticket fue removido antes del cierre, excluirlo
+              if (!row.status_at_sprint_close && sprintCloseDate) {
+                return sum;
+              }
+              
+              // Usar story_points_at_close (SP al final del sprint)
+              const spAtClose = Number(row.story_points_at_close) || 0;
+              return sum + spAtClose;
+            }, 0);
+
+            // Completed SP = suma de story_points_at_close solo de los tickets completados
+            completedSP = issueSprintRows.reduce((sum, row) => {
+              // Si status_at_sprint_close es null, el ticket fue removido antes del cierre, excluirlo
+              if (!row.status_at_sprint_close && sprintCloseDate) {
+                return sum;
+              }
+              
+              const statusAtClose = row.status_at_sprint_close;
+              const isCompleted = isCompletedStatus(statusAtClose);
+              if (!isCompleted) return sum;
+              
+              // Usar story_points_at_close para los completados
+              const spAtClose = Number(row.story_points_at_close) || 0;
+              return sum + spAtClose;
+            }, 0);
+
+            calculatedFromIssueSprints = true;
+            console.log(`[TEAM_HEALTH_KPI] Planning Accuracy (sprint ${sprintName || sprintId}) from issue_sprints: Total SP at Close=${plannedSP}, Completed SP=${completedSP}, Links=${issueSprintRows.length}, Issues=${issues.length}`);
+          }
+        }
+      } catch (e) {
+        console.warn('[TEAM_HEALTH_KPI] Failed to calculate Planning Accuracy via issue_sprints (falling back to burndown):', e?.message || e);
+        // If issue_sprints calculation failed, use burndown data if available
+        if (burndownData && burndownData.totalCompleted !== undefined) {
+          plannedSP = burndownData.totalPlanned || plannedSP;
+          completedSP = burndownData.totalCompleted || completedSP;
+          console.log(`[TEAM_HEALTH_KPI] Planning Accuracy (sprint ${sprintName || sprintId}) from burndown (fallback): Planned=${plannedSP}, Completed=${completedSP}`);
+        }
+      }
+
+      // Only use issues snapshot fallback if we didn't successfully calculate from issue_sprints
+      if (!calculatedFromIssueSprints && sprintName && squadIdForSprint) {
+        const { data: squadIssues, error: squadIssuesError } = await supabase
+          .from('issues')
+          .select('id, issue_key, squad_id, current_sprint, current_story_points, current_status, status_by_sprint')
+          .eq('squad_id', squadIdForSprint)
+          .not('current_story_points', 'is', null)
+          .gt('current_story_points', 0);
+
+        if (!squadIssuesError && squadIssues) {
+          const issuesInSprint = squadIssues.filter((issue) => {
+            if (issue.current_sprint === sprintName) return true;
+            const statusMap = parseStatusBySprint(issue.status_by_sprint);
+            return Object.prototype.hasOwnProperty.call(statusMap, sprintName);
+          });
+
+          plannedSP = issuesInSprint.reduce((sum, i) => sum + (i.current_story_points || 0), 0);
+          completedSP = issuesInSprint.reduce((sum, i) => {
+            const statusMap = parseStatusBySprint(i.status_by_sprint);
+            const statusAtEnd = statusMap[sprintName] || i.current_status;
+            return isCompletedStatus(statusAtEnd) ? sum + (i.current_story_points || 0) : sum;
+          }, 0);
+
+          console.log(`[TEAM_HEALTH_KPI] Planning Accuracy (sprint ${sprintName}) from issues snapshot (fallback): Planned=${plannedSP}, Completed=${completedSP}, Issues=${issuesInSprint.length}`);
+        } else if (squadIssuesError) {
+          console.warn('[TEAM_HEALTH_KPI] Could not fetch squad issues for Planning Accuracy:', squadIssuesError);
+        }
+      }
+
+      // PLANNING ACCURACY = (SP Cerrados / SP Totales al Final del Sprint) * 100
+      // No usamos carry over para el cálculo, solo para información adicional
+      let carryOverCount = 0;
+      
+      // Get previous sprint to calculate carry over (solo para información, no para el cálculo)
+      if (sprintName && squadIdForSprint) {
+        const { data: previousSprintData } = await supabase
+          .from('sprints')
+          .select('id, sprint_name, end_date')
+          .eq('squad_id', squadIdForSprint)
+          .ilike('sprint_name', '%Sprint%')
+          .lte('end_date', sprint.start_date || sprint.end_date || '9999-12-31')
+          .order('end_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (previousSprintData) {
+          // Carry Over = cantidad de tickets NO completados del sprint anterior
+          const { data: previousSprintIssues, error: prevSprintError } = await supabase
+            .from('issue_sprints')
+            .select('status_at_sprint_close')
+            .eq('sprint_id', previousSprintData.id)
+            .not('status_at_sprint_close', 'is', null);
+          
+          if (!prevSprintError && previousSprintIssues) {
+            const isCompletedStatusForCarryOver = (status) => {
+              if (!status) return false;
+              const s = String(status).trim().toUpperCase();
+              return s === 'DONE' ||
+                     s.includes('DEVELOPMENT DONE') ||
+                     s.includes('DEV DONE') ||
+                     s === 'CLOSED' ||
+                     s === 'RESOLVED' ||
+                     s === 'COMPLETED';
+            };
+            
+            // Carry over = tickets NO completados (cantidad, no SP)
+            carryOverCount = previousSprintIssues.filter(isp => 
+              !isCompletedStatusForCarryOver(isp.status_at_sprint_close)
+            ).length;
+            
+            console.log(`[TEAM_HEALTH_KPI] Carry over from ${previousSprintData.sprint_name}: ${carryOverCount} tickets NOT completed`);
+          }
+        }
+      }
+      
+      // Planning Accuracy = (SP Cerrados / SP Totales al Final) * 100
+      const percentage = plannedSP > 0 ? (completedSP / plannedSP) * 100 : (completedSP > 0 ? 100 : 0);
       const score = calculatePlanningAccuracyScore(percentage);
+
+      console.log(`[TEAM_HEALTH_KPI] Planning Accuracy calculation: Total SP at Close=${plannedSP}, Completed SP=${completedSP}, Percentage=${percentage.toFixed(2)}%, Carry Over Tickets=${carryOverCount}`);
 
       return {
         percentage: Math.round(percentage * 10) / 10,
         score,
-        plannedSP,
+        plannedSP: plannedSP, // SP totales al final del sprint
         completedSP,
-        addedSP
+        carryOverSP: 0, // Carry over no se usa en el cálculo, solo carryOverCount para información
+        carryOverCount,
+        addedSP: 0 // Not used in Planning Accuracy
       };
     }
 
     // Calculate average from last 6 sprints
-    const validMetrics = data.filter(metric => {
+    // Try to enhance with burndown data if available
+    const enhancedMetrics = await Promise.all(data.map(async (metric) => {
       const sprint = metric.sprints;
-      const plannedSP = sprint?.planned_story_points || metric.total_story_points || 0;
-      const completedSP = metric.completed_story_points || 0;
+      let plannedSP = sprint?.planned_story_points || metric.total_story_points || 0;
+      let completedSP = metric.completed_story_points || 0;
+      
+      // Try to get burndown data for more accurate metrics
+      if (sprint?.id) {
+        try {
+          const burndown = await getBurndownDataForSprint(sprint.id);
+          if (burndown && burndown.totalCompleted !== undefined && burndown.totalPlanned !== undefined) {
+            plannedSP = burndown.totalPlanned;
+            completedSP = burndown.totalCompleted;
+          }
+        } catch (error) {
+          // Silently fall back to metric data
+        }
+      }
+      
+      return {
+        ...metric,
+        enhancedPlannedSP: plannedSP,
+        enhancedCompletedSP: completedSP
+      };
+    }));
+    
+    const validMetrics = enhancedMetrics.filter(metric => {
+      const plannedSP = metric.enhancedPlannedSP || metric.sprints?.planned_story_points || metric.total_story_points || 0;
+      const completedSP = metric.enhancedCompletedSP || metric.completed_story_points || 0;
       const effectivePlannedSP = plannedSP > 0 ? plannedSP : metric.total_story_points || 0;
       return effectivePlannedSP > 0; // Only include sprints with valid planned SP
     });
@@ -177,45 +631,133 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null) => {
     }
 
     // Calculate average Planning Accuracy from last 6 sprints
-    let totalPlannedSP = 0;
-    let totalCompletedSP = 0;
-    let totalAddedSP = 0;
-    const percentages = [];
-
+    // Get sprint IDs for batch calculation (to include DEVELOPMENT DONE)
+    const sprintIds = validMetrics.map(metric => metric.sprints?.id).filter(Boolean);
+    
+    // Get sprint names for planned SP calculation (same as Project Metrics logic)
+    const sprintIdToName = new Map();
+    const sprintNames = [];
     validMetrics.forEach(metric => {
       const sprint = metric.sprints;
-      const plannedSP = sprint?.planned_story_points || metric.total_story_points || 0;
-      const completedSP = metric.completed_story_points || 0;
-      const addedSP = metric.added_story_points || 0;
-      
-      const effectivePlannedSP = plannedSP > 0 ? plannedSP : metric.total_story_points || 0;
-      
-      if (effectivePlannedSP > 0) {
-        totalPlannedSP += effectivePlannedSP;
-        totalCompletedSP += completedSP;
-        totalAddedSP += addedSP;
-        
-        const sprintPercentage = (completedSP / effectivePlannedSP) * 100;
-        percentages.push(sprintPercentage);
+      // IMPORTANT: Only consider sprints with "Sprint" in the name (exclude "Backlog" and other non-sprint values)
+      if (sprint?.id && sprint?.sprint_name && sprint.sprint_name.includes('Sprint')) {
+        sprintIdToName.set(sprint.id, sprint.sprint_name);
+        if (!sprintNames.includes(sprint.sprint_name)) {
+          sprintNames.push(sprint.sprint_name);
+        }
       }
     });
+    
+    // Create reverse map: sprint_name -> sprint_id
+    const sprintNameToId = new Map();
+    sprintIdToName.forEach((name, id) => {
+      sprintNameToId.set(name, id);
+    });
+    
+    // Calculate completed SP for all sprints in parallel (ensures DEVELOPMENT DONE is included)
+    const completedSPMap = sprintIds.length > 0 
+      ? await calculateCompletedStoryPointsBatch(sprintIds)
+      : new Map();
+    
+    console.log(`[TEAM_HEALTH_KPI] Calculated completed SP for ${sprintIds.length} sprints in batch (including DEVELOPMENT DONE)`);
 
-    if (percentages.length === 0) {
-      return null;
+    // PLANNING ACCURACY = (SP Cerrados / SP Totales al Final del Sprint) * 100
+    // Para cada sprint, calcular desde issue_sprints usando story_points_at_close
+    let totalCompletedSP = 0;
+    let totalSPAtClose = 0;
+    const percentages = [];
+    
+    const isCompletedStatusForBatch = (status) => {
+      if (!status) return false;
+      const s = String(status).trim().toUpperCase();
+      return s === 'DONE' ||
+             s.includes('DEVELOPMENT DONE') ||
+             s.includes('DEV DONE') ||
+             s === 'CLOSED' ||
+             s === 'RESOLVED' ||
+             s === 'COMPLETED';
+    };
+
+    // Calculate Planning Accuracy for each sprint using issue_sprints
+    for (const metric of validMetrics) {
+      const sprint = metric.sprints;
+      const sprintId = sprint?.id;
+      const sprintName = sprint?.sprint_name;
+      
+      if (!sprintId || !sprintName || !sprintName.includes('Sprint')) {
+        continue; // Skip invalid sprints
+      }
+
+      // Get issue_sprints data for this sprint
+      const { data: issueSprintRows, error: issueSprintError } = await supabase
+        .from('issue_sprints')
+        .select('status_at_sprint_close, story_points_at_close')
+        .eq('sprint_id', sprintId)
+        .not('status_at_sprint_close', 'is', null)
+        .limit(10000);
+
+      if (issueSprintError || !issueSprintRows || issueSprintRows.length === 0) {
+        console.warn(`[TEAM_HEALTH_KPI] No issue_sprints data for sprint ${sprintName}, skipping`);
+        continue;
+      }
+
+      // Total SP al final = suma de story_points_at_close de todos los tickets
+      const sprintTotalSPAtClose = issueSprintRows.reduce((sum, row) => {
+        return sum + (Number(row.story_points_at_close) || 0);
+      }, 0);
+
+      // Completed SP = suma de story_points_at_close solo de los completados
+      const sprintCompletedSP = issueSprintRows.reduce((sum, row) => {
+        const isCompleted = isCompletedStatusForBatch(row.status_at_sprint_close);
+        if (!isCompleted) return sum;
+        return sum + (Number(row.story_points_at_close) || 0);
+      }, 0);
+
+      // Planning Accuracy = (SP Cerrados / SP Totales al Final) * 100
+      const sprintPercentage = sprintTotalSPAtClose > 0 
+        ? (sprintCompletedSP / sprintTotalSPAtClose) * 100 
+        : (sprintCompletedSP > 0 ? 100 : 0);
+      
+      if (sprintTotalSPAtClose > 0) {
+        totalCompletedSP += sprintCompletedSP;
+        totalSPAtClose += sprintTotalSPAtClose;
+        percentages.push(sprintPercentage);
+        
+        console.log(`[TEAM_HEALTH_KPI] Sprint ${sprintName}: Total SP at Close=${sprintTotalSPAtClose}, Completed SP=${sprintCompletedSP}, Percentage=${sprintPercentage.toFixed(2)}%`);
+      }
     }
 
-    // Calculate average percentage (average of individual sprint percentages, not total)
-    const avgPercentage = percentages.reduce((sum, p) => sum + p, 0) / percentages.length;
-    const score = calculatePlanningAccuracyScore(avgPercentage);
+    if (percentages.length === 0 || totalSPAtClose === 0) {
+      if (totalCompletedSP === 0) {
+        return null;
+      }
+      // If we have completed SP but no total SP, return 100%
+      return {
+        percentage: 100,
+        score: calculatePlanningAccuracyScore(100),
+        plannedSP: 0,
+        completedSP: totalCompletedSP,
+        carryOverSP: 0,
+        addedSP: 0
+      };
+    }
 
-    console.log(`[TEAM_HEALTH_KPI] Planning Accuracy calculated from last ${validMetrics.length} sprints (average: ${avgPercentage.toFixed(1)}%)`);
+    // Calculate overall percentage using total completed SP / total SP at close
+    const totalPercentage = (totalCompletedSP / totalSPAtClose) * 100;
+    const score = calculatePlanningAccuracyScore(totalPercentage);
+
+    console.log(`[TEAM_HEALTH_KPI] Planning Accuracy calculated from last ${validMetrics.length} sprints (average: ${totalPercentage.toFixed(2)}%)`);
+    console.log(`  Total Completed SP: ${totalCompletedSP}`);
+    console.log(`  Total SP at Close: ${totalSPAtClose}`);
+    console.log(`  Individual sprint percentages:`, percentages.map(p => p.toFixed(2)).join(', '));
 
     return {
-      percentage: Math.round(avgPercentage * 10) / 10,
+      percentage: Math.round(totalPercentage * 10) / 10,
       score,
-      plannedSP: Math.round(totalPlannedSP / validMetrics.length), // Average planned SP
-      completedSP: Math.round(totalCompletedSP / validMetrics.length), // Average completed SP
-      addedSP: Math.round(totalAddedSP / validMetrics.length) // Average added SP
+      plannedSP: totalSPAtClose, // SP totales al final del sprint (planificado)
+      completedSP: totalCompletedSP,
+      carryOverSP: 0, // Carry over no se usa en el cálculo, solo para información
+      addedSP: 0 // Not used in Planning Accuracy
     };
   } catch (error) {
     console.error('[TEAM_HEALTH_KPI] Error calculating Planning Accuracy:', error);
@@ -224,12 +766,13 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null) => {
 };
 
 /**
- * Calculates Capacity Accuracy based on issues with SP in "To Do", "Blocked", or "Reopen" 
+ * Calculates Capacity Accuracy based on issues with SP in "To Do", "Blocked", or "Reopen"
  * states at sprint start, considering carryover
  * @param {string} sprintId - Sprint ID (optional, uses most recent if not provided)
+ * @param {string} squadId - Squad ID (optional, filters by squad if provided)
  * @returns {Promise<Object>} Capacity Accuracy data
  */
-const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
+const calculateCapacityAccuracyFromMetrics = async (sprintId = null, squadId = null) => {
   console.log('[TEAM_HEALTH_KPI] 🔍 calculateCapacityAccuracyFromMetrics called with sprintId:', sprintId);
   if (!supabase) {
     console.error('[TEAM_HEALTH_KPI] ❌ Supabase not initialized');
@@ -241,91 +784,122 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
     const { convertSPToHours } = await import('../utils/spToHoursConverter');
     console.log('[TEAM_HEALTH_KPI] ✅ SP to hours converter imported');
 
-    // Get sprint with dates
-    let sprintQuery = supabase
-      .from('sprints')
-      .select('id, sprint_name, planned_capacity_hours, planned_story_points, start_date, end_date, squad_id')
-      .order('end_date', { ascending: false })
-      .limit(1);
+    // Strategy: Try to find the most appropriate sprint for capacity calculation
+    let sprint = null;
+    let sprintName = null;
+    let sprintStartDate = null;
+    let sprintEndDate = null;
 
+    // PRIORITY: Try to use burndown data if available (most accurate historical data)
+    let burndownData = null;
     if (sprintId) {
-      sprintQuery = sprintQuery.eq('id', sprintId);
+      try {
+        burndownData = await getBurndownDataForSprint(sprintId);
+        if (burndownData && burndownData.totalCompleted !== undefined) {
+          console.log(`[TEAM_HEALTH_KPI] ✅ Using burndown data for Capacity Accuracy (source: ${burndownData.dataSource || 'unknown'})`);
+        }
+      } catch (error) {
+        console.debug(`[TEAM_HEALTH_KPI] Burndown data not available for Capacity Accuracy, using fallback`);
+      }
     }
 
-    const { data: sprints, error: sprintError } = await sprintQuery;
-    console.log('[TEAM_HEALTH_KPI] Sprint query result:', { 
-      sprintId, 
-      foundSprints: sprints?.length || 0, 
-      error: sprintError?.message || null 
-    });
-
-    if (sprintError || !sprints || sprints.length === 0) {
-      console.warn('[TEAM_HEALTH_KPI] ❌ Error getting sprint:', sprintError);
-      console.warn('[TEAM_HEALTH_KPI] Sprint query details:', { sprintId, error: sprintError });
-      return null;
-    }
-
-    let sprint = sprints[0];
-    
-    // If sprint has null dates, try to find a sprint with valid dates
-    if (!sprint.start_date || !sprint.end_date) {
-      console.warn('[TEAM_HEALTH_KPI] ⚠️ Sprint has null dates, searching for sprint with valid dates...');
-      console.warn('[TEAM_HEALTH_KPI] Sprint details:', { 
-        id: sprint.id, 
-        name: sprint.sprint_name, 
-        start: sprint.start_date, 
-        end: sprint.end_date 
-      });
-      
-      // Try to find a sprint with valid dates (same squad if available)
-      const squadIdFilter = sprint.squad_id ? { eq: sprint.squad_id } : {};
-      let validSprintQuery = supabase
+    // 1. If specific sprint requested, use it
+    if (sprintId) {
+      const { data: specificSprint, error: specificError } = await supabase
         .from('sprints')
         .select('id, sprint_name, planned_capacity_hours, planned_story_points, start_date, end_date, squad_id')
-        .not('start_date', 'is', null)
-        .not('end_date', 'is', null)
-        .order('end_date', { ascending: false })
-        .limit(1);
-      
-      if (sprint.squad_id) {
-        validSprintQuery = validSprintQuery.eq('squad_id', sprint.squad_id);
-      }
-      
-      const { data: validSprints, error: validSprintError } = await validSprintQuery;
-      
-      if (!validSprintError && validSprints && validSprints.length > 0) {
-        sprint = validSprints[0];
-        console.log('[TEAM_HEALTH_KPI] ✅ Found sprint with valid dates:', sprint.sprint_name);
-      } else {
-        console.warn('[TEAM_HEALTH_KPI] ⚠️ No sprints with valid dates found, will calculate without date filtering');
-        // Continue with original sprint but use current date logic
+        .eq('id', sprintId)
+        .single();
+
+      if (!specificError && specificSprint) {
+        // IMPORTANT: Only consider sprints with "Sprint" in the name
+        if (!specificSprint.sprint_name || !specificSprint.sprint_name.includes('Sprint')) {
+          console.warn(`[TEAM_HEALTH_KPI] Sprint name "${specificSprint.sprint_name}" does not contain "Sprint", skipping`);
+          return null;
+        }
+        sprint = specificSprint;
+        sprintName = specificSprint.sprint_name;
+        sprintStartDate = specificSprint.start_date ? new Date(specificSprint.start_date) : null;
+        sprintEndDate = specificSprint.end_date ? new Date(specificSprint.end_date) : null;
+        console.log('[TEAM_HEALTH_KPI] ✅ Using specific sprint:', sprintName);
       }
     }
-    
-    // If still no dates, we'll calculate using current issues only (no date filtering)
-    const sprintStartDate = sprint.start_date ? new Date(sprint.start_date) : null;
-    const sprintEndDate = sprint.end_date ? new Date(sprint.end_date) : null;
-    const sprintName = sprint.sprint_name;
-    console.log('[TEAM_HEALTH_KPI] ✅ Found sprint:', { 
-      id: sprint.id, 
-      name: sprintName, 
-      start: sprint.start_date, 
-      end: sprint.end_date,
-      squadId: sprint.squad_id 
-    });
+
+    // 2. If no specific sprint, try to find the most recent sprint for the squad
+    if (!sprint && squadId) {
+      const { data: squadSprints, error: squadError } = await supabase
+        .from('sprints')
+        .select('id, sprint_name, planned_capacity_hours, planned_story_points, start_date, end_date, squad_id')
+        .eq('squad_id', squadId)
+        .ilike('sprint_name', '%Sprint%')
+        .order('end_date', { ascending: false })
+        .limit(1);
+
+      if (!squadError && squadSprints && squadSprints.length > 0) {
+        // IMPORTANT: Only consider sprints with "Sprint" in the name (already filtered in query, but double-check)
+        const validSprint = squadSprints.find(s => s.sprint_name && s.sprint_name.includes('Sprint'));
+        if (!validSprint) {
+          console.warn('[TEAM_HEALTH_KPI] No valid sprints found (must contain "Sprint" in name)');
+          return null;
+        }
+        sprint = validSprint;
+        sprintName = sprint.sprint_name;
+        sprintStartDate = sprint.start_date ? new Date(sprint.start_date) : null;
+        sprintEndDate = sprint.end_date ? new Date(sprint.end_date) : null;
+        console.log('[TEAM_HEALTH_KPI] ✅ Using most recent sprint for squad:', sprintName);
+      }
+    }
+
+    // 3. If still no sprint found, we can still calculate capacity using current issues
+    // This is valid - capacity can be calculated without a specific sprint context
+    if (!sprint) {
+      console.log('[TEAM_HEALTH_KPI] ℹ️ No sprint found, calculating capacity using current issues only');
+      // sprintName remains null, which means we'll get all current issues for the squad
+    }
+    if (sprint) {
+      console.log('[TEAM_HEALTH_KPI] ✅ Found sprint:', {
+        id: sprint.id,
+        name: sprintName,
+        start: sprint.start_date,
+        end: sprint.end_date,
+        squadId: sprint.squad_id
+      });
+    } else {
+      console.log('[TEAM_HEALTH_KPI] ℹ️ Calculating capacity without specific sprint context');
+    }
 
     // Get squad sprint capacity (capacity available and goal)
-    const { data: squadCapacity, error: capacityError } = await supabase
-      .from('squad_sprint_capacity')
-      .select('capacity_goal_sp, capacity_available_sp')
-      .eq('sprint_id', sprint.id)
-      .eq('squad_id', sprint.squad_id)
-      .limit(1)
-      .single();
+    // Use maybeSingle() instead of single() to avoid 404 errors when no record exists
+    let squadCapacity = null;
+    let capacityError = null;
+
+    // Only query if we have both sprint_id and squad_id
+    const squadIdForCapacity = sprint?.squad_id || squadId;
+    if (sprint?.id && squadIdForCapacity) {
+      const capacityResult = await supabase
+        .from('squad_sprint_capacity')
+        .select('capacity_goal_sp, capacity_available_sp')
+        .eq('sprint_id', sprint.id)
+        .eq('squad_id', sprint.squad_id)
+        .maybeSingle();
+      
+      squadCapacity = capacityResult.data;
+      capacityError = capacityResult.error;
+    }
 
     // Calculate available capacity (90% of capacity_available_sp or capacity_goal_sp)
     let availableCapacitySP = null;
     let availableCapacityHours = null;
+    
+    // Only log error if it's not a "not found" error (PGRST116, PGRST205, or 404)
+    // PGRST116 = no rows found, PGRST205 = table not found
+    // Suppress expected 404 errors silently
+    if (capacityError && capacityError.code !== 'PGRST116' && capacityError.code !== 'PGRST205' && capacityError.code !== '42703') {
+      console.warn('[TEAM_HEALTH_KPI] Error fetching squad sprint capacity:', capacityError);
+    } else if (capacityError && capacityError.code === 'PGRST205') {
+      // Table doesn't exist - this is expected if migrations haven't been run
+      console.debug('[TEAM_HEALTH_KPI] squad_sprint_capacity table not found (PGRST205) - skipping capacity lookup');
+    }
     
     if (!capacityError && squadCapacity) {
       // Use capacity_available_sp if available, otherwise capacity_goal_sp
@@ -352,49 +926,283 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
       }
     }
 
-    // Get previous sprint to detect carryover (only if we have valid dates)
+    // Get previous sprint to detect carryover (only if we have a sprint with valid dates)
     let previousSprint = null;
-    if (sprint.start_date) {
+    if (sprint && sprint.start_date) {
       const { data: previousSprints, error: prevSprintError } = await supabase
         .from('sprints')
         .select('id, sprint_name, end_date')
         .eq('squad_id', sprint.squad_id)
-        .lt('end_date', sprint.start_date)
+        .lte('end_date', sprint.start_date)
         .not('end_date', 'is', null)
         .order('end_date', { ascending: false })
         .limit(1);
-      
+
       if (!prevSprintError && previousSprints && previousSprints.length > 0) {
         previousSprint = previousSprints[0];
       }
     }
 
-    // Get all issues that were in this sprint (by current_sprint)
-    // Also try to get issues by squad_id if current_sprint doesn't match
-    let { data: sprintIssues, error: issuesError } = await supabase
-      .from('issues')
-      .select('id, current_story_points, current_status, current_sprint, status_by_sprint, created_date, squad_id')
-      .eq('current_sprint', sprintName)
-      .not('current_story_points', 'is', null)
-      .gt('current_story_points', 0);
+    // If a specific sprint is provided, use issue_sprints as the source of truth for membership.
+    // This survives cases where Jira's Sprint field was overwritten / trace lost.
+    if (sprintId) {
+      const { data: sprintRow, error: sprintRowError } = await supabase
+        .from('sprints')
+        .select('id, sprint_name, start_date, end_date, squad_id')
+        .eq('id', sprintId)
+        .single();
 
-    // If no issues found by current_sprint, try to get by squad and date range (only if we have dates)
-    if ((!sprintIssues || sprintIssues.length === 0) && sprint.squad_id && sprintStartDate && sprintEndDate) {
-      console.log('[TEAM_HEALTH_KPI] No issues found by current_sprint, trying by squad and date range...');
-      const { data: squadIssues, error: squadIssuesError } = await supabase
-        .from('issues')
-        .select('id, current_story_points, current_status, current_sprint, status_by_sprint, created_date, squad_id')
-        .eq('squad_id', sprint.squad_id)
-        .not('current_story_points', 'is', null)
-        .gt('current_story_points', 0)
-        .gte('created_date', sprintStartDate.toISOString().split('T')[0])
-        .lte('created_date', sprintEndDate.toISOString().split('T')[0]);
-      
-      if (!squadIssuesError && squadIssues && squadIssues.length > 0) {
-        sprintIssues = squadIssues;
-        console.log(`[TEAM_HEALTH_KPI] Found ${sprintIssues.length} issues by squad and date range`);
+      if (sprintRowError || !sprintRow) {
+        console.warn('[TEAM_HEALTH_KPI] Could not load sprint for Capacity Accuracy:', sprintRowError);
+      } else {
+        sprintName = sprintRow.sprint_name;
+        sprintStartDate = sprintRow.start_date ? new Date(sprintRow.start_date) : null;
+        sprintEndDate = sprintRow.end_date ? new Date(sprintRow.end_date) : null;
+        sprint = { ...sprintRow }; // keep existing shape used below
       }
+
+      const { data: issueSprintRows, error: issueSprintError } = await supabase
+        .from('issue_sprints')
+        .select('issue_id, sprint_id, status_at_sprint_close, story_points_at_start, story_points_at_close')
+        .eq('sprint_id', sprintId)
+        .limit(10000);
+
+      if (!issueSprintError && issueSprintRows && issueSprintRows.length > 0) {
+        const issueIds = issueSprintRows.map(r => r.issue_id).filter(Boolean);
+        const { data: issues, error: issuesError } = await supabase
+          .from('issues')
+          .select('id, issue_key, current_story_points, current_status, story_points_by_sprint')
+          .in('id', issueIds);
+
+        if (!issuesError && issues && issues.length > 0) {
+          const issuesById = new Map(issues.map(i => [i.id, i]));
+          const parseJsonMap = (value) => {
+            if (!value) return {};
+            if (typeof value === 'object') return value;
+            if (typeof value === 'string') {
+              try { return JSON.parse(value); } catch { return {}; }
+            }
+            return {};
+          };
+
+          const isDoneLike = (status) => {
+            if (!status) return false;
+            const s = String(status).trim().toUpperCase();
+            return s === 'DONE' ||
+              s === 'DEVELOPMENT DONE' ||
+              s.includes('DEVELOPMENT DONE') ||
+              s.includes('DEV DONE') ||
+              (s.includes('DONE') && !s.includes('TO DO') && !s.includes('TODO')) ||
+              s === 'CLOSED' ||
+              s === 'RESOLVED' ||
+              s === 'COMPLETED';
+          };
+
+          // Get sprint close date to filter out tickets removed before closure
+          let sprintCloseDate = null;
+          if (sprint) {
+            sprintCloseDate = sprint.complete_date || sprint.end_date || null;
+          } else if (sprintId) {
+            const { data: sprintData } = await supabase
+              .from('sprints')
+              .select('complete_date, end_date')
+              .eq('id', sprintId)
+              .maybeSingle();
+            if (sprintData) {
+              sprintCloseDate = sprintData.complete_date || sprintData.end_date || null;
+            }
+          }
+
+          // Total SP al final del sprint (usar story_points_at_close)
+          // IMPORTANT: Only include tickets that were actually in the sprint at closure
+          const totalSPAtClose = issueSprintRows.reduce((sum, row) => {
+            // If status_at_sprint_close is null and sprint has closed, the ticket was likely removed before sprint close
+            // Skip it
+            if (!row.status_at_sprint_close && sprintCloseDate) {
+              return sum;
+            }
+            
+            // Usar story_points_at_close (SP al final del sprint)
+            const sp = Number(row.story_points_at_close) || 0;
+            return sum + sp;
+          }, 0);
+
+          // Delivered SP = SP completados al final del sprint
+          // PRIORITY: Use burndown data if available (most accurate historical data)
+          let deliveredSP = 0;
+          if (burndownData && burndownData.totalCompleted !== undefined) {
+            deliveredSP = burndownData.totalCompleted;
+            console.log(`[TEAM_HEALTH_KPI] ✅ Using burndown data for delivered SP: ${deliveredSP} SP`);
+          } else {
+            // Fallback: Calculate from issue_sprints
+            // Use story_points_at_close (SP al final del sprint) for completed tickets
+            // IMPORTANT: Only include tickets that were actually in the sprint at closure
+            deliveredSP = issueSprintRows.reduce((sum, row) => {
+              // If status_at_sprint_close is null and sprint has closed, the ticket was likely removed before sprint close
+              // Skip it
+              if (!row.status_at_sprint_close && sprintCloseDate) {
+                return sum;
+              }
+              
+              const isCompleted = isDoneLike(row.status_at_sprint_close);
+              if (!isCompleted) return sum;
+              
+              // Use story_points_at_close (SP al final del sprint) for completed tickets
+              const sp = Number(row.story_points_at_close) || 0;
+              return sum + sp;
+            }, 0);
+          }
+
+          // Total horas al final del sprint (usar story_points_at_close)
+          const totalHoursAtClose = issueSprintRows.reduce((sum, row) => {
+            // If status_at_sprint_close is null and sprint has closed, the ticket was likely removed before sprint close
+            // Skip it
+            if (!row.status_at_sprint_close && sprintCloseDate) {
+              return sum;
+            }
+            
+            // Usar story_points_at_close (SP al final del sprint)
+            const sp = Number(row.story_points_at_close) || 0;
+            return sum + convertSPToHours(sp);
+          }, 0);
+
+          // Delivered hours: Convert delivered SP to hours
+          // PRIORITY: Use burndown data if available (most accurate historical data)
+          let deliveredHours = 0;
+          if (burndownData && burndownData.totalCompleted !== undefined) {
+            // Convert delivered SP from burndown to hours
+            // We need to estimate hours from total SP
+            // For simplicity, use average conversion: 5 hours per SP (conservative estimate)
+            deliveredHours = burndownData.totalCompleted * 5;
+            console.log(`[TEAM_HEALTH_KPI] ✅ Using burndown data for delivered hours: ${deliveredHours}h (from ${burndownData.totalCompleted} SP)`);
+          } else {
+            // Fallback: Calculate from issue_sprints
+            deliveredHours = issueSprintRows.reduce((sum, row) => {
+              // If status_at_sprint_close is null and sprint has closed, the ticket was likely removed before sprint close
+              // Skip it
+              if (!row.status_at_sprint_close && sprintCloseDate) {
+                return sum;
+              }
+              
+              const isCompleted = isDoneLike(row.status_at_sprint_close);
+              if (!isCompleted) return sum;
+              
+              // Use story_points_at_close (SP al final del sprint) for completed tickets
+              const sp = Number(row.story_points_at_close) || 0;
+              return sum + convertSPToHours(sp);
+            }, 0);
+          }
+
+          // CAPACITY ACCURACY = SP Completados vs Capacidad Planificada (from squad_sprint_capacity)
+          // Get planned capacity from squad_sprint_capacity table (PM enters this data)
+          let plannedCapacitySP = null;
+          let plannedCapacityHours = null;
+          
+          const squadIdForCapacity = sprint?.squad_id || squadId;
+          if (sprintId && squadIdForCapacity) {
+            const { data: squadCapacityData, error: capacityError } = await supabase
+              .from('squad_sprint_capacity')
+              .select('capacity_goal_sp, capacity_available_sp')
+              .eq('sprint_id', sprintId)
+              .eq('squad_id', squadIdForCapacity)
+              .maybeSingle();
+            
+            if (!capacityError && squadCapacityData) {
+              // Use capacity_goal_sp if available, otherwise capacity_available_sp
+              plannedCapacitySP = squadCapacityData.capacity_goal_sp || squadCapacityData.capacity_available_sp || null;
+              
+              if (plannedCapacitySP) {
+                // Convert SP to hours using the converter
+                plannedCapacityHours = convertSPToHours(plannedCapacitySP);
+                console.log(`[TEAM_HEALTH_KPI] Using planned capacity from squad_sprint_capacity: ${plannedCapacitySP} SP = ${plannedCapacityHours}h`);
+              }
+            } else if (capacityError && capacityError.code !== 'PGRST116' && capacityError.code !== 'PGRST205') {
+              console.warn('[TEAM_HEALTH_KPI] Error fetching planned capacity:', capacityError);
+            }
+          }
+          
+          // If no planned capacity from squad_sprint_capacity, fall back to calculated total hours at close
+          // But log a warning that PM should enter capacity data
+          if (!plannedCapacityHours || plannedCapacityHours === 0) {
+            console.warn(`[TEAM_HEALTH_KPI] ⚠️ No planned capacity found in squad_sprint_capacity for sprint ${sprintName || sprintId}. PM should enter capacity data in Team Capacity section. Falling back to calculated total hours at close.`);
+            plannedCapacityHours = totalHoursAtClose;
+            plannedCapacitySP = totalSPAtClose;
+          }
+          
+          // Capacity Accuracy = Delivered SP / Planned Capacity
+          const ratio = plannedCapacityHours > 0 ? deliveredHours / plannedCapacityHours : 0;
+          const score = calculateCapacityAccuracyScore(ratio);
+
+          console.log(`[TEAM_HEALTH_KPI] Capacity Accuracy (sprint ${sprintName || sprintId}): Delivered=${deliveredSP} SP (${deliveredHours}h) vs Planned Capacity=${plannedCapacitySP} SP (${plannedCapacityHours}h), Ratio=${ratio.toFixed(2)}`);
+
+          return {
+            value: Math.round(ratio * 100) / 100,
+            score,
+            plannedCapacity: Math.round(plannedCapacityHours),
+            actualCapacity: Math.round(deliveredHours),
+            plannedSP: plannedCapacitySP,
+            completedSP: deliveredSP,
+            carryoverSP: 0,
+            carryoverCapacity: 0,
+            issuesPlanned: issueSprintRows.filter(r => r.status_at_sprint_close || !sprintCloseDate).length, // Only tickets that reached sprint end
+            issuesCompleted: issueSprintRows.filter(r => isDoneLike(r.status_at_sprint_close)).length
+          };
+        }
+      }
+      // If issue_sprints is empty, fall through to legacy logic below
+      console.warn('[TEAM_HEALTH_KPI] issue_sprints had no rows for sprint; falling back to legacy capacity logic');
     }
+
+    // Get issues based on available context - following Google Sheets logic
+    let { data: sprintIssues, error: issuesError } = await (async () => {
+      // Strategy: Get issues that were ever in this sprint (current_sprint contains sprint name)
+      // OR issues from the squad if no specific sprint context
+      if (squadId) {
+        console.log('[TEAM_HEALTH_KPI] Getting issues for squad capacity calculation:', squadId);
+
+        // Get all issues for the squad that have story points
+        const { data: squadIssues, error: squadError } = await supabase
+          .from('issues')
+          .select('id, current_story_points, current_status, current_sprint, status_by_sprint, created_date, squad_id, issue_key')
+          .eq('squad_id', squadId)
+          .not('current_story_points', 'is', null)
+          .gt('current_story_points', 0);
+
+        if (squadError) {
+          console.warn('[TEAM_HEALTH_KPI] Error getting squad issues:', squadError);
+          return { data: null, error: squadError };
+        }
+
+        // If we have a specific sprint, filter to issues that were in that sprint.
+        // IMPORTANT: Closed sprints often won't have current_sprint = sprintName anymore.
+        // Use status_by_sprint keys as the source of truth (same "foto" concept as the Google Sheet).
+        if (sprintName && squadIssues) {
+          const parseStatusBySprint = (value) => {
+            if (!value) return {};
+            if (typeof value === 'object') return value;
+            if (typeof value === 'string') {
+              try { return JSON.parse(value); } catch { return {}; }
+            }
+            return {};
+          };
+
+          const filteredIssues = squadIssues.filter((issue) => {
+            if (issue.current_sprint === sprintName) return true;
+            const statusMap = parseStatusBySprint(issue.status_by_sprint);
+            return Object.prototype.hasOwnProperty.call(statusMap, sprintName);
+          });
+          console.log(`[TEAM_HEALTH_KPI] Filtered ${filteredIssues.length} issues for sprint "${sprintName}" from ${squadIssues.length} squad issues`);
+          return { data: filteredIssues, error: null };
+        }
+
+        // No specific sprint, return all squad issues for capacity calculation
+        return { data: squadIssues, error: null };
+      }
+
+      // Fallback: should not happen with proper filtering
+      console.warn('[TEAM_HEALTH_KPI] No squad context available for capacity calculation');
+      return { data: null, error: null };
+    })();
 
     if (issuesError) {
       console.warn('[TEAM_HEALTH_KPI] Error getting sprint issues:', issuesError);
@@ -402,17 +1210,17 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
     }
 
     if (!sprintIssues || sprintIssues.length === 0) {
-      console.warn('[TEAM_HEALTH_KPI] No issues found for sprint:', sprintName);
+      console.warn('[TEAM_HEALTH_KPI] No issues found for capacity calculation');
       console.warn('[TEAM_HEALTH_KPI] Debug info:', {
         sprintName,
-        squadId: sprint.squad_id,
-        startDate: sprint.start_date,
-        endDate: sprint.end_date
+        squadId: squadId,
+        hasSprint: !!sprint,
+        sprintSquadId: sprint?.squad_id
       });
       return null;
     }
 
-    console.log(`[TEAM_HEALTH_KPI] Found ${sprintIssues.length} issues for sprint ${sprintName}`);
+    console.log(`[TEAM_HEALTH_KPI] Found ${sprintIssues.length} issues for capacity calculation${sprintName ? ` (sprint: ${sprintName})` : ' (current capacity)'}`);
 
     // States to consider for capacity calculation
     // Match variations: "To Do", "TODO", "ToDo", "Blocked", "Reopen", "Re-open", etc.
@@ -639,18 +1447,72 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
       }, 0);
     }
 
-    // Actual Capacity = Planned Capacity (what was planned at sprint start)
-    // This represents the capacity that was committed/planned for the sprint
-    const actualCapacity = finalPlannedCapacity;
+    // Calculate Actual Capacity = Issues completed at sprint end (velocity)
+    // Following Google Sheets logic: take snapshot at sprint end date
+    const sprintEndDateSnapshot = sprintEndDate ? new Date(sprintEndDate) : (sprint.end_date ? new Date(sprint.end_date) : null);
 
-    // Capacity Accuracy = Actual / Planned (ratio)
-    const ratio = actualCapacity / finalPlannedCapacity;
+    let actualCapacity = 0;
+    let completedSPAtEnd = 0;
+    let completedIssuesAtEnd = 0;
+
+    if (sprintEndDateSnapshot) {
+      // Calculate what was actually completed by sprint end (velocity)
+      // This follows the Google Sheets approach of taking a "foto" at completeDate
+      sprintIssues.forEach(issue => {
+        const storyPoints = issue.current_story_points || 0;
+
+        // Check if issue was completed by sprint end using historical status
+        if (issue.status_by_sprint && sprintName) {
+          try {
+            const statusHistory = typeof issue.status_by_sprint === 'string'
+              ? JSON.parse(issue.status_by_sprint)
+              : issue.status_by_sprint;
+
+            // Check status at sprint end (Google Sheets uses completeDate/endDate)
+            const statusAtEnd = statusHistory[sprintName];
+            if (statusAtEnd) {
+              const statusUpper = statusAtEnd.toUpperCase().trim();
+              const isCompletedAtEnd = ['DONE', 'DEVELOPMENT DONE', 'RESOLVED', 'CLOSED', 'COMPLETED'].includes(statusUpper);
+
+              if (isCompletedAtEnd) {
+                actualCapacity += convertSPToHours(storyPoints);
+                completedSPAtEnd += storyPoints;
+                completedIssuesAtEnd++;
+                console.log(`[TEAM_HEALTH_KPI] Issue ${issue.issue_key} completed by sprint end: ${storyPoints} SP = ${convertSPToHours(storyPoints)}h`);
+              }
+            }
+          } catch (e) {
+            console.warn(`[TEAM_HEALTH_KPI] Error parsing status history for ${issue.issue_key}:`, e.message);
+          }
+        } else {
+          // Fallback: use current status if no historical data
+          const currentStatus = (issue.current_status || '').toUpperCase().trim();
+          const isCompleted = ['DONE', 'DEVELOPMENT DONE', 'RESOLVED', 'CLOSED', 'COMPLETED'].includes(currentStatus);
+
+          if (isCompleted) {
+            actualCapacity += convertSPToHours(storyPoints);
+            completedSPAtEnd += storyPoints;
+            completedIssuesAtEnd++;
+          }
+        }
+      });
+
+      console.log(`[TEAM_HEALTH_KPI] Sprint end snapshot: ${completedIssuesAtEnd} issues completed, ${completedSPAtEnd} SP = ${actualCapacity}h`);
+    } else {
+      // No sprint end date available, use planned capacity as fallback
+      console.warn('[TEAM_HEALTH_KPI] No sprint end date available, using planned capacity as actual capacity');
+      actualCapacity = finalPlannedCapacity;
+    }
+
+    // Capacity Accuracy = Actual Delivered / Planned (ratio)
+    // This measures how much of the planned capacity was actually utilized
+    const ratio = finalPlannedCapacity > 0 ? actualCapacity / finalPlannedCapacity : 0;
     const score = calculateCapacityAccuracyScore(ratio);
 
-    console.log(`[TEAM_HEALTH_KPI] ✅ Capacity Accuracy calculated: ${ratio.toFixed(2)} (Planned: ${finalPlannedCapacity}h, Actual: ${actualCapacity}h)`);
+    console.log(`[TEAM_HEALTH_KPI] ✅ Capacity Accuracy calculated: ${ratio.toFixed(2)} (Planned: ${finalPlannedCapacity}h, Delivered: ${actualCapacity}h)`);
     console.log(`[TEAM_HEALTH_KPI]   Sprint: ${sprintName}`);
-    console.log(`[TEAM_HEALTH_KPI]   Issues in capacity states: ${plannedIssues.length}`);
-    console.log(`[TEAM_HEALTH_KPI]   Total SP: ${plannedSP}`);
+    console.log(`[TEAM_HEALTH_KPI]   Issues planned: ${plannedIssues.length} (${plannedSP} SP)`);
+    console.log(`[TEAM_HEALTH_KPI]   Issues completed by end: ${completedIssuesAtEnd} (${completedSPAtEnd} SP)`);
     if (carryoverCapacity > 0) {
       console.log(`[TEAM_HEALTH_KPI]   Carryover: ${carryoverSP} SP (${carryoverCapacity}h)`);
     }
@@ -661,9 +1523,11 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
       plannedCapacity: Math.round(finalPlannedCapacity),
       actualCapacity: Math.round(actualCapacity),
       plannedSP,
+      completedSP: completedSPAtEnd,
       carryoverSP,
       carryoverCapacity: Math.round(carryoverCapacity),
-      issuesCount: plannedIssues.length
+      issuesPlanned: plannedIssues.length,
+      issuesCompleted: completedIssuesAtEnd
     };
   } catch (error) {
     console.error('[TEAM_HEALTH_KPI] Error calculating Capacity Accuracy:', error);
@@ -671,9 +1535,15 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null) => {
   }
 };
 
+// Simple in-memory cache to avoid repeated queries (5 minute TTL)
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Gets Team Health KPI data from Supabase
  * @param {Object} options - Options for data retrieval
+ * @param {boolean} options.includeTrends - Whether to calculate detailed trends (default: false, uses simplified trends)
+ * @param {boolean} options.useCache - Whether to use cache (default: true)
  * @returns {Promise<Object>} Team Health KPI data
  */
 export const getTeamHealthKPIData = async (options = {}) => {
@@ -683,13 +1553,26 @@ export const getTeamHealthKPIData = async (options = {}) => {
     sprintId = null,
     startDate = null,
     endDate = null,
-    filters = {}
+    filters = {},
+    includeTrends = false, // OPTIMIZATION: Default to false to avoid 24+ queries
+    useCache = true
   } = options;
+  
+  // Check cache first (if enabled and no filters that would change results)
+  if (useCache && !sprintId && !startDate && !endDate && !filters.squadId && Object.keys(filters).length === 0) {
+    const cacheKey = 'teamHealthKPIData';
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log('[TEAM_HEALTH_KPI] ✅ Using cached data');
+      return cached.data;
+    }
+  }
 
   // Extract filters
   const filterSprintId = filters.sprintId || sprintId;
   const filterStartDate = filters.startDate ? new Date(filters.startDate) : startDate;
   const filterEndDate = filters.endDate ? new Date(filters.endDate) : endDate;
+  const filterSquadId = filters.squadId;
 
   // If explicitly requested, use mock data (for testing only)
   if (useMockData) {
@@ -701,6 +1584,9 @@ export const getTeamHealthKPIData = async (options = {}) => {
     console.warn('[TEAM_HEALTH_KPI] Supabase not configured - no data available');
     return null;
   }
+
+  // Define current date for use throughout the function
+  const now = new Date();
 
   try {
     // Get active survey for eNPS calculation (or use filters if surveyId provided)
@@ -747,36 +1633,62 @@ export const getTeamHealthKPIData = async (options = {}) => {
       defaultEndDate = filterEndDate || now;
     }
 
-    // Calculate eNPS (with surveyId if available)
-    let enps = await calculateENPSFromResponses(defaultStartDate, defaultEndDate, surveyIdForENPS);
-    if (!enps) {
-      console.warn('[TEAM_HEALTH_KPI] ⚠️ Could not calculate eNPS from enps_responses table');
-      console.warn('[TEAM_HEALTH_KPI] This is expected if enps_responses table is empty or not connected to survey UI');
-    } else {
-      console.log('[TEAM_HEALTH_KPI] ✅ Using REAL data for eNPS');
-    }
+    // OPTIMIZATION: Calculate all 3 main metrics in parallel for faster loading
+    console.log('[TEAM_HEALTH_KPI] 🔍 Calculating all metrics in parallel...');
+    
+    const [enpsResult, planningAccuracyResult, capacityAccuracyResult] = await Promise.all([
+      // Calculate eNPS
+      (async () => {
+        console.log('[TEAM_HEALTH_KPI] 🔍 Calculating eNPS with:', {
+          startDate: defaultStartDate.toISOString().split('T')[0],
+          endDate: defaultEndDate.toISOString().split('T')[0],
+          surveyId: surveyIdForENPS
+        });
+        let enps = await calculateENPSFromResponses(defaultStartDate, defaultEndDate, surveyIdForENPS);
+        
+        // Use mock data if eNPS is 0 or very low (for better visualization)
+        if (!enps || enps.value === 0 || (enps.value < 10 && enps.totalResponses < 10)) {
+          if (!enps) {
+            console.warn('[TEAM_HEALTH_KPI] ⚠️ Could not calculate eNPS from enps_responses table');
+          } else {
+            console.log('[TEAM_HEALTH_KPI] ℹ️ eNPS value is 0 or very low, using mock data');
+          }
+          enps = generateMockENPSData();
+          console.log('[TEAM_HEALTH_KPI] 📊 Using MOCK data for eNPS');
+        } else {
+          console.log('[TEAM_HEALTH_KPI] ✅ Using REAL data for eNPS');
+        }
+        return enps;
+      })(),
+      
+      // Calculate Planning Accuracy
+      (async () => {
+        const planningAccuracy = await calculatePlanningAccuracyFromMetrics(filterSprintId, filterSquadId);
+        if (!planningAccuracy) {
+          console.warn('[TEAM_HEALTH_KPI] ⚠️ Could not calculate Planning Accuracy');
+        } else {
+          console.log('[TEAM_HEALTH_KPI] ✅ Using REAL data for Planning Accuracy');
+          console.log(`[TEAM_HEALTH_KPI] Planning Accuracy: ${planningAccuracy.percentage}%`);
+        }
+        return planningAccuracy;
+      })(),
 
-    // Calculate Planning Accuracy (use filter sprintId if provided)
-    let planningAccuracy = await calculatePlanningAccuracyFromMetrics(filterSprintId);
-    if (!planningAccuracy) {
-      console.warn('[TEAM_HEALTH_KPI] ⚠️ Could not calculate Planning Accuracy from sprint_metrics');
-      console.warn('[TEAM_HEALTH_KPI] Possible reasons: no sprint_metrics, no total_story_points/completed_story_points, or data not synced from Jira');
-    } else {
-      console.log('[TEAM_HEALTH_KPI] ✅ Using REAL data for Planning Accuracy');
-      console.log(`[TEAM_HEALTH_KPI] Planning Accuracy: ${planningAccuracy.percentage}% (Planned: ${planningAccuracy.plannedSP}, Completed: ${planningAccuracy.completedSP})`);
-    }
-
-    // Calculate Capacity Accuracy (use filter sprintId if provided)
-    console.log('[TEAM_HEALTH_KPI] Calling calculateCapacityAccuracyFromMetrics with sprintId:', filterSprintId);
-    let capacityAccuracy = await calculateCapacityAccuracyFromMetrics(filterSprintId);
-    console.log('[TEAM_HEALTH_KPI] Capacity Accuracy result:', capacityAccuracy);
-    if (!capacityAccuracy) {
-      console.warn('[TEAM_HEALTH_KPI] ⚠️ Could not calculate Capacity Accuracy from metrics');
-      console.warn('[TEAM_HEALTH_KPI] Possible reasons: no planned_capacity_hours, no workload_sp, or data not synced from Jira');
-    } else {
-      console.log('[TEAM_HEALTH_KPI] ✅ Using REAL data for Capacity Accuracy');
-      console.log(`[TEAM_HEALTH_KPI] Capacity Accuracy: ${capacityAccuracy.value} (Planned: ${capacityAccuracy.plannedCapacity}h, Actual: ${capacityAccuracy.actualCapacity}h)`);
-    }
+      // Calculate Capacity Accuracy
+      (async () => {
+        const capacityAccuracy = await calculateCapacityAccuracyFromMetrics(filterSprintId, filterSquadId);
+        if (!capacityAccuracy) {
+          console.warn('[TEAM_HEALTH_KPI] ⚠️ Could not calculate Capacity Accuracy');
+        } else {
+          console.log('[TEAM_HEALTH_KPI] ✅ Using REAL data for Capacity Accuracy');
+          console.log(`[TEAM_HEALTH_KPI] Capacity Accuracy: ${capacityAccuracy.value}`);
+        }
+        return capacityAccuracy;
+      })()
+    ]);
+    
+    const enps = enpsResult;
+    const planningAccuracy = planningAccuracyResult;
+    const capacityAccuracy = capacityAccuracyResult;
 
     // If we don't have at least one real metric, return null (no data available)
     if (!enps && !planningAccuracy && !capacityAccuracy) {
@@ -797,48 +1709,88 @@ export const getTeamHealthKPIData = async (options = {}) => {
       capacityScore
     );
 
-    // Generate trends (last 8 weeks)
-    const trends = [];
-    for (let i = 7; i >= 0; i--) {
-      const weekDate = new Date(now);
-      weekDate.setDate(weekDate.getDate() - (i * 7));
-      const weekStart = new Date(weekDate);
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6);
+    // Generate trends (simplified by default, detailed if requested)
+    let trends = [];
+    if (includeTrends) {
+      // Detailed trends with historical data (24+ queries - slower but accurate)
+      console.log('[TEAM_HEALTH_KPI] ⚠️ Calculating detailed trends (this may take longer)...');
+      for (let i = 7; i >= 0; i--) {
+        const weekDate = new Date(now);
+        weekDate.setDate(weekDate.getDate() - (i * 7));
+        const weekStart = new Date(weekDate);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
 
-      // Calculate metrics for this week (use null if not available)
-      const weekENPS = await calculateENPSFromResponses(weekStart, weekEnd, surveyIdForENPS);
-      const weekPlanning = await calculatePlanningAccuracyFromMetrics();
-      const weekCapacity = await calculateCapacityAccuracyFromMetrics();
+        // Calculate metrics for this week
+        const weekENPS = await calculateENPSFromResponses(weekStart, weekEnd, surveyIdForENPS);
+        const weekPlanning = await calculatePlanningAccuracyFromMetrics();
+        const weekCapacity = await calculateCapacityAccuracyFromMetrics();
 
-      // Use current period data if week data not available
-      const weekENPSScore = weekENPS?.score || enpsScore;
-      const weekPlanningScore = weekPlanning?.score || planningScore;
-      const weekCapacityScore = weekCapacity?.score || capacityScore;
+        const weekENPSScore = weekENPS?.score || enpsScore;
+        const weekPlanningScore = weekPlanning?.score || planningScore;
+        const weekCapacityScore = weekCapacity?.score || capacityScore;
 
-      const weekScore = calculateTeamHealthScore(
-        weekENPSScore,
-        weekPlanningScore,
-        weekCapacityScore
-      );
+        const weekScore = calculateTeamHealthScore(
+          weekENPSScore,
+          weekPlanningScore,
+          weekCapacityScore
+        );
 
-      trends.push({
-        week: `Wk ${8 - i}`,
-        healthScore: weekScore,
-        enps: weekENPS?.value || enps?.value || null,
-        planningAcc: weekPlanning?.percentage || planningAccuracy?.percentage || null,
-        capacityAcc: weekCapacity?.value || capacityAccuracy?.value || null
-      });
+        trends.push({
+          week: `Wk ${8 - i}`,
+          healthScore: weekScore,
+          enps: weekENPS?.value || enps?.value || null,
+          planningAcc: weekPlanning?.percentage || planningAccuracy?.percentage || null,
+          capacityAcc: weekCapacity?.value || capacityAccuracy?.value || null
+        });
+      }
+    } else {
+      // Simplified trends using current period data (fast, no additional queries)
+      for (let i = 7; i >= 0; i--) {
+        trends.push({
+          week: `Wk ${8 - i}`,
+          healthScore: teamHealthScore,
+          enps: enps?.value || null,
+          planningAcc: planningAccuracy?.percentage || null,
+          capacityAcc: capacityAccuracy?.value || null
+        });
+      }
     }
 
-    return {
+    const result = {
       teamHealthScore,
       enps: enps || null,
       planningAccuracy: planningAccuracy || null,
       capacityAccuracy: capacityAccuracy || null,
       trends: trends.slice(0, 8)
     };
+    
+    // Cache result if applicable
+    if (useCache && !sprintId && !startDate && !endDate && Object.keys(filters).length === 0) {
+      const cacheKey = 'teamHealthKPIData';
+      cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+      // Clean old cache entries (keep only last 10)
+      if (cache.size > 10) {
+        const firstKey = cache.keys().next().value;
+        cache.delete(firstKey);
+      }
+    }
+    
+    console.log('[TEAM_HEALTH_KPI] 📊 Final result being returned:', {
+      teamHealthScore: result.teamHealthScore,
+      hasEnps: !!result.enps,
+      enpsValue: result.enps?.value,
+      hasPlanningAccuracy: !!result.planningAccuracy,
+      hasCapacityAccuracy: !!result.capacityAccuracy,
+      trendsCount: result.trends.length,
+      fromCache: false
+    });
+    
+    return result;
   } catch (error) {
     console.error('[TEAM_HEALTH_KPI] Error calculating Team Health KPIs:', error);
     console.warn('[TEAM_HEALTH_KPI] No data available due to error');

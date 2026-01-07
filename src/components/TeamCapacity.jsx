@@ -7,9 +7,11 @@ import {
   getAllSprints,
   upsertCapacity,
   recalculateSpDone,
-  getDevelopersForSquad,
+  getAllDevelopers,
   getAllDevelopersForCapacity,
-  batchUpsertDeveloperParticipations
+  batchUpsertDeveloperParticipations,
+  getLastCapacityAllocations,
+  getLastSquadAssignments
 } from '../services/teamCapacityService';
 
 /**
@@ -26,13 +28,15 @@ const TeamCapacity = () => {
   const [selectedSprint, setSelectedSprint] = useState(null);
   const [developers, setDevelopers] = useState([]);
   const [capacityData, setCapacityData] = useState(null);
-  const [developerParticipations, setDeveloperParticipations] = useState({}); // {developerId: isParticipating}
+  const [developerParticipations, setDeveloperParticipations] = useState({}); // {developerId: {isParticipating: boolean, capacity_sp: number}}
+  const [lastSquadAssignments, setLastSquadAssignments] = useState({}); // {developerId: squad_name}
   const [editingCapacity, setEditingCapacity] = useState(false);
   const [formData, setFormData] = useState({
     capacity_goal_sp: '',
     capacity_available_sp: ''
   });
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -47,6 +51,7 @@ const TeamCapacity = () => {
       setCapacityData(null);
       setDevelopers([]);
       setDeveloperParticipations({});
+      setLastSquadAssignments({});
     }
   }, [selectedSquad, selectedSprint]);
 
@@ -58,7 +63,9 @@ const TeamCapacity = () => {
         getAllSprints()
       ]);
       setSquads(squadsData);
-      setSprints(sprintsData);
+      // IMPORTANT: Filter to only include sprints with "Sprint" in the name (already filtered in API, but double-check)
+      const validSprints = (sprintsData || []).filter(s => s.sprint_name && s.sprint_name.includes('Sprint'));
+      setSprints(validSprints);
     } catch (error) {
       console.error('[TeamCapacity] Error loading initial data:', error);
     } finally {
@@ -70,10 +77,10 @@ const TeamCapacity = () => {
     try {
       setLoading(true);
       
-      // Load all developers for the squad FIRST (always needed)
-      const squadDevelopers = await getDevelopersForSquad(selectedSquad);
-      console.log('[TeamCapacity] Loaded developers:', squadDevelopers.length);
-      setDevelopers(squadDevelopers);
+      // Load ALL developers (for multisquad support)
+      const allDevelopers = await getAllDevelopers();
+      console.log('[TeamCapacity] Loaded all developers:', allDevelopers.length);
+      setDevelopers(allDevelopers);
       
       // Load capacity data
       const capacity = await getCapacityForSquadSprint(selectedSquad, selectedSprint);
@@ -92,22 +99,61 @@ const TeamCapacity = () => {
         // Load developer participations from database
         const devParticipations = await getAllDevelopersForCapacity(capacity.id);
         devParticipations.forEach(dp => {
-          participationMap[dp.developer_id] = dp.is_participating;
+          participationMap[dp.developer_id] = {
+            isParticipating: dp.is_participating || false,
+            capacity_sp: dp.capacity_allocation_sp || 0
+          };
         });
+        
+        // Load last squad assignments for display (even if capacity exists)
+        const developerIds = allDevelopers.map(d => d.id);
+        const lastSquads = await getLastSquadAssignments(developerIds, selectedSprint);
+        setLastSquadAssignments(lastSquads);
       } else {
         setFormData({
           capacity_goal_sp: '',
           capacity_available_sp: ''
         });
+        
+        // Load last capacity allocations and squad assignments from previous sprints
+        const developerIds = allDevelopers.map(d => d.id);
+        const [lastCapacities, lastSquads] = await Promise.all([
+          getLastCapacityAllocations(developerIds, selectedSprint),
+          getLastSquadAssignments(developerIds, selectedSprint)
+        ]);
+        console.log('[TeamCapacity] Loaded last capacity allocations:', lastCapacities);
+        console.log('[TeamCapacity] Loaded last squad assignments:', lastSquads);
+        
+        // Store last squad assignments
+        setLastSquadAssignments(lastSquads);
+        
+        // Initialize with last capacity allocations
+        allDevelopers.forEach(dev => {
+          participationMap[dev.id] = {
+            isParticipating: false,
+            capacity_sp: lastCapacities[dev.id] || 0 // Use last capacity or 0 if first time
+          };
+        });
       }
       
-      // Initialize participations for all developers (default to false if not in database)
-      squadDevelopers.forEach(dev => {
+      // Load last squad assignments even if capacity exists (for display)
+      if (capacity) {
+        const developerIds = allDevelopers.map(d => d.id);
+        const lastSquads = await getLastSquadAssignments(developerIds, selectedSprint);
+        setLastSquadAssignments(lastSquads);
+      }
+      
+      // Initialize participations for developers not yet in the map
+      allDevelopers.forEach(dev => {
         if (!(dev.id in participationMap)) {
-          participationMap[dev.id] = false; // Default to not participating
+          participationMap[dev.id] = {
+            isParticipating: false,
+            capacity_sp: 0
+          };
         }
       });
       setDeveloperParticipations(participationMap);
+      setHasChanges(false);
       
     } catch (error) {
       console.error('[TeamCapacity] Error loading capacity and developers:', error);
@@ -122,8 +168,40 @@ const TeamCapacity = () => {
   const handleToggleDeveloper = (developerId) => {
     setDeveloperParticipations(prev => ({
       ...prev,
-      [developerId]: !prev[developerId]
+      [developerId]: {
+        ...prev[developerId],
+        isParticipating: !prev[developerId]?.isParticipating
+      }
     }));
+    setHasChanges(true);
+    setTimeout(() => recalculateTotalCapacity(), 0);
+  };
+
+  const handleCapacityChange = (developerId, capacitySp) => {
+    setDeveloperParticipations(prev => ({
+      ...prev,
+      [developerId]: {
+        ...prev[developerId],
+        capacity_sp: parseFloat(capacitySp) || 0
+      }
+    }));
+    setHasChanges(true);
+    setTimeout(() => recalculateTotalCapacity(), 0);
+  };
+
+  const recalculateTotalCapacity = () => {
+    const totalCapacity = Object.values(developerParticipations)
+      .filter(p => p?.isParticipating)
+      .reduce((sum, p) => sum + (parseFloat(p.capacity_sp) || 0), 0);
+    
+    // Update form data with calculated total (only if no capacity data exists or editing)
+    if (!capacityData || editingCapacity) {
+      setFormData(prev => ({
+        ...prev,
+        capacity_goal_sp: totalCapacity > 0 ? totalCapacity.toFixed(1) : prev.capacity_goal_sp,
+        capacity_available_sp: totalCapacity > 0 ? totalCapacity.toFixed(1) : prev.capacity_available_sp
+      }));
+    }
   };
 
   const handleSave = async () => {
@@ -135,13 +213,22 @@ const TeamCapacity = () => {
     try {
       setSaving(true);
       
-      // First, save/update capacity
+      // Calculate total capacity from individual developer capacities
+      const calculatedTotal = Object.values(developerParticipations)
+        .filter(p => p?.isParticipating)
+        .reduce((sum, p) => sum + (parseFloat(p.capacity_sp) || 0), 0);
+      
+      // Use calculated total or form data (whichever is higher, or form data if manually set)
+      const finalGoalSP = calculatedTotal > 0 ? calculatedTotal : (parseFloat(formData.capacity_goal_sp) || 0);
+      const finalAvailableSP = calculatedTotal > 0 ? calculatedTotal : (parseFloat(formData.capacity_available_sp) || 0);
+      
+      // First, save/update capacity with calculated values
       const capacityResult = await upsertCapacity(
         {
           squad_id: selectedSquad,
           sprint_id: selectedSprint,
-          capacity_goal_sp: parseFloat(formData.capacity_goal_sp) || 0,
-          capacity_available_sp: parseFloat(formData.capacity_available_sp) || 0
+          capacity_goal_sp: finalGoalSP,
+          capacity_available_sp: finalAvailableSP
         },
         currentUser?.id
       );
@@ -151,11 +238,15 @@ const TeamCapacity = () => {
         return;
       }
 
-      // Then, save developer participations
-      const participations = developers.map(dev => ({
-        developer_id: dev.id,
-        is_participating: developerParticipations[dev.id] || false
-      }));
+      // Then, save developer participations with individual capacities
+      const participations = developers.map(dev => {
+        const participation = developerParticipations[dev.id] || { isParticipating: false, capacity_sp: 0 };
+        return {
+          developer_id: dev.id,
+          is_participating: participation.isParticipating || false,
+          capacity_allocation_sp: participation.capacity_sp || 0
+        };
+      });
 
       const participationSuccess = await batchUpsertDeveloperParticipations(
         capacityResult.id,
@@ -209,7 +300,10 @@ const TeamCapacity = () => {
   const selectedSprintData = sprints.find(s => s.id === selectedSprint);
   const selectedSquadData = squads.find(s => s.id === selectedSquad);
   
-  const participatingCount = Object.values(developerParticipations).filter(Boolean).length;
+  const participatingCount = Object.values(developerParticipations).filter(p => p?.isParticipating).length;
+  const totalCalculatedCapacity = Object.values(developerParticipations)
+    .filter(p => p?.isParticipating)
+    .reduce((sum, p) => sum + (parseFloat(p.capacity_sp) || 0), 0);
   const completionPct = capacityData && capacityData.capacity_goal_sp > 0
     ? ((capacityData.sp_done || 0) / capacityData.capacity_goal_sp) * 100
     : 0;
@@ -378,7 +472,7 @@ const TeamCapacity = () => {
                       className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-lg font-semibold text-right"
                     />
                   ) : (
-                    <div className="text-2xl font-bold text-white">{capacityData.capacity_goal_sp.toFixed(1)}</div>
+                    <div className="text-2xl font-bold text-white">{(capacityData.capacity_goal_sp || 0).toFixed(1)}</div>
                   )}
                 </div>
                 <div className="glass rounded-lg p-4 border border-slate-700/50">
@@ -392,15 +486,15 @@ const TeamCapacity = () => {
                       className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-lg font-semibold text-right"
                     />
                   ) : (
-                    <div className="text-2xl font-bold text-white">{capacityData.capacity_available_sp.toFixed(1)}</div>
+                    <div className="text-2xl font-bold text-white">{(capacityData.capacity_available_sp || 0).toFixed(1)}</div>
                   )}
                 </div>
                 <div className="glass rounded-lg p-4 border border-slate-700/50">
                   <div className="text-sm text-slate-400 mb-1">SP Done</div>
                   <div className={`text-2xl font-bold ${
-                    capacityData.sp_done > 0 ? 'text-emerald-400' : 'text-slate-400'
+                    (capacityData.sp_done || 0) > 0 ? 'text-emerald-400' : 'text-slate-400'
                   }`}>
-                    {capacityData.sp_done.toFixed(1)}
+                    {(capacityData.sp_done || 0).toFixed(1)}
                   </div>
                 </div>
                 <div className="glass rounded-lg p-4 border border-slate-700/50">
@@ -426,48 +520,43 @@ const TeamCapacity = () => {
                   <h3 className="text-xl font-bold text-white">Team Composition</h3>
                   <p className="text-sm text-slate-400 mt-1">
                     {developers.length > 0 
-                      ? `Select developers who will participate in this sprint (${participatingCount} selected)`
-                      : 'No developers found for this squad'}
+                      ? `Select developers and assign individual capacity (${participatingCount} selected, Total: ${totalCalculatedCapacity.toFixed(1)} SP)`
+                      : 'No developers found'}
                   </p>
                 </div>
                 {!capacityData && developers.length > 0 && (
                   <button
                     onClick={handleSave}
-                    disabled={saving || !formData.capacity_goal_sp || !formData.capacity_available_sp}
+                    disabled={saving || participatingCount === 0 || totalCalculatedCapacity === 0}
                     className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     <Plus size={18} />
                     Create Capacity
                   </button>
                 )}
+                {capacityData && hasChanges && (
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Save size={18} />
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                )}
               </div>
 
-              {/* Capacity Input Fields - Show at top if no capacity data exists */}
-              {!capacityData && developers.length > 0 && (
-                <div className="mb-6 p-4 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                  <p className="text-sm text-slate-400 mb-4">Set capacity goals to save team composition:</p>
-                  <div className="grid grid-cols-2 gap-4">
+              {/* Calculated Total Capacity Display */}
+              {participatingCount > 0 && (
+                <div className="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <label className="block text-sm text-slate-300 mb-2 font-medium">Goal SP</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={formData.capacity_goal_sp}
-                        onChange={(e) => setFormData({ ...formData, capacity_goal_sp: e.target.value })}
-                        placeholder="0.0"
-                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                      />
+                      <p className="text-sm text-blue-400 font-semibold mb-1">Calculated Total Capacity</p>
+                      <p className="text-xs text-slate-400">Sum of individual developer capacities</p>
                     </div>
-                    <div>
-                      <label className="block text-sm text-slate-300 mb-2 font-medium">Available SP</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={formData.capacity_available_sp}
-                        onChange={(e) => setFormData({ ...formData, capacity_available_sp: e.target.value })}
-                        placeholder="0.0"
-                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                      />
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-blue-400">{totalCalculatedCapacity.toFixed(1)} SP</div>
+                      <div className="text-xs text-slate-400">{participatingCount} developer{participatingCount !== 1 ? 's' : ''}</div>
                     </div>
                   </div>
                 </div>
@@ -482,8 +571,8 @@ const TeamCapacity = () => {
               ) : developers.length === 0 ? (
                 <div className="text-center py-8">
                   <Users className="mx-auto text-slate-400 mb-4" size={48} />
-                  <p className="text-slate-400 mb-2">No developers found for this squad</p>
-                  <p className="text-slate-500 text-sm">Developers are identified by issues assigned to initiatives in this squad</p>
+                  <p className="text-slate-400 mb-2">No developers found</p>
+                  <p className="text-slate-500 text-sm">Ensure developers are marked as active in the database</p>
                 </div>
               ) : (
                 <>
@@ -492,30 +581,37 @@ const TeamCapacity = () => {
                       <thead>
                         <tr className="border-b border-slate-700/50">
                           <th className="text-left py-3 px-4 text-slate-400 font-semibold text-sm w-12">
-                            <input
-                              type="checkbox"
-                              checked={developers.length > 0 && developers.every(dev => developerParticipations[dev.id])}
-                              onChange={(e) => {
-                                const newState = e.target.checked;
-                                const newParticipations = {};
-                                developers.forEach(dev => {
-                                  newParticipations[dev.id] = newState;
-                                });
-                                setDeveloperParticipations(newParticipations);
-                                setHasChanges(true);
-                              }}
-                              className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 cursor-pointer"
-                              title="Select/Deselect all developers"
-                            />
+                        <input
+                          type="checkbox"
+                          checked={developers.length > 0 && developers.every(dev => developerParticipations[dev.id]?.isParticipating)}
+                          onChange={(e) => {
+                            const newState = e.target.checked;
+                            const newParticipations = {};
+                            developers.forEach(dev => {
+                              newParticipations[dev.id] = {
+                                isParticipating: newState,
+                                capacity_sp: developerParticipations[dev.id]?.capacity_sp || 0
+                              };
+                            });
+                            setDeveloperParticipations(newParticipations);
+                            setHasChanges(true);
+                            setTimeout(() => recalculateTotalCapacity(), 0);
+                          }}
+                          className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 cursor-pointer"
+                          title="Select/Deselect all developers"
+                        />
                           </th>
-                          <th className="text-left py-3 px-4 text-slate-400 font-semibold text-sm">Developer</th>
-                          <th className="text-left py-3 px-4 text-slate-400 font-semibold text-sm">Email</th>
-                          <th className="text-center py-3 px-4 text-slate-400 font-semibold text-sm">Participating</th>
+                      <th className="text-left py-3 px-4 text-slate-400 font-semibold text-sm">Developer</th>
+                      <th className="text-left py-3 px-4 text-slate-400 font-semibold text-sm">Last Project Assigned</th>
+                      <th className="text-center py-3 px-4 text-slate-400 font-semibold text-sm">Participating</th>
+                      <th className="text-right py-3 px-4 text-slate-400 font-semibold text-sm">Capacity SP</th>
                         </tr>
                       </thead>
                       <tbody>
                         {developers.map(developer => {
-                          const isParticipating = developerParticipations[developer.id] || false;
+                          const participation = developerParticipations[developer.id] || { isParticipating: false, capacity_sp: 0 };
+                          const isParticipating = participation.isParticipating;
+                          const capacitySp = participation.capacity_sp || 0;
                           
                           return (
                             <tr key={developer.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
@@ -523,17 +619,14 @@ const TeamCapacity = () => {
                                 <input
                                   type="checkbox"
                                   checked={isParticipating}
-                                  onChange={() => {
-                                    handleToggleDeveloper(developer.id);
-                                    if (!capacityData) {
-                                      setHasChanges(true);
-                                    }
-                                  }}
+                                  onChange={() => handleToggleDeveloper(developer.id)}
                                   className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 cursor-pointer"
                                 />
                               </td>
                               <td className="py-3 px-4 text-white font-medium">{developer.display_name}</td>
-                              <td className="py-3 px-4 text-slate-400">{developer.email || 'N/A'}</td>
+                              <td className="py-3 px-4 text-slate-400">
+                                {lastSquadAssignments[developer.id] || '-'}
+                              </td>
                               <td className="py-3 px-4 text-center">
                                 {isParticipating ? (
                                   <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-medium">
@@ -543,6 +636,21 @@ const TeamCapacity = () => {
                                   <span className="px-2 py-1 rounded bg-slate-700 text-slate-500 text-xs font-medium">
                                     No
                                   </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                {isParticipating ? (
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={capacitySp}
+                                    onChange={(e) => handleCapacityChange(developer.id, e.target.value)}
+                                    className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm text-right focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                    placeholder="0.0"
+                                  />
+                                ) : (
+                                  <span className="text-slate-500 text-sm">-</span>
                                 )}
                               </td>
                             </tr>
@@ -556,7 +664,7 @@ const TeamCapacity = () => {
                   {!capacityData && (
                     <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
                       <p className="text-sm text-amber-400">
-                        <strong>Note:</strong> Set Goal SP and Available SP above, then click "Create Capacity" to save the team composition.
+                        <strong>Note:</strong> Select developers and assign individual capacity SP. The total capacity is calculated automatically. Click "Create Capacity" to save.
                       </p>
                     </div>
                   )}

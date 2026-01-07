@@ -57,6 +57,147 @@ function findHistoryValueAtDate(changelog, fieldNames, targetDate, fallbackValue
 }
 
 /**
+ * Verifica si un ticket estaba en el sprint al inicio del sprint
+ * Revisa el changelog del campo Sprint para ver si fue agregado antes o después del inicio
+ * @param {Object} changelog - Changelog del issue de Jira
+ * @param {string} sprintName - Nombre del sprint
+ * @param {string} sprintStartDate - Fecha de inicio del sprint (ISO string)
+ * @param {Array} currentSprintData - Array de sprints actuales del ticket
+ * @returns {boolean} true si el ticket estaba en el sprint al inicio, false si fue agregado después
+ */
+function wasTicketInSprintAtStart(changelog, sprintName, sprintStartDate, currentSprintData = []) {
+  if (!changelog || !changelog.histories || !sprintStartDate) {
+    // Si no hay changelog, asumir que estaba en el sprint al inicio si está en la lista actual
+    return currentSprintData.some(s => s.name === sprintName);
+  }
+
+  const sprintFieldNames = ['Sprint', config.jira.sprintFieldId];
+  const startTime = new Date(sprintStartDate).getTime();
+  
+  if (isNaN(startTime)) {
+    return currentSprintData.some(s => s.name === sprintName);
+  }
+
+  // Obtener todos los cambios del campo Sprint
+  const sprintChanges = changelog.histories
+    .flatMap(history => (history.items || []).map(item => ({
+      ...item,
+      created: new Date(history.created).getTime()
+    })))
+    .filter(item => {
+      const fieldLower = (item.field || '').toLowerCase();
+      return sprintFieldNames.some(fn => fieldLower === fn.toLowerCase());
+    })
+    .sort((a, b) => a.created - b.created);
+
+  if (sprintChanges.length === 0) {
+    // Si no hay cambios, asumir que estaba en el sprint al inicio
+    return currentSprintData.some(s => s.name === sprintName);
+  }
+
+  // Verificar si el ticket fue agregado al sprint ANTES o DESPUÉS del inicio
+  let wasInSprintAtStart = currentSprintData.some(s => s.name === sprintName); // Estado inicial
+  
+  for (const change of sprintChanges) {
+    const toString = change.toString || '';
+    const fromString = change.fromString || '';
+    
+    if (change.created <= startTime) {
+      // Cambios antes o en el inicio del sprint
+      if (toString.includes(sprintName)) {
+        wasInSprintAtStart = true;
+      } else if (fromString.includes(sprintName) && !toString.includes(sprintName)) {
+        wasInSprintAtStart = false;
+      }
+    } else {
+      // Si encontramos un cambio DESPUÉS del inicio que agrega el ticket al sprint,
+      // significa que NO estaba en el sprint al inicio
+      if (toString.includes(sprintName) && !fromString.includes(sprintName)) {
+        // Ticket fue agregado después del inicio
+        return false;
+      }
+      break;
+    }
+  }
+
+  return wasInSprintAtStart;
+}
+
+/**
+ * Verifica si un ticket estaba en el sprint al momento del cierre
+ * Revisa el changelog del campo Sprint para ver si fue removido antes del cierre
+ * @param {Object} changelog - Changelog del issue de Jira
+ * @param {string} sprintName - Nombre del sprint
+ * @param {string} sprintCloseDate - Fecha de cierre del sprint (ISO string)
+ * @param {Array} currentSprintData - Array de sprints actuales del ticket
+ * @returns {boolean} true si el ticket estaba en el sprint al cierre, false si fue removido antes
+ */
+function wasTicketInSprintAtClose(changelog, sprintName, sprintCloseDate, currentSprintData = []) {
+  if (!changelog || !changelog.histories || !sprintCloseDate) {
+    // Si no hay changelog, verificar si el sprint está en la lista actual
+    return currentSprintData.some(s => s.name === sprintName);
+  }
+
+  const sprintFieldNames = ['Sprint', 'customfield_10020'];
+  const closeTime = new Date(sprintCloseDate).getTime();
+  
+  if (isNaN(closeTime)) {
+    return currentSprintData.some(s => s.name === sprintName);
+  }
+
+  // Obtener todos los cambios del campo Sprint
+  const sprintChanges = changelog.histories
+    .flatMap(history => (history.items || []).map(item => ({
+      ...item,
+      created: new Date(history.created).getTime()
+    })))
+    .filter(item => {
+      const fieldLower = (item.field || '').toLowerCase();
+      return sprintFieldNames.some(fn => fieldLower === fn.toLowerCase());
+    })
+    .sort((a, b) => a.created - b.created);
+
+  if (sprintChanges.length === 0) {
+    // Si no hay cambios en el changelog, verificar si está en la lista actual
+    return currentSprintData.some(s => s.name === sprintName);
+  }
+
+  // Encontrar el último cambio antes del cierre del sprint
+  // Rastrear el estado del ticket en el sprint a lo largo del tiempo
+  let wasInSprint = currentSprintData.some(s => s.name === sprintName); // Estado inicial
+
+  for (const change of sprintChanges) {
+    if (change.created <= closeTime) {
+      // Verificar si el cambio indica que el ticket fue agregado o removido del sprint
+      const toString = change.toString || '';
+      const fromString = change.fromString || '';
+      
+      // Si el toString contiene el nombre del sprint, el ticket fue agregado o estaba en el sprint
+      if (toString.includes(sprintName)) {
+        wasInSprint = true;
+      }
+      // Si el fromString contenía el sprint pero el toString no, fue removido
+      else if (fromString.includes(sprintName) && !toString.includes(sprintName)) {
+        wasInSprint = false;
+      }
+      // Si el fromString no contenía el sprint pero el toString sí, fue agregado
+      else if (!fromString.includes(sprintName) && toString.includes(sprintName)) {
+        wasInSprint = true;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // Retornar el estado final antes del cierre
+  return wasInSprint;
+
+  // Si no hay cambios antes del cierre, verificar si está en la lista actual
+  // Esto puede pasar si el ticket fue agregado al sprint antes de cualquier cambio registrado
+  return currentSprintData.some(s => s.name === sprintName);
+}
+
+/**
  * Calcula el tiempo en cada estado basado en el changelog
  * @param {Object} changelog - Changelog del issue
  * @param {string} createdDateISO - Fecha de creación en ISO
@@ -465,19 +606,103 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
     }
 
     // Guardar relación issue-sprints
+    // IMPORTANTE: Solo guardar tickets que estaban en el sprint al momento del cierre
+    // No incluir tickets que fueron removidos del sprint antes del cierre
     if (sprintIds.length > 0) {
       for (const { sprintId, sprint } of sprintIds) {
-        // Determinar estado al cierre del sprint
-        let statusAtSprintClose = null;
+        const sprintName = sprint?.name;
         const sprintCloseDate = sprint.completeDate || sprint.endDate;
+
+        // Verificar si el ticket estaba en el sprint al momento del cierre
+        // Si el sprint está activo, siempre incluir (aún no ha cerrado)
+        const isActiveSprint = sprint.state === 'active';
+        const wasInSprintAtClose = isActiveSprint || 
+          wasTicketInSprintAtClose(
+            jiraIssue.changelog,
+            sprintName,
+            sprintCloseDate,
+            sprintData
+          );
+
+        // Solo guardar si el ticket estaba en el sprint al cierre (o si el sprint está activo)
+        if (!wasInSprintAtClose) {
+          logger.debug(`⏭️ [${jiraIssue.key}] Ticket removido del sprint "${sprintName}" antes del cierre, omitiendo de issue_sprints`);
+          continue;
+        }
+
+        // Source of truth for "foto" at sprint close:
+        // We already computed `statusBySprint[sprintName]` using findHistoryValueAtDate at fotoDate
+        // (same approach as the Google Sheet). Use it here.
+        let statusAtSprintClose = sprintName ? statusBySprint[sprintName] : null;
+
+        // IMPORTANT: Always use the historical status at sprint close date
+        // Never use current status - we want the exact "foto" at sprint closure
+        const isSprintClosed = sprint.state === 'closed';
         
-        if (sprintCloseDate && statusHistory.length > 0) {
-          const closeDate = new Date(sprintCloseDate);
-          // Buscar el estado más cercano antes del cierre
-          for (const status of statusHistory.reverse()) {
-            if (status.date <= closeDate) {
-              statusAtSprintClose = status.to;
-              break;
+        // If statusBySprint doesn't have the status, try to get it from statusHistory
+        if (!statusAtSprintClose || statusAtSprintClose === 'N/A (Sin Historial)') {
+          if (sprintCloseDate && statusHistory.length > 0) {
+            const closeDate = new Date(sprintCloseDate);
+            
+            // Find the status that was active at or before the sprint close date
+            // We iterate backwards to find the most recent status before/at close
+            let foundStatus = null;
+            for (const status of [...statusHistory].reverse()) {
+              if (status.date <= closeDate) {
+                foundStatus = status.to;
+                break;
+              }
+            }
+            
+            if (foundStatus) {
+              statusAtSprintClose = normalizeStatus(foundStatus);
+              const foundStatusDate = statusHistory.find(s => s.to === foundStatus && s.date <= closeDate)?.date;
+              logger.debug(`📸 [${jiraIssue.key}] Sprint ${sprintName} closed, using historical status from ${foundStatusDate ? new Date(foundStatusDate).toISOString() : 'unknown date'}: ${foundStatus}`);
+            }
+          }
+          
+          // Final fallback: only use current status if we truly have no historical data
+          // This should be rare - indicates missing changelog data
+          if (!statusAtSprintClose || statusAtSprintClose === 'N/A (Sin Historial)') {
+            logger.warn(`⚠️ [${jiraIssue.key}] No historical status found for sprint ${sprintName}, using current status as fallback: ${normalizedStatus}`);
+            statusAtSprintClose = normalizedStatus;
+          }
+        } else {
+          // Log when we successfully use the historical status from statusBySprint
+          logger.debug(`📸 [${jiraIssue.key}] Sprint ${sprintName} closed, using status from statusBySprint: ${statusAtSprintClose}`);
+        }
+
+        // Story points at sprint start: use the computed map (Google Sheet logic)
+        // IMPORTANT: If ticket was added to sprint AFTER start date, SP at start should be 0
+        let spAtStart = 0;
+        if (sprintName && Object.prototype.hasOwnProperty.call(storyPointsBySprint, sprintName)) {
+          spAtStart = Number(storyPointsBySprint[sprintName]) || 0;
+        } else {
+          spAtStart = issueData.storyPoints || 0;
+        }
+        
+        // Verify if ticket was in sprint at start date using changelog
+        // If ticket was added after sprint start, spAtStart should be 0
+        if (sprint.startDate) {
+          const issueCreated = fields.created ? new Date(fields.created) : null;
+          const sprintStart = new Date(sprint.startDate);
+          
+          // Quick check: if ticket was created AFTER sprint start, it definitely wasn't in sprint at start
+          if (issueCreated && issueCreated.getTime() > sprintStart.getTime()) {
+            spAtStart = 0;
+            logger.debug(`⏭️ [${jiraIssue.key}] Ticket creado después del inicio del sprint "${sprintName}" (${sprint.startDate}), SP al inicio = 0`);
+          } else {
+            // Use changelog to verify if ticket was added to sprint after start
+            const wasInSprintAtStart = wasTicketInSprintAtStart(
+              jiraIssue.changelog,
+              sprintName,
+              sprint.startDate,
+              sprintData
+            );
+            
+            if (!wasInSprintAtStart) {
+              spAtStart = 0;
+              logger.debug(`⏭️ [${jiraIssue.key}] Ticket agregado al sprint "${sprintName}" después del inicio (${sprint.startDate}), SP al inicio = 0`);
             }
           }
         }
@@ -489,7 +714,7 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
             issue_id: issueId,
             sprint_id: sprintId,
             status_at_sprint_close: statusAtSprintClose ? normalizeStatus(statusAtSprintClose) : normalizedStatus,
-            story_points_at_start: issueData.storyPoints, // TODO: calcular SP inicial del sprint
+            story_points_at_start: spAtStart,
             story_points_at_close: issueData.storyPoints,
           }, {
             onConflict: 'issue_id,sprint_id',
@@ -606,19 +831,107 @@ export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClie
     
     try {
       // Guardar relaciones issue-sprints
+      // IMPORTANTE: Solo guardar tickets que estaban en el sprint al momento del cierre
+      // No incluir tickets que fueron removidos del sprint antes del cierre
       if (issueData.sprintIds && issueData.sprintIds.length > 0) {
         const normalizedStatus = issueData.status;
+        const statusBySprint = issueData.statusBySprint || {};
+        const storyPointsBySprint = issueData.storyPointsBySprint || {};
+        const changelog = issueData.rawData?.changelog || null;
+        const sprintData = issueData.rawData?.fields?.[config.jira.sprintFieldId] || [];
         
         for (const { sprintId, sprint } of issueData.sprintIds) {
-          let statusAtSprintClose = null;
+          const sprintName = sprint?.name;
           const sprintCloseDate = sprint.completeDate || sprint.endDate;
+
+          // Verificar si el ticket estaba en el sprint al momento del cierre
+          // Si el sprint está activo, siempre incluir (aún no ha cerrado)
+          const isActiveSprint = sprint.state === 'active';
+          const wasInSprintAtClose = isActiveSprint || 
+            wasTicketInSprintAtClose(
+              changelog,
+              sprintName,
+              sprintCloseDate,
+              sprintData
+            );
+
+          // Solo guardar si el ticket estaba en el sprint al cierre (o si el sprint está activo)
+          if (!wasInSprintAtClose) {
+            logger.debug(`⏭️ [${issueData.key}] Ticket removido del sprint "${sprintName}" antes del cierre, omitiendo de issue_sprints`);
+            continue;
+          }
           
-          if (sprintCloseDate && issueData.statusHistory && issueData.statusHistory.length > 0) {
-            const closeDate = new Date(sprintCloseDate);
-            for (const status of [...issueData.statusHistory].reverse()) {
-              if (status.date <= closeDate) {
-                statusAtSprintClose = normalizeStatus(status.to);
-                break;
+          // Source of truth for "foto" at sprint close:
+          // Use the already computed statusBySprint[sprintName] (same approach as Google Sheet)
+          let statusAtSprintClose = sprintName ? statusBySprint[sprintName] : null;
+
+          // IMPORTANT: Always use the historical status at sprint close date
+          // Never use current status - we want the exact "foto" at sprint closure
+          const isSprintClosed = sprint.state === 'closed';
+          
+          // If statusBySprint doesn't have the status, try to get it from statusHistory
+          if (!statusAtSprintClose || statusAtSprintClose === 'N/A (Sin Historial)') {
+            if (sprintCloseDate && issueData.statusHistory && issueData.statusHistory.length > 0) {
+              const closeDate = new Date(sprintCloseDate);
+              
+              // Find the status that was active at or before the sprint close date
+              // We iterate backwards to find the most recent status before/at close
+              let foundStatus = null;
+              for (const status of [...issueData.statusHistory].reverse()) {
+                if (status.date <= closeDate) {
+                  foundStatus = status.to;
+                  break;
+                }
+              }
+              
+              if (foundStatus) {
+                statusAtSprintClose = normalizeStatus(foundStatus);
+                const foundStatusDate = issueData.statusHistory.find(s => s.to === foundStatus && s.date <= closeDate)?.date;
+                logger.debug(`📸 [${issueData.key}] Sprint ${sprintName} closed, using historical status from ${foundStatusDate ? new Date(foundStatusDate).toISOString() : 'unknown date'} in batch: ${foundStatus}`);
+              }
+            }
+            
+            // Final fallback: only use current status if we truly have no historical data
+            // This should be rare - indicates missing changelog data
+            if (!statusAtSprintClose || statusAtSprintClose === 'N/A (Sin Historial)') {
+              logger.warn(`⚠️ [${issueData.key}] No historical status found for sprint ${sprintName} in batch, using current status as fallback: ${normalizedStatus}`);
+              statusAtSprintClose = normalizedStatus;
+            }
+          } else {
+            // Log when we successfully use the historical status from statusBySprint
+            logger.debug(`📸 [${issueData.key}] Sprint ${sprintName} closed, using status from statusBySprint in batch: ${statusAtSprintClose}`);
+          }
+          
+          // Story points at sprint start: use the computed map (Google Sheet logic)
+          let spAtStart = 0;
+          if (sprintName && Object.prototype.hasOwnProperty.call(storyPointsBySprint, sprintName)) {
+            spAtStart = Number(storyPointsBySprint[sprintName]) || 0;
+          } else {
+            spAtStart = issueData.storyPoints || 0;
+          }
+          
+          // Verify if ticket was in sprint at start date using changelog
+          // If ticket was added after sprint start, spAtStart should be 0
+          if (sprint.startDate) {
+            const issueCreated = issueData.rawData?.fields?.created ? new Date(issueData.rawData.fields.created) : null;
+            const sprintStart = new Date(sprint.startDate);
+            
+            // Quick check: if ticket was created AFTER sprint start, it definitely wasn't in sprint at start
+            if (issueCreated && issueCreated.getTime() > sprintStart.getTime()) {
+              spAtStart = 0;
+              logger.debug(`⏭️ [${issueData.key}] Ticket creado después del inicio del sprint "${sprintName}" en batch, SP al inicio = 0`);
+            } else if (changelog) {
+              // Use changelog to verify if ticket was added to sprint after start
+              const wasInSprintAtStart = wasTicketInSprintAtStart(
+                changelog,
+                sprintName,
+                sprint.startDate,
+                sprintData
+              );
+              
+              if (!wasInSprintAtStart) {
+                spAtStart = 0;
+                logger.debug(`⏭️ [${issueData.key}] Ticket agregado al sprint "${sprintName}" después del inicio en batch, SP al inicio = 0`);
               }
             }
           }
@@ -628,8 +941,8 @@ export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClie
             .upsert({
               issue_id: issueId,
               sprint_id: sprintId,
-              status_at_sprint_close: statusAtSprintClose || normalizedStatus,
-              story_points_at_start: issueData.storyPoints,
+              status_at_sprint_close: statusAtSprintClose ? normalizeStatus(statusAtSprintClose) : normalizedStatus,
+              story_points_at_start: spAtStart,
               story_points_at_close: issueData.storyPoints,
             }, {
               onConflict: 'issue_id,sprint_id',

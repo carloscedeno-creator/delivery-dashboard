@@ -126,9 +126,31 @@ export const upsertCapacity = async (capacityData, userId) => {
       squad_id,
       sprint_id,
       capacity_goal_sp: parseFloat(capacity_goal_sp) || 0,
-      capacity_available_sp: parseFloat(capacity_available_sp) || 0,
-      updated_by_id: userId
+      capacity_available_sp: parseFloat(capacity_available_sp) || 0
     };
+
+    // Solo incluir created_by_id y updated_by_id si userId es válido
+    // (cuando se usa clave anónima, userId puede ser null/undefined/inválido)
+    // Validar que userId sea un UUID válido (no vacío, no null, formato correcto)
+    const isValidUserId = userId && 
+                          typeof userId === 'string' && 
+                          userId.trim() !== '' &&
+                          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    
+    if (isValidUserId) {
+      record.updated_by_id = userId;
+      if (!existing) {
+        record.created_by_id = userId;
+      }
+      console.log('[TeamCapacity] Including userId fields:', { created_by_id: record.created_by_id, updated_by_id: record.updated_by_id });
+    } else {
+      // Asegurarse de que estos campos NO estén en el record
+      delete record.created_by_id;
+      delete record.updated_by_id;
+      console.log('[TeamCapacity] userId is invalid or missing, excluding created_by_id and updated_by_id:', { userId, isValidUserId: false });
+    }
+    // Si userId no es válido, simplemente no incluimos estos campos
+    // La base de datos usará NULL (que está permitido por el schema)
 
     let result;
     if (existing) {
@@ -147,7 +169,6 @@ export const upsertCapacity = async (capacityData, userId) => {
       result = data;
     } else {
       // Create new
-      record.created_by_id = userId;
       const { data, error } = await supabase
         .from('squad_sprint_capacity')
         .insert(record)
@@ -211,7 +232,8 @@ export const getAllSprints = async (squadId = null) => {
   try {
     let query = supabase
       .from('sprints')
-      .select('id, sprint_name, start_date, end_date, state, squad_id')
+      .select('id, sprint_name, start_date, end_date, complete_date, state, squad_id')
+      .ilike('sprint_name', '%Sprint%')
       .order('start_date', { ascending: false });
 
     if (squadId) {
@@ -225,7 +247,18 @@ export const getAllSprints = async (squadId = null) => {
       return [];
     }
 
-    return data || [];
+    // Determinar sprint actual (active state o el más reciente que no ha terminado)
+    const now = new Date();
+    const sprintsWithCurrent = (data || []).map(sprint => {
+      // Un sprint está activo si:
+      // 1. Tiene state === 'active', O
+      // 2. No tiene end_date o end_date es en el futuro (y no está cerrado)
+      const isActive = sprint.state === 'active' || 
+        (sprint.state !== 'closed' && (!sprint.end_date || new Date(sprint.end_date) >= now));
+      return { ...sprint, is_active: isActive };
+    });
+
+    return sprintsWithCurrent;
   } catch (error) {
     console.error('[TeamCapacity] Error:', error);
     return [];
@@ -233,62 +266,25 @@ export const getAllSprints = async (squadId = null) => {
 };
 
 /**
- * Get developers for a specific squad
- * @param {string} squadId - Squad ID
- * @returns {Promise<Array>} Array of developers
+ * Get ALL active developers (for multisquad support)
+ * @returns {Promise<Array>} Array of all active developers
  */
-export const getDevelopersForSquad = async (squadId) => {
+export const getAllDevelopers = async () => {
   if (!supabase) {
     console.warn('[TeamCapacity] Supabase not configured');
     return [];
   }
 
   try {
-    // Get developers that have issues assigned in initiatives of this squad
-    const { data: initiatives, error: initiativesError } = await supabase
-      .from('initiatives')
-      .select('id')
-      .eq('squad_id', squadId);
-
-    if (initiativesError) {
-      console.error('[TeamCapacity] Error getting initiatives:', initiativesError);
-      return [];
-    }
-
-    const initiativeIds = (initiatives || []).map(i => i.id);
-
-    if (initiativeIds.length === 0) {
-      return [];
-    }
-
-    // Get issues for these initiatives
-    const { data: issues, error: issuesError } = await supabase
-      .from('issues')
-      .select('assignee_id')
-      .in('initiative_id', initiativeIds)
-      .not('assignee_id', 'is', null);
-
-    if (issuesError) {
-      console.error('[TeamCapacity] Error getting issues:', issuesError);
-      return [];
-    }
-
-    const assigneeIds = [...new Set(issues.map(i => i.assignee_id).filter(Boolean))];
-
-    if (assigneeIds.length === 0) {
-      return [];
-    }
-
-    // Get developer information
+    // Get all active developers
     const { data: developers, error: devsError } = await supabase
       .from('developers')
       .select('id, display_name, email')
-      .in('id', assigneeIds)
       .eq('active', true)
       .order('display_name', { ascending: true });
 
     if (devsError) {
-      console.error('[TeamCapacity] Error getting developers:', devsError);
+      console.error('[TeamCapacity] Error getting all developers:', devsError);
       return [];
     }
 
@@ -297,6 +293,17 @@ export const getDevelopersForSquad = async (squadId) => {
     console.error('[TeamCapacity] Error:', error);
     return [];
   }
+};
+
+/**
+ * Get developers for a specific squad (legacy - kept for compatibility)
+ * @param {string} squadId - Squad ID
+ * @returns {Promise<Array>} Array of developers
+ */
+export const getDevelopersForSquad = async (squadId) => {
+  // For multisquad support, return all developers
+  // The UI will allow selecting any developer for any squad
+  return getAllDevelopers();
 };
 
 /**
@@ -401,7 +408,7 @@ export const upsertDeveloperParticipation = async (capacityId, developerId, isPa
 /**
  * Batch upsert developer participations
  * @param {string} capacityId - Squad sprint capacity ID
- * @param {Array} participations - Array of {developer_id, is_participating}
+ * @param {Array} participations - Array of {developer_id, is_participating, capacity_allocation_sp}
  * @returns {Promise<boolean>} Success status
  */
 export const batchUpsertDeveloperParticipations = async (capacityId, participations) => {
@@ -414,7 +421,8 @@ export const batchUpsertDeveloperParticipations = async (capacityId, participati
     const records = participations.map(p => ({
       squad_sprint_capacity_id: capacityId,
       developer_id: p.developer_id,
-      is_participating: p.is_participating
+      is_participating: p.is_participating || false,
+      capacity_allocation_sp: p.capacity_allocation_sp || 0
     }));
 
     const { error } = await supabase
@@ -432,6 +440,180 @@ export const batchUpsertDeveloperParticipations = async (capacityId, participati
   } catch (error) {
     console.error('[TeamCapacity] Error:', error);
     return false;
+  }
+};
+
+/**
+ * Get last capacity allocation for developers from previous sprints
+ * @param {Array<string>} developerIds - Array of developer IDs
+ * @param {string} currentSprintId - Current sprint ID (to exclude from search)
+ * @returns {Promise<Object>} Map of developer_id to last capacity_allocation_sp
+ */
+export const getLastCapacityAllocations = async (developerIds, currentSprintId = null) => {
+  if (!supabase || !developerIds || developerIds.length === 0) {
+    return {};
+  }
+
+  try {
+    // First, get all capacity records excluding current sprint
+    let capacityQuery = supabase
+      .from('squad_sprint_capacity')
+      .select('id, sprint_id, sprint:sprints!inner(end_date)')
+      .order('sprint.end_date', { ascending: false })
+      .limit(100); // Get recent sprints
+
+    if (currentSprintId) {
+      capacityQuery = capacityQuery.neq('sprint_id', currentSprintId);
+    }
+
+    const { data: capacityRecords, error: capacityError } = await capacityQuery;
+
+    if (capacityError || !capacityRecords || capacityRecords.length === 0) {
+      console.log('[TeamCapacity] No previous capacity records found');
+      return {};
+    }
+
+    const capacityIds = capacityRecords.map(c => c.id);
+
+    // Get developer allocations from these capacity records
+    const { data: allocations, error } = await supabase
+      .from('squad_sprint_developers')
+      .select('developer_id, capacity_allocation_sp, squad_sprint_capacity_id')
+      .in('developer_id', developerIds)
+      .in('squad_sprint_capacity_id', capacityIds)
+      .eq('is_participating', true)
+      .not('capacity_allocation_sp', 'is', null)
+      .gt('capacity_allocation_sp', 0)
+      .order('squad_sprint_capacity_id', { ascending: false });
+
+    if (error) {
+      console.warn('[TeamCapacity] Error getting last capacity allocations:', error);
+      return {};
+    }
+
+    if (!allocations || allocations.length === 0) {
+      console.log('[TeamCapacity] No previous allocations found for developers');
+      return {};
+    }
+
+    // Create a map of capacity_id to sprint end_date for sorting
+    const capacityToSprintDate = {};
+    capacityRecords.forEach(c => {
+      capacityToSprintDate[c.id] = c.sprint?.end_date || '';
+    });
+
+    // Sort allocations by sprint end_date (most recent first)
+    allocations.sort((a, b) => {
+      const dateA = capacityToSprintDate[a.squad_sprint_capacity_id] || '';
+      const dateB = capacityToSprintDate[b.squad_sprint_capacity_id] || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    // Create a map of developer_id to last capacity_allocation_sp
+    // (take the first occurrence for each developer since they're sorted by date)
+    const lastCapacityMap = {};
+    const seenDevelopers = new Set();
+    
+    allocations.forEach(allocation => {
+      if (!seenDevelopers.has(allocation.developer_id) && allocation.capacity_allocation_sp > 0) {
+        lastCapacityMap[allocation.developer_id] = allocation.capacity_allocation_sp;
+        seenDevelopers.add(allocation.developer_id);
+      }
+    });
+
+    console.log('[TeamCapacity] Found last capacity allocations for', Object.keys(lastCapacityMap).length, 'developers');
+    return lastCapacityMap;
+  } catch (error) {
+    console.error('[TeamCapacity] Error getting last capacity allocations:', error);
+    return {};
+  }
+};
+
+/**
+ * Get last squad/project assigned for developers from previous sprints
+ * @param {Array<string>} developerIds - Array of developer IDs
+ * @param {string} currentSprintId - Current sprint ID (to exclude from search)
+ * @returns {Promise<Object>} Map of developer_id to last squad_name
+ */
+export const getLastSquadAssignments = async (developerIds, currentSprintId = null) => {
+  if (!supabase || !developerIds || developerIds.length === 0) {
+    return {};
+  }
+
+  try {
+    // First, get all capacity records excluding current sprint
+    let capacityQuery = supabase
+      .from('squad_sprint_capacity')
+      .select('id, squad_id, sprint_id, sprint:sprints!inner(end_date), squad:squads!inner(squad_name)')
+      .order('sprint.end_date', { ascending: false })
+      .limit(100); // Get recent sprints
+
+    if (currentSprintId) {
+      capacityQuery = capacityQuery.neq('sprint_id', currentSprintId);
+    }
+
+    const { data: capacityRecords, error: capacityError } = await capacityQuery;
+
+    if (capacityError || !capacityRecords || capacityRecords.length === 0) {
+      console.log('[TeamCapacity] No previous capacity records found for squad assignments');
+      return {};
+    }
+
+    const capacityIds = capacityRecords.map(c => c.id);
+
+    // Get developer allocations from these capacity records
+    const { data: allocations, error } = await supabase
+      .from('squad_sprint_developers')
+      .select('developer_id, squad_sprint_capacity_id')
+      .in('developer_id', developerIds)
+      .in('squad_sprint_capacity_id', capacityIds)
+      .eq('is_participating', true);
+
+    if (error) {
+      console.warn('[TeamCapacity] Error getting last squad assignments:', error);
+      return {};
+    }
+
+    if (!allocations || allocations.length === 0) {
+      console.log('[TeamCapacity] No previous allocations found for developers');
+      return {};
+    }
+
+    // Create a map of capacity_id to squad_name and sprint end_date for sorting
+    const capacityToSquad = {};
+    const capacityToSprintDate = {};
+    capacityRecords.forEach(c => {
+      capacityToSquad[c.id] = c.squad?.squad_name || '';
+      capacityToSprintDate[c.id] = c.sprint?.end_date || '';
+    });
+
+    // Sort allocations by sprint end_date (most recent first)
+    allocations.sort((a, b) => {
+      const dateA = capacityToSprintDate[a.squad_sprint_capacity_id] || '';
+      const dateB = capacityToSprintDate[b.squad_sprint_capacity_id] || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    // Create a map of developer_id to last squad_name
+    // (take the first occurrence for each developer since they're sorted by date)
+    const lastSquadMap = {};
+    const seenDevelopers = new Set();
+    
+    allocations.forEach(allocation => {
+      if (!seenDevelopers.has(allocation.developer_id)) {
+        const squadName = capacityToSquad[allocation.squad_sprint_capacity_id];
+        if (squadName) {
+          lastSquadMap[allocation.developer_id] = squadName;
+          seenDevelopers.add(allocation.developer_id);
+        }
+      }
+    });
+
+    console.log('[TeamCapacity] Found last squad assignments for', Object.keys(lastSquadMap).length, 'developers');
+    return lastSquadMap;
+  } catch (error) {
+    console.error('[TeamCapacity] Error getting last squad assignments:', error);
+    return {};
   }
 };
 
