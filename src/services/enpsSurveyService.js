@@ -38,7 +38,7 @@ export const submitENPSResponse = async (responseData) => {
     let finalSurveyId = surveyId;
     if (!finalSurveyId) {
       try {
-        const { getActiveSurvey } = await import('./enpsSurveyManagementService');
+        const { getActiveSurvey } = await import('./enpsSurveyManagementService.js');
         const activeSurvey = await getActiveSurvey();
         if (activeSurvey) {
           finalSurveyId = activeSurvey.id;
@@ -56,7 +56,7 @@ export const submitENPSResponse = async (responseData) => {
     if (!finalRespondentId) {
       // Try to get from authService (localStorage session)
       try {
-        const { getCurrentUser } = await import('../utils/authService');
+        const { getCurrentUser } = await import('../utils/authService.js');
         const currentUser = getCurrentUser();
         
         if (currentUser && currentUser.email) {
@@ -65,7 +65,7 @@ export const submitENPSResponse = async (responseData) => {
             .from('developers')
             .select('id')
             .eq('email', currentUser.email.toLowerCase().trim())
-            .single();
+            .maybeSingle();
           
           if (!devError && developer) {
             finalRespondentId = developer.id;
@@ -88,7 +88,7 @@ export const submitENPSResponse = async (responseData) => {
               .from('developers')
               .select('id')
               .eq('email', user.email.toLowerCase().trim())
-              .single();
+              .maybeSingle();
             
             if (developer) {
               finalRespondentId = developer.id;
@@ -117,7 +117,7 @@ export const submitENPSResponse = async (responseData) => {
       query = query.eq('survey_id', finalSurveyId);
     }
     
-    const { data: existingResponse, error: checkError } = await query.single();
+    const { data: existingResponse, error: checkError } = await query.maybeSingle();
 
     if (existingResponse && !checkError) {
       // Update existing response
@@ -208,7 +208,7 @@ export const getLatestResponse = async (respondentId = null, surveyId = null) =>
           .from('developers')
           .select('id')
           .eq('email', user.email)
-          .single();
+          .maybeSingle();
         
         if (developer) {
           query = query.eq('respondent_id', developer.id);
@@ -264,6 +264,206 @@ export const hasRespondedToday = async (respondentId = null, surveyId = null) =>
   const today = new Date().toISOString().split('T')[0];
   const responseDate = new Date(latestResponse.survey_date).toISOString().split('T')[0];
   
-  return responseDate === today;
+    return responseDate === today;
+};
+
+/**
+ * Submit a complete survey response with multiple answers
+ * @param {Object} responseData - Response data
+ * @param {number} responseData.npsScore - NPS score (0-10) - kept for backward compatibility
+ * @param {string} responseData.comments - Optional comments - kept for backward compatibility
+ * @param {string} responseData.surveyPeriod - Survey period
+ * @param {string} responseData.respondentId - Developer ID
+ * @param {string} responseData.surveyId - Survey ID
+ * @param {string} responseData.squadId - Squad ID (required)
+ * @param {Array<Object>} responseData.answers - Array of answers {questionId, answerValue, answerNumber, answerJson}
+ * @returns {Promise<Object>} Created response object
+ */
+export const submitCompleteSurveyResponse = async (responseData) => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+
+  try {
+    const { 
+      npsScore, 
+      comments, 
+      surveyPeriod = 'weekly', 
+      respondentId = null, 
+      surveyId = null, 
+      squadId = null,
+      answers = []
+    } = responseData;
+    
+    // Validate squadId
+    if (!squadId) {
+      throw new Error('Squad ID is required');
+    }
+
+    // Get active survey if surveyId not provided
+    let finalSurveyId = surveyId;
+    if (!finalSurveyId) {
+      try {
+        const { getActiveSurvey } = await import('./enpsSurveyManagementService.js');
+        const activeSurvey = await getActiveSurvey();
+        if (activeSurvey) {
+          finalSurveyId = activeSurvey.id;
+        } else {
+          throw new Error('No active survey found. Please activate a survey first.');
+        }
+      } catch (importError) {
+        console.warn('[ENPS_SURVEY] Could not get active survey:', importError);
+      }
+    }
+
+    // Get current user if respondentId not provided
+    let finalRespondentId = respondentId;
+    if (!finalRespondentId) {
+      try {
+        const { getCurrentUser } = await import('../utils/authService.js');
+        const currentUser = getCurrentUser();
+        
+        if (currentUser && currentUser.email) {
+          const { data: developer, error: devError } = await supabase
+            .from('developers')
+            .select('id')
+            .eq('email', currentUser.email.toLowerCase().trim())
+            .maybeSingle();
+          
+          if (!devError && developer) {
+            finalRespondentId = developer.id;
+          }
+        }
+      } catch (importError) {
+        console.warn('[ENPS_SURVEY] Could not import authService:', importError);
+      }
+    }
+
+    if (!finalRespondentId) {
+      throw new Error('Respondent ID is required. Please ensure you are logged in as a developer or provide a developer ID.');
+    }
+
+    // Check if user already responded to this survey today for this squad
+    const today = new Date().toISOString().split('T')[0];
+    let query = supabase
+      .from('enps_responses')
+      .select('id')
+      .eq('respondent_id', finalRespondentId)
+      .eq('survey_date', today)
+      .eq('squad_id', squadId);
+    
+    if (finalSurveyId) {
+      query = query.eq('survey_id', finalSurveyId);
+    }
+    
+    const { data: existingResponse, error: checkError } = await query.maybeSingle();
+
+    let responseId;
+    let responseDataToSave;
+
+    if (existingResponse) {
+      // Update existing response
+      responseId = existingResponse.id;
+      responseDataToSave = {
+        nps_score: npsScore || null, // Keep for backward compatibility
+        comments: comments || null, // Keep for backward compatibility
+        survey_period: surveyPeriod
+      };
+      
+      if (finalSurveyId) {
+        responseDataToSave.survey_id = finalSurveyId;
+      }
+
+      const { error: updateError } = await supabase
+        .from('enps_responses')
+        .update(responseDataToSave)
+        .eq('id', responseId);
+
+      if (updateError) {
+        console.error('[ENPS_SURVEY] Error updating response:', updateError);
+        throw updateError;
+      }
+    } else {
+      // Create new response
+      const insertData = {
+        survey_date: today,
+        respondent_id: finalRespondentId,
+        nps_score: npsScore || null, // Keep for backward compatibility
+        comments: comments || null, // Keep for backward compatibility
+        survey_period: surveyPeriod,
+        squad_id: squadId
+      };
+      
+      if (finalSurveyId) {
+        insertData.survey_id = finalSurveyId;
+      }
+      
+      const { data, error } = await supabase
+        .from('enps_responses')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[ENPS_SURVEY] Error submitting response:', error);
+        throw error;
+      }
+
+      responseId = data.id;
+    }
+
+    // Save individual answers if provided
+    if (answers && answers.length > 0) {
+      try {
+        const { saveSurveyAnswers } = await import('./enpsSurveyAnswersService.js');
+        await saveSurveyAnswers(responseId, answers);
+      } catch (answersError) {
+        console.error('[ENPS_SURVEY] Error saving individual answers:', answersError);
+        // Don't throw - response is saved, answers can be saved later
+      }
+    }
+
+    // Return the response
+    const { data: finalResponse } = await supabase
+      .from('enps_responses')
+      .select('*')
+      .eq('id', responseId)
+      .single();
+
+    return finalResponse;
+  } catch (error) {
+    console.error('[ENPS_SURVEY] Error in submitCompleteSurveyResponse:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get developer by email address
+ * @param {string} email - Developer email address
+ * @returns {Promise<Object|null>} Developer object or null if not found
+ */
+export const getDeveloperByEmail = async (email) => {
+  if (!supabase) {
+    console.error('[ENPS_SURVEY] Supabase not initialized');
+    return null;
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('developers')
+      .select('id, display_name, email')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      console.error('[ENPS_SURVEY] Error fetching developer by email:', error);
+      return null;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('[ENPS_SURVEY] Exception getting developer by email:', error);
+    return null;
+  }
 };
 

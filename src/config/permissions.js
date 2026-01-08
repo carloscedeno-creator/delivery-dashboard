@@ -146,7 +146,7 @@ export const loadCustomPermissions = async () => {
 
   try {
     // Dynamic import to avoid issues if Supabase is not configured
-    const { supabase } = await import('../utils/supabaseApi');
+    const { supabase } = await import('../utils/supabaseApi.js');
     if (!supabase) {
       return null;
     }

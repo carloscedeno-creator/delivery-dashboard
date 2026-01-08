@@ -16,18 +16,19 @@ import { Q1_2026_TARGETS, DEVELOPMENT_QUALITY_WEIGHTS } from '../config/kpiConfi
 /**
  * Componente de Quality KPIs
  * Shows the Development Quality Score and its component metrics
+ * Recibe filtros como props desde KPIsView
  */
-const QualityKPIs = () => {
+const QualityKPIs = ({ filters = {} }) => {
   const [kpiData, setKpiData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Load real data from API
+  // Load real data from API when filters change
   useEffect(() => {
     const loadKPIData = async () => {
       try {
         setLoading(true);
-        const { getQualityKPIData } = await import('../services/qualityKPIService');
-        const data = await getQualityKPIData();
+        const { getQualityKPIData } = await import('../services/qualityKPIService.js');
+        const data = await getQualityKPIData({ filters });
         setKpiData(data);
       } catch (error) {
         console.error('[QualityKPIs] Error loading KPI data:', error);
@@ -38,7 +39,7 @@ const QualityKPIs = () => {
     };
 
     loadKPIData();
-  }, []);
+  }, [filters]);
 
   if (loading) {
     return (
