@@ -91,17 +91,25 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                         {isOpen ? (
                             <div className="flex items-center gap-3">
                                 <img 
-                                    src={`${import.meta.env.BASE_URL}logo.png`}
+                                    src={import.meta.env.BASE_URL ? `${import.meta.env.BASE_URL}logo.png` : '/logo.png'}
                                     alt="Agentic Logo" 
                                     className="w-8 h-8 rounded-lg object-contain"
+                                    onError={(e) => {
+                                        console.error('[Sidebar] Failed to load logo:', e.target.src);
+                                        e.target.style.display = 'none';
+                                    }}
                                 />
                                 <span className="text-white font-semibold text-sm">Dashboard</span>
                             </div>
                         ) : (
                             <img 
-                                src={`${import.meta.env.BASE_URL}logo.png`}
+                                src={import.meta.env.BASE_URL ? `${import.meta.env.BASE_URL}logo.png` : '/logo.png'}
                                 alt="Agentic Logo" 
                                 className="w-8 h-8 rounded-lg object-contain"
+                                onError={(e) => {
+                                    console.error('[Sidebar] Failed to load logo:', e.target.src);
+                                    e.target.style.display = 'none';
+                                }}
                             />
                         )}
                         <button
