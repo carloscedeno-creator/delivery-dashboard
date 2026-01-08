@@ -60,8 +60,15 @@ async function compareVelocityData() {
 
     console.log(`✅ Encontrados ${sprints.length} sprints en Supabase\n`);
 
-    // Obtener métricas de sprints desde v_sprint_metrics_complete
+    // Obtener métricas de sprints desde sprint_velocity (nueva tabla)
     const sprintNames = sprints.map(s => s.sprint_name);
+    const { data: velocityData, error: velocityError } = await supabase
+      .from('sprint_velocity')
+      .select('*')
+      .in('sprint_name', sprintNames)
+      .order('sprint_name', { ascending: true });
+
+    // También obtener métricas desde v_sprint_metrics_complete para comparación
     const { data: metrics, error: metricsError } = await supabase
       .from('v_sprint_metrics_complete')
       .select('*')
@@ -73,13 +80,33 @@ async function compareVelocityData() {
       return;
     }
 
-    console.log(`✅ Encontradas métricas para ${metrics.length} sprints\n`);
+    if (velocityError) {
+      console.warn('⚠️ Error obteniendo velocity data:', velocityError.message);
+    } else {
+      console.log(`✅ Encontrados datos de velocity para ${velocityData?.length || 0} sprints`);
+    }
 
-    // Crear mapa de métricas por nombre de sprint
+    if (metricsError) {
+      console.warn('⚠️ Error obteniendo métricas:', metricsError.message);
+    } else {
+      console.log(`✅ Encontradas métricas para ${metrics?.length || 0} sprints\n`);
+    }
+
+    // Crear mapa de velocity data por nombre de sprint
+    const velocityMap = new Map();
+    if (velocityData) {
+      velocityData.forEach(v => {
+        velocityMap.set(v.sprint_name, v);
+      });
+    }
+
+    // Crear mapa de métricas por nombre de sprint (para referencia)
     const metricsMap = new Map();
-    metrics.forEach(m => {
-      metricsMap.set(m.sprint_name, m);
-    });
+    if (metrics) {
+      metrics.forEach(m => {
+        metricsMap.set(m.sprint_name, m);
+      });
+    }
 
     // Comparar datos
     console.log('📊 COMPARACIÓN DE DATOS:\n');
@@ -92,9 +119,10 @@ async function compareVelocityData() {
     const differences = [];
 
     for (const jiraData of jiraVelocityData) {
+      const supabaseVelocity = velocityMap.get(jiraData.sprint);
       const supabaseMetric = metricsMap.get(jiraData.sprint);
       
-      if (!supabaseMetric) {
+      if (!supabaseVelocity && !supabaseMetric) {
         console.log(
           jiraData.sprint.padEnd(25),
           String(jiraData.commitment).padEnd(18),
@@ -112,21 +140,23 @@ async function compareVelocityData() {
           supabaseData: null
         });
       } else {
-        // Buscar campos que puedan representar commitment y completed
-        // Posibles campos: story_points, sp_committed, sp_done, total_story_points, etc.
-        const supabaseSP = supabaseMetric.story_points || 
-                          supabaseMetric.sp_done || 
-                          supabaseMetric.total_story_points || 
-                          supabaseMetric.completed_story_points || 
-                          'N/A';
+        // Usar datos de sprint_velocity si están disponibles, sino usar v_sprint_metrics_complete
+        const supabaseCommitment = supabaseVelocity?.commitment ?? null;
+        const supabaseCompleted = supabaseVelocity?.completed ?? null;
         
-        const commitmentMatch = supabaseMetric.sp_committed === jiraData.commitment ||
-                               supabaseMetric.committed_story_points === jiraData.commitment;
-        const completedMatch = supabaseMetric.sp_done === jiraData.completed ||
-                              supabaseMetric.completed_story_points === jiraData.completed ||
-                              supabaseMetric.story_points === jiraData.completed;
+        // Si no hay datos en sprint_velocity, intentar desde metrics
+        const fallbackCommitment = supabaseMetric?.total_story_points ?? null;
+        const fallbackCompleted = supabaseMetric?.completed_story_points ?? null;
+        
+        const finalCommitment = supabaseCommitment ?? fallbackCommitment ?? 'N/A';
+        const finalCompleted = supabaseCompleted ?? fallbackCompleted ?? 'N/A';
+        
+        const commitmentMatch = supabaseCommitment !== null && 
+                               Math.abs(Number(supabaseCommitment) - jiraData.commitment) <= 1; // Tolerancia de 1 SP
+        const completedMatch = supabaseCompleted !== null && 
+                              Math.abs(Number(supabaseCompleted) - jiraData.completed) <= 1; // Tolerancia de 1 SP
 
-        const match = commitmentMatch || completedMatch ? '✅' : '⚠️';
+        const match = commitmentMatch && completedMatch ? '✅' : '⚠️';
         
         if (match === '✅') {
           totalMatched++;
@@ -136,7 +166,8 @@ async function compareVelocityData() {
             issue: 'Datos no coinciden',
             jiraCommitment: jiraData.commitment,
             jiraCompleted: jiraData.completed,
-            supabaseData: supabaseMetric
+            supabaseVelocity: supabaseVelocity,
+            supabaseMetric: supabaseMetric
           });
         }
 
@@ -144,7 +175,7 @@ async function compareVelocityData() {
           jiraData.sprint.padEnd(25),
           String(jiraData.commitment).padEnd(18),
           String(jiraData.completed).padEnd(18),
-          String(supabaseSP).padEnd(18),
+          `${finalCommitment}/${finalCompleted}`.padEnd(18),
           match.padEnd(10),
           commitmentMatch && completedMatch ? 'OK' : 'CHECK'
         );
@@ -163,22 +194,33 @@ async function compareVelocityData() {
         console.log(`   Sprint: ${diff.sprint}`);
         console.log(`   Issue: ${diff.issue}`);
         console.log(`   Jira - Commitment: ${diff.jiraCommitment}, Completed: ${diff.jiraCompleted}`);
-        if (diff.supabaseData) {
-          console.log(`   Supabase - Campos disponibles:`, Object.keys(diff.supabaseData).join(', '));
-          console.log(`   Supabase - Valores relevantes:`, {
-            story_points: diff.supabaseData.story_points,
-            sp_done: diff.supabaseData.sp_done,
-            sp_committed: diff.supabaseData.sp_committed,
-            total_story_points: diff.supabaseData.total_story_points,
-            completed_story_points: diff.supabaseData.completed_story_points
+        if (diff.supabaseVelocity) {
+          console.log(`   Supabase Velocity - Commitment: ${diff.supabaseVelocity.commitment}, Completed: ${diff.supabaseVelocity.completed}`);
+          console.log(`   Supabase Velocity - Tickets: Commitment=${diff.supabaseVelocity.commitment_tickets}, Completed=${diff.supabaseVelocity.completed_tickets}, Total=${diff.supabaseVelocity.total_tickets}`);
+        }
+        if (diff.supabaseMetric) {
+          console.log(`   Supabase Metrics - Campos disponibles:`, Object.keys(diff.supabaseMetric).join(', '));
+          console.log(`   Supabase Metrics - Valores relevantes:`, {
+            total_story_points: diff.supabaseMetric.total_story_points,
+            completed_story_points: diff.supabaseMetric.completed_story_points
           });
+        }
+        if (!diff.supabaseVelocity && !diff.supabaseMetric) {
+          console.log(`   ⚠️ No hay datos en Supabase para este sprint`);
         }
         console.log('');
       });
     }
 
+    // Mostrar estructura de sprint_velocity para referencia
+    if (velocityData && velocityData.length > 0) {
+      console.log('\n📋 ESTRUCTURA DE sprint_velocity (primer registro):\n');
+      const sample = velocityData[0];
+      console.log(JSON.stringify(sample, null, 2));
+    }
+
     // Mostrar estructura de v_sprint_metrics_complete para referencia
-    if (metrics.length > 0) {
+    if (metrics && metrics.length > 0) {
       console.log('\n📋 ESTRUCTURA DE v_sprint_metrics_complete (primer registro):\n');
       const sample = metrics[0];
       console.log(JSON.stringify(sample, null, 2));
