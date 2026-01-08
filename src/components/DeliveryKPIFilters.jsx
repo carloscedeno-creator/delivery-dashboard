@@ -11,19 +11,39 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
   const [sprints, setSprints] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [renderError, setRenderError] = useState(null);
 
+  // Log cuando el componente se monta
   useEffect(() => {
+    console.log('[DeliveryKPIFilters] ✅ Component mounted');
+    console.log('[DeliveryKPIFilters] Props received:', {
+      hasFilters: !!filters,
+      hasOnFiltersChange: !!onFiltersChange,
+      filtersKeys: filters ? Object.keys(filters) : []
+    });
+    
     loadFilterOptions();
   }, []);
 
+  // Log cuando las props cambian
+  useEffect(() => {
+    console.log('[DeliveryKPIFilters] 🔄 Filters updated:', filters);
+  }, [filters]);
+
   const loadFilterOptions = async () => {
+    console.log('[DeliveryKPIFilters] 🔄 Loading filter options...');
+    console.log('[DeliveryKPIFilters] Supabase available:', !!supabase);
+    
     if (!supabase) {
+      console.warn('[DeliveryKPIFilters] ⚠️ Supabase not available, cannot load filters');
       setLoading(false);
+      setRenderError('Supabase not initialized');
       return;
     }
 
     try {
       setLoading(true);
+      setRenderError(null);
 
       // Load squads
       const { data: squadsData, error: squadsError } = await supabase
@@ -31,8 +51,14 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
         .select('id, squad_key, squad_name')
         .order('squad_name', { ascending: true });
 
-      if (!squadsError && squadsData) {
+      if (squadsError) {
+        console.error('[DeliveryKPIFilters] ❌ Error loading squads:', squadsError);
+        setRenderError(`Error loading squads: ${squadsError.message}`);
+      } else if (squadsData) {
+        console.log('[DeliveryKPIFilters] ✅ Loaded squads:', squadsData.length);
         setSquads(squadsData);
+      } else {
+        console.warn('[DeliveryKPIFilters] ⚠️ No squads data returned');
       }
 
       // Load sprints (only sprints with "Sprint" in the name)
@@ -43,7 +69,11 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
         .order('end_date', { ascending: false })
         .limit(50);
 
-      if (!sprintsError && sprintsData) {
+      if (sprintsError) {
+        console.error('[DeliveryKPIFilters] ❌ Error loading sprints:', sprintsError);
+        setRenderError(`Error loading sprints: ${sprintsError.message}`);
+      } else if (sprintsData) {
+        console.log('[DeliveryKPIFilters] ✅ Loaded sprints:', sprintsData.length);
         // Determinar sprint actual (active state o el más reciente que no ha terminado)
         const now = new Date();
         const sprintsWithCurrent = sprintsData.map(sprint => {
@@ -55,6 +85,8 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
           return { ...sprint, is_active: isActive };
         });
         setSprints(sprintsWithCurrent);
+      } else {
+        console.warn('[DeliveryKPIFilters] ⚠️ No sprints data returned');
       }
 
       // Load developers
@@ -64,11 +96,21 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
         .eq('active', true)
         .order('display_name', { ascending: true });
 
-      if (!devsError && developersData) {
+      if (devsError) {
+        console.error('[DeliveryKPIFilters] ❌ Error loading developers:', devsError);
+        setRenderError(`Error loading developers: ${devsError.message}`);
+      } else if (developersData) {
+        console.log('[DeliveryKPIFilters] ✅ Loaded developers:', developersData.length);
         setDevelopers(developersData);
+      } else {
+        console.warn('[DeliveryKPIFilters] ⚠️ No developers data returned');
       }
+      
+      console.log('[DeliveryKPIFilters] ✅ Filter options loaded successfully');
     } catch (error) {
-      console.error('[DeliveryKPIFilters] Error loading filter options:', error);
+      console.error('[DeliveryKPIFilters] ❌ Exception loading filter options:', error);
+      setRenderError(`Exception: ${error.message}`);
+      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -109,8 +151,33 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
     })
     .slice(0, 6); // Solo últimos 6 sprints
 
-  return (
-    <div className="glass rounded-xl p-6 border border-slate-700/50">
+  // Si hay un error crítico, mostrar mensaje de error pero aún así renderizar los filtros
+  if (renderError && !loading) {
+    console.error('[DeliveryKPIFilters] ⚠️ Render error detected:', renderError);
+  }
+
+  // Verificar que las props requeridas estén presentes
+  if (!onFiltersChange) {
+    console.error('[DeliveryKPIFilters] ❌ CRITICAL: onFiltersChange prop is missing!');
+    return (
+      <div className="glass rounded-xl p-6 border border-red-500/50 bg-red-500/10">
+        <p className="text-red-400 text-sm">
+          ⚠️ Error: Filters component not properly initialized. Check console for details.
+        </p>
+      </div>
+    );
+  }
+
+  try {
+    return (
+      <div className="glass rounded-xl p-6 border border-slate-700/50">
+      {/* Debug info en desarrollo - remover en producción si es necesario */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mb-2 text-xs text-slate-500">
+          [DEBUG] Filters: {JSON.stringify(filters)}, Loading: {loading ? 'true' : 'false'}, Error: {renderError || 'none'}
+        </div>
+      )}
+      
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Filter size={20} className="text-cyan-400" />
@@ -245,7 +312,17 @@ const DeliveryKPIFilters = ({ filters, onFiltersChange }) => {
         </div>
       )}
     </div>
-  );
+    );
+  } catch (error) {
+    console.error('[DeliveryKPIFilters] ❌ CRITICAL: Render error caught:', error);
+    return (
+      <div className="glass rounded-xl p-6 border border-red-500/50 bg-red-500/10">
+        <p className="text-red-400 font-semibold mb-2">⚠️ Error rendering filters</p>
+        <p className="text-red-300 text-sm">{error.message}</p>
+        <p className="text-slate-400 text-xs mt-2">Check console for full error details</p>
+      </div>
+    );
+  }
 };
 
 export default DeliveryKPIFilters;

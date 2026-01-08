@@ -1,15 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Truck, Shield, Heart } from 'lucide-react';
 import DeliveryKPIs from './DeliveryKPIs';
 import QualityKPIs from './QualityKPIs';
 import TeamHealthKPIs from './TeamHealthKPIs';
+import DeliveryKPIFilters from './DeliveryKPIFilters';
 
 /**
  * Componente principal de KPIs
  * Muestra navegación por subsecciones: Delivery, Quality, Health
+ * Puede recibir una prop initialTab para establecer el tab inicial
+ * Los filtros son compartidos entre todos los tipos de KPIs
  */
-const KPIsView = () => {
-  const [activeSubsection, setActiveSubsection] = useState('delivery');
+const KPIsView = ({ initialTab = 'delivery' }) => {
+  const [activeSubsection, setActiveSubsection] = useState(initialTab);
+  const [filters, setFilters] = useState({
+    squadId: null,
+    sprintId: null,
+    developerId: null,
+    startDate: null,
+    endDate: null
+  });
+
+  // Actualizar tab activo si initialTab cambia
+  useEffect(() => {
+    if (initialTab && ['delivery', 'quality', 'health'].includes(initialTab)) {
+      setActiveSubsection(initialTab);
+    }
+  }, [initialTab]);
 
   const subsections = [
     { id: 'delivery', label: 'Delivery', icon: Truck, component: DeliveryKPIs },
@@ -20,8 +37,21 @@ const KPIsView = () => {
   const activeSubsectionData = subsections.find(s => s.id === activeSubsection);
   const ActiveComponent = activeSubsectionData?.component;
 
+  // Log para debugging en producción
+  useEffect(() => {
+    console.log('[KPIsView] ✅ Component rendered', {
+      activeSubsection,
+      hasFilters: !!filters,
+      filtersKeys: filters ? Object.keys(filters) : []
+    });
+  }, [activeSubsection, filters]);
+
   return (
     <div className="space-y-6">
+      {/* Filtros compartidos para todos los KPIs */}
+      {console.log('[KPIsView] 🔄 Rendering DeliveryKPIFilters component')}
+      <DeliveryKPIFilters filters={filters} onFiltersChange={setFilters} />
+
       {/* Navegación de subsecciones */}
       <div className="flex gap-4 border-b border-slate-700/50 pb-4">
         {subsections.map((subsection) => {
@@ -48,7 +78,7 @@ const KPIsView = () => {
       {/* Contenido de la subsección activa */}
       <div className="mt-6">
         {ActiveComponent ? (
-          <ActiveComponent />
+          <ActiveComponent filters={filters} />
         ) : (
           <div className="glass rounded-2xl p-12 text-center">
             <p className="text-slate-400 text-lg">

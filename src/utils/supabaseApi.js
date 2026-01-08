@@ -36,10 +36,36 @@ export const getSprintMetrics = async (projectKey = 'OBD', options = {}) => {
   }
 
   try {
+    // Obtener squad_id desde projectKey
+    const { data: squad } = await supabase
+      .from('squads')
+      .select('id')
+      .eq('squad_key', projectKey.toUpperCase())
+      .single();
+
+    if (!squad) {
+      console.warn(`[SUPABASE] Squad not found for projectKey: ${projectKey}`);
+      return [];
+    }
+
+    // Obtener los nombres de sprints del squad para filtrar la vista (solo sprints con "Sprint" en el nombre)
+    const { data: sprints } = await supabase
+      .from('sprints')
+      .select('sprint_name')
+      .eq('squad_id', squad.id)
+      .ilike('sprint_name', '%Sprint%');
+
+    if (!sprints || sprints.length === 0) {
+      console.warn(`[SUPABASE] No sprints found for squad: ${squad.id}`);
+      return [];
+    }
+
+    const squadSprintNames = sprints.map(s => s.sprint_name);
+
     let query = supabase
       .from('v_sprint_metrics_complete')
       .select('*')
-      .eq('project_name', projectKey.toUpperCase());
+      .in('sprint_name', squadSprintNames);
 
     // Sort by end date (most recent first)
     query = query.order('end_date', { ascending: false, nullsFirst: false });
@@ -51,13 +77,28 @@ export const getSprintMetrics = async (projectKey = 'OBD', options = {}) => {
 
     // Filter by state if specified
     if (options.state) {
-      query = query.eq('state', options.state);
+      // Validar y limpiar el valor de state para evitar queries mal formadas (ej: "closed:1")
+      let stateValue = options.state;
+      if (typeof stateValue === 'string' && stateValue.includes(':')) {
+        console.warn('[SUPABASE] ⚠️ State value contains invalid suffix, cleaning:', stateValue);
+        stateValue = stateValue.split(':')[0];
+      }
+      query = query.eq('state', stateValue);
     }
 
     const { data, error } = await query;
 
     if (error) {
-      console.error('[SUPABASE] Error getting sprint metrics:', error);
+      // Log detallado para debugging en producción
+      console.error('[SUPABASE] ❌ Error getting sprint metrics:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        status: error.status,
+        projectKey,
+        options
+      });
       throw error;
     }
 
@@ -80,10 +121,36 @@ export const getDeveloperMetrics = async (projectKey = 'OBD', options = {}) => {
   }
 
   try {
+    // Obtener squad_id desde projectKey
+    const { data: squad } = await supabase
+      .from('squads')
+      .select('id')
+      .eq('squad_key', projectKey.toUpperCase())
+      .single();
+
+    if (!squad) {
+      console.warn(`[SUPABASE] Squad not found for projectKey: ${projectKey}`);
+      return [];
+    }
+
+    // Obtener los nombres de sprints del squad para filtrar la vista (solo sprints con "Sprint" en el nombre)
+    const { data: sprints } = await supabase
+      .from('sprints')
+      .select('sprint_name')
+      .eq('squad_id', squad.id)
+      .ilike('sprint_name', '%Sprint%');
+
+    if (!sprints || sprints.length === 0) {
+      console.warn(`[SUPABASE] No sprints found for squad: ${squad.id}`);
+      return [];
+    }
+
+    const squadSprintNames = sprints.map(s => s.sprint_name);
+
     let query = supabase
       .from('v_developer_sprint_metrics_complete')
       .select('*')
-      .eq('project_name', projectKey.toUpperCase());
+      .in('sprint_name', squadSprintNames);
 
     // Sort by sprint and developer
     query = query.order('sprint_name', { ascending: false });
@@ -166,10 +233,37 @@ export const getActiveSprint = async (projectKey = 'OBD') => {
   }
 
   try {
+    // Obtener squad_id desde projectKey
+    const { data: squad } = await supabase
+      .from('squads')
+      .select('id')
+      .eq('squad_key', projectKey.toUpperCase())
+      .single();
+
+    if (!squad) {
+      console.warn(`[SUPABASE] Squad not found for projectKey: ${projectKey}`);
+      return null;
+    }
+
+    // Obtener los nombres de sprints del squad para filtrar la vista (solo sprints con "Sprint" en el nombre)
+    const { data: sprints } = await supabase
+      .from('sprints')
+      .select('sprint_name')
+      .eq('squad_id', squad.id)
+      .eq('state', 'active')
+      .ilike('sprint_name', '%Sprint%');
+
+    if (!sprints || sprints.length === 0) {
+      console.log('[SUPABASE] No active sprints found for squad');
+      return null;
+    }
+
+    const squadSprintNames = sprints.map(s => s.sprint_name);
+
     const { data, error } = await supabase
       .from('v_sprint_metrics_complete')
       .select('*')
-      .eq('project_name', projectKey.toUpperCase())
+      .in('sprint_name', squadSprintNames)
       .eq('state', 'active')
       .order('start_date', { ascending: false })
       .limit(1)
@@ -542,11 +636,12 @@ export const getDeveloperAllocationData = async () => {
   }
 
   try {
-    // Get active or most recent sprints by squad
+    // Get active or most recent sprints by squad (only sprints with "Sprint" in name)
     const { data: activeSprints, error: sprintsError } = await supabase
       .from('sprints')
       .select('id, squad_id, start_date, end_date, state, sprint_name')
       .or('state.eq.active,state.eq.closed')
+      .ilike('sprint_name', '%Sprint%')
       .order('end_date', { ascending: false });
 
     if (sprintsError) {
