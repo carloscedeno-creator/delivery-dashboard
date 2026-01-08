@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => {
   
   return {
     base,
+    // Forzar modo SPA y punto de entrada explícito para evitar 404 en dev/preview
+    appType: 'spa',
+    build: {
+      rollupOptions: {
+        input: path.resolve(__dirname, 'index.html'),
+      },
+    },
     plugins: [react()],
     resolve: {
       alias: {
