@@ -781,7 +781,7 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null, squadId = n
 
   try {
     // Import SP to hours converter
-    const { convertSPToHours } = await import('../utils/spToHoursConverter');
+    const { convertSPToHours } = await import('../utils/spToHoursConverter.js');
     console.log('[TEAM_HEALTH_KPI] ✅ SP to hours converter imported');
 
     // Strategy: Try to find the most appropriate sprint for capacity calculation
@@ -1596,7 +1596,7 @@ export const getTeamHealthKPIData = async (options = {}) => {
     } else {
       // Try to get active survey
       try {
-        const { getActiveSurvey } = await import('./enpsSurveyManagementService');
+        const { getActiveSurvey } = await import('./enpsSurveyManagementService.js');
         const activeSurvey = await getActiveSurvey();
         if (activeSurvey) {
           surveyIdForENPS = activeSurvey.id;
@@ -1612,7 +1612,7 @@ export const getTeamHealthKPIData = async (options = {}) => {
     if (surveyIdForENPS) {
       // Use survey dates if we have a survey
       try {
-        const { getSurveyById } = await import('./enpsSurveyManagementService');
+        const { getSurveyById } = await import('./enpsSurveyManagementService.js');
         const survey = await getSurveyById(surveyIdForENPS);
         if (survey) {
           defaultStartDate = new Date(survey.start_date);
