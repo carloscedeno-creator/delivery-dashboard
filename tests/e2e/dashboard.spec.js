@@ -215,6 +215,173 @@ test.describe('Dashboard Navigation', () => {
     }
   });
 
+  test('debe mostrar filtros de Squad y Sprint en Team Allocation', async ({ page }) => {
+    // Verificar si el usuario tiene acceso a 3 Amigos section
+    const threeAmigosLink = page.getByRole('button', { name: /3 Amigos/i });
+    
+    if (await threeAmigosLink.isVisible({ timeout: 5000 })) {
+      // Click para expandir el submenu
+      await threeAmigosLink.click();
+      await page.waitForTimeout(500);
+      
+      // Buscar Team Allocation en el submenu
+      const teamAllocationLink = page.getByRole('button', { name: /Team Allocation/i });
+      
+      if (await teamAllocationLink.isVisible({ timeout: 2000 })) {
+        await teamAllocationLink.click();
+        await page.waitForTimeout(2000);
+        
+        // Verificar que se muestra el componente Team Allocation
+        await expect(page.getByText(/Team Allocation Report/i)).toBeVisible({
+          timeout: 5000,
+        });
+        
+        // Verificar que los filtros de Squad y Sprint están presentes
+        const squadLabel = page.getByText(/Select Squad/i);
+        const sprintLabel = page.getByText(/Select Sprint/i);
+        
+        await expect(squadLabel).toBeVisible({ timeout: 5000 });
+        await expect(sprintLabel).toBeVisible({ timeout: 5000 });
+        
+        // Verificar que los selects están presentes
+        const squadSelect = page.locator('select').first();
+        const sprintSelect = page.locator('select').nth(1);
+        
+        await expect(squadSelect).toBeVisible({ timeout: 3000 });
+        await expect(sprintSelect).toBeVisible({ timeout: 3000 });
+        
+        // Verificar que los selects tienen opciones
+        const squadOptions = await squadSelect.locator('option').count();
+        const sprintOptions = await sprintSelect.locator('option').count();
+        
+        // Debe tener al menos la opción por defecto "Select Squad" / "Select Sprint"
+        expect(squadOptions).toBeGreaterThan(0);
+        expect(sprintOptions).toBeGreaterThan(0);
+      }
+    } else {
+      console.log('⚠️ Usuario no tiene acceso a 3 Amigos section - comportamiento esperado');
+    }
+  });
+
+  test('debe poder filtrar por Squad y Sprint en Team Allocation', async ({ page }) => {
+    // Verificar si el usuario tiene acceso a 3 Amigos section
+    const threeAmigosLink = page.getByRole('button', { name: /3 Amigos/i });
+    
+    if (await threeAmigosLink.isVisible({ timeout: 5000 })) {
+      // Click para expandir el submenu
+      await threeAmigosLink.click();
+      await page.waitForTimeout(500);
+      
+      // Buscar Team Allocation en el submenu
+      const teamAllocationLink = page.getByRole('button', { name: /Team Allocation/i });
+      
+      if (await teamAllocationLink.isVisible({ timeout: 2000 })) {
+        await teamAllocationLink.click();
+        await page.waitForTimeout(2000);
+        
+        // Verificar que se muestra el componente Team Allocation
+        await expect(page.getByText(/Team Allocation Report/i)).toBeVisible({
+          timeout: 5000,
+        });
+        
+        // Seleccionar un Squad si está disponible
+        const squadSelect = page.locator('select').first();
+        
+        if (await squadSelect.isVisible({ timeout: 3000 })) {
+          const squadOptions = await squadSelect.locator('option').count();
+          
+          if (squadOptions > 1) {
+            // Seleccionar el primer squad (índice 1, ya que 0 es "Select Squad")
+            await squadSelect.selectOption({ index: 1 });
+            await page.waitForTimeout(1000);
+            
+            // Verificar que el Sprint select se habilita o muestra opciones
+            const sprintSelect = page.locator('select').nth(1);
+            
+            if (await sprintSelect.isVisible({ timeout: 2000 })) {
+              const sprintOptions = await sprintSelect.locator('option').count();
+              
+              if (sprintOptions > 1) {
+                // Seleccionar el primer sprint
+                await sprintSelect.selectOption({ index: 1 });
+                await page.waitForTimeout(2000);
+                
+                // Verificar que se muestra información de capacidad o datos
+                // Puede mostrar "No capacity data" o datos reales
+                const capacityInfo = page.getByText(/Capacity|SP Done|SP Available|Developers/i);
+                const noDataMessage = page.getByText(/No capacity data|No data available/i);
+                
+                // Al menos uno de estos debe estar visible
+                const hasCapacityInfo = await capacityInfo.first().isVisible({ timeout: 3000 }).catch(() => false);
+                const hasNoDataMessage = await noDataMessage.isVisible({ timeout: 3000 }).catch(() => false);
+                
+                expect(hasCapacityInfo || hasNoDataMessage).toBeTruthy();
+              }
+            }
+          }
+        }
+      }
+    } else {
+      console.log('⚠️ Usuario no tiene acceso a 3 Amigos section - comportamiento esperado');
+    }
+  });
+
+  test('debe mostrar información de capacidad cuando se seleccionan Squad y Sprint en Team Allocation', async ({ page }) => {
+    // Verificar si el usuario tiene acceso a 3 Amigos section
+    const threeAmigosLink = page.getByRole('button', { name: /3 Amigos/i });
+    
+    if (await threeAmigosLink.isVisible({ timeout: 5000 })) {
+      // Click para expandir el submenu
+      await threeAmigosLink.click();
+      await page.waitForTimeout(500);
+      
+      // Buscar Team Allocation en el submenu
+      const teamAllocationLink = page.getByRole('button', { name: /Team Allocation/i });
+      
+      if (await teamAllocationLink.isVisible({ timeout: 2000 })) {
+        await teamAllocationLink.click();
+        await page.waitForTimeout(2000);
+        
+        // Seleccionar Squad y Sprint
+        const squadSelect = page.locator('select').first();
+        const sprintSelect = page.locator('select').nth(1);
+        
+        if (await squadSelect.isVisible({ timeout: 3000 })) {
+          const squadOptions = await squadSelect.locator('option').count();
+          const sprintOptions = await sprintSelect.locator('option').count();
+          
+          if (squadOptions > 1 && sprintOptions > 1) {
+            // Seleccionar Squad
+            await squadSelect.selectOption({ index: 1 });
+            await page.waitForTimeout(1000);
+            
+            // Seleccionar Sprint
+            await sprintSelect.selectOption({ index: 1 });
+            await page.waitForTimeout(2000);
+            
+            // Verificar que se muestra información de capacidad
+            // Puede mostrar métricas como SP Done, SP Available, Completion %, Utilization %, etc.
+            const capacityMetrics = page.getByText(/SP Done|SP Available|Completion|Utilization|Capacity Goal|Developers/i);
+            const hasMetrics = await capacityMetrics.first().isVisible({ timeout: 5000 }).catch(() => false);
+            
+            // Si hay datos, debe mostrar métricas; si no hay datos, puede mostrar mensaje
+            if (!hasMetrics) {
+              const noDataMessage = page.getByText(/No capacity data|No data available|No allocation data/i);
+              const hasNoData = await noDataMessage.isVisible({ timeout: 2000 }).catch(() => false);
+              
+              // Al menos uno debe estar presente
+              expect(hasMetrics || hasNoData).toBeTruthy();
+            } else {
+              expect(hasMetrics).toBeTruthy();
+            }
+          }
+        }
+      }
+    } else {
+      console.log('⚠️ Usuario no tiene acceso a 3 Amigos section - comportamiento esperado');
+    }
+  });
+
   test('debe mostrar Team Capacity para roles con acceso (admin, pm, 3amigos)', async ({ page }) => {
     // Verificar si el usuario tiene acceso a PM section
     const pmLink = page.getByRole('button', { name: /PM/i });
