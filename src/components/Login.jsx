@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, MessageSquare } from 'lucide-react';
 
 const Login = ({ onLoginSuccess }) => {
     const [email, setEmail] = useState('');
@@ -37,7 +37,7 @@ const Login = ({ onLoginSuccess }) => {
                     {/* Logo y título */}
                     <div className="text-center mb-8">
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
-                            <img src="logo.png" alt="Logo" className="h-12 w-auto object-contain" />
+                            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Logo" className="h-12 w-auto object-contain" />
                         </div>
                         <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
                             Strata Dashboard
@@ -113,8 +113,24 @@ const Login = ({ onLoginSuccess }) => {
                         </button>
                     </form>
 
+                    {/* Link to Survey */}
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                        <a
+                            href="#enps-survey"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                // Set activeView to enps-survey via window event or parent callback
+                                window.dispatchEvent(new CustomEvent('navigateToSurvey'));
+                            }}
+                            className="flex items-center justify-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors"
+                        >
+                            <MessageSquare size={16} />
+                            <span>Take Team Satisfaction Survey (No login required)</span>
+                        </a>
+                    </div>
+
                     {/* Footer */}
-                    <div className="mt-6 text-center text-xs text-slate-500">
+                    <div className="mt-4 text-center text-xs text-slate-500">
                         <p>Available roles: admin, 3amigos, Stakeholder, PM, Regular</p>
                     </div>
                 </div>

@@ -7,10 +7,12 @@
   "scripts": {
     "check-epic-dates": "node scripts/check-epic-dates-in-db.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --mode production",
+    "build:dev": "vite build --mode development",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist",
+    "check-env": "node scripts/check-env.js",
+    "deploy": "npm run check-env && npm run build && gh-pages -d dist",
     "test": "vitest run",
     "calculate-metrics": "node scripts/calculate-metrics.js",
     "test-metrics": "node scripts/test-metrics-calculation.js",
@@ -18,10 +20,14 @@
     "query": "node scripts/query-example.js",
     "compare-formats": "node scripts/compare-csv-vs-supabase.js",
     "check-sprint": "node scripts/check-sprint-issues.js",
-    "check-status": "node scripts/check-issue-status.js",
-    "force-sync-issues": "node scripts/force-sync-issues.js",
-    "update-status": "node scripts/update-issue-status.js",
-    "apply-migration": "node scripts/verify-and-apply-migration.js"
+        "check-status": "node scripts/check-issue-status.js",
+        "force-sync-issues": "node scripts/force-sync-issues.js",
+        "update-status": "node scripts/update-issue-status.js",
+        "apply-migration": "node scripts/verify-and-apply-migration.js",
+        "apply-kpi-migrations": "node scripts/apply-kpi-migrations.js",
+        "populate-kpi-data": "node scripts/populate-initial-data.js",
+        "diagnose-kpi": "node scripts/diagnose-kpi-data.js",
+        "apply-role-permission-migration": "node scripts/apply-role-permission-migration.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",

@@ -10,7 +10,7 @@ import { supabase } from './supabaseApi';
  */
 export const getSquads = async () => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -22,7 +22,7 @@ export const getSquads = async () => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo squads:', error);
+    console.error('[DEVELOPER_METRICS] Error getting squads:', error);
     throw error;
   }
 };
@@ -32,29 +32,33 @@ export const getSquads = async () => {
  */
 export const getSprintsForSquad = async (squadId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
     const { data, error } = await supabase
       .from('sprints')
-      .select('id, sprint_key, sprint_name, start_date, end_date, squad_id')
+      .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state, squad_id')
       .eq('squad_id', squadId)
+      .ilike('sprint_name', '%Sprint%')
       .order('start_date', { ascending: false });
 
     if (error) throw error;
     
-    // Determinar sprint actual (el más reciente que no ha terminado)
+    // Determinar sprint actual (active state o el más reciente que no ha terminado)
     const now = new Date();
     const sprintsWithCurrent = (data || []).map(sprint => {
-      const endDate = sprint.end_date ? new Date(sprint.end_date) : null;
-      const isActive = endDate ? endDate >= now : false;
+      // Un sprint está activo si:
+      // 1. Tiene state === 'active', O
+      // 2. No tiene end_date o end_date es en el futuro (y no está cerrado)
+      const isActive = sprint.state === 'active' || 
+        (sprint.state !== 'closed' && (!sprint.end_date || new Date(sprint.end_date) >= now));
       return { ...sprint, is_active: isActive };
     });
     
     return sprintsWithCurrent;
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo sprints:', error);
+    console.error('[DEVELOPER_METRICS] Error getting sprints:', error);
     throw error;
   }
 };
@@ -64,7 +68,7 @@ export const getSprintsForSquad = async (squadId) => {
  */
 export const getDevelopersForSquad = async (squadId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
@@ -112,24 +116,24 @@ export const getDevelopersForSquad = async (squadId) => {
 
     return (developers || []).filter(d => squadAssigneeIds.includes(d.id));
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo developers:', error);
+    console.error('[DEVELOPER_METRICS] Error getting developers:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene métricas de un desarrollador específico
+ * Gets metrics for a specific developer
  * @param {string} developerId - UUID del desarrollador
  * @param {string} squadId - UUID del squad (opcional)
  * @param {string} sprintId - UUID del sprint (opcional)
  */
 export const getDeveloperMetricsData = async (developerId, squadId = null, sprintId = null) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   if (!developerId) {
-    throw new Error('Developer ID es requerido');
+    throw new Error('Developer ID is required');
   }
 
   // Validar que el ID sea un UUID válido (formato básico)
@@ -140,22 +144,28 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
   }
 
   try {
-    // Obtener el nombre del sprint si está seleccionado para filtrar por current_sprint
+    // Obtener el nombre del sprint y estado si está seleccionado
     let sprintName = null;
+    let sprintCloseDate = null;
+    let isSprintClosed = false;
     if (sprintId) {
       const { data: sprint, error: sprintError } = await supabase
         .from('sprints')
-        .select('sprint_name')
+        .select('sprint_name, end_date, complete_date, state')
         .eq('id', sprintId)
         .single();
 
       if (sprintError) throw sprintError;
       sprintName = sprint?.sprint_name?.trim();
+      sprintCloseDate = sprint?.complete_date || sprint?.end_date || null;
+      isSprintClosed = sprint?.state === 'closed' || (sprintCloseDate && new Date(sprintCloseDate) < new Date());
       
-      console.log('[DEVELOPER_METRICS] Sprint seleccionado:', {
+      console.log('[DEVELOPER_METRICS] Selected sprint:', {
         sprintId,
         sprintName,
-        sprintNameLength: sprintName?.length
+        sprintNameLength: sprintName?.length,
+        isSprintClosed,
+        sprintCloseDate
       });
       
       if (!sprintName) {
@@ -178,96 +188,135 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       }
     }
 
-    // Construir query base
-    let query = supabase
-      .from('issues')
-      .select(`
-        id,
-        issue_key,
-        summary,
-        current_status,
-        current_story_points,
-        current_sprint,
-        assignee_id,
-        initiative_id,
-        initiatives(
-          id,
-          squad_id,
-          squads(
+    // Para sprints cerrados, usar issue_sprints (sprint snapshot) como fuente de verdad
+    let issues = [];
+    if (sprintId && sprintName && isSprintClosed) {
+      // Estrategia 1: Usar issue_sprints para sprints cerrados
+      const { data: issueSprints, error: issueSprintsError } = await supabase
+        .from('issue_sprints')
+        .select(`
+          issue_id,
+          status_at_sprint_close,
+          story_points_at_close,
+          issues!inner(
             id,
-            squad_key,
-            squad_name
+            issue_key,
+            summary,
+            current_status,
+            current_story_points,
+            assignee_id,
+            initiative_id,
+            initiatives(
+              id,
+              squad_id,
+              squads(
+                id,
+                squad_key,
+                squad_name
+              )
+            )
           )
-        )
-      `)
-      .eq('assignee_id', developerId);
+        `)
+        .eq('sprint_id', sprintId)
+        .eq('issues.assignee_id', developerId)
+        .not('status_at_sprint_close', 'is', null); // Solo tickets que estaban en el sprint al cierre
 
-    // Filtrar por current_sprint (métrica real que define si está en el sprint seleccionado)
-    // IMPORTANTE: Usamos comparación exacta. Si hay problemas, verificar que los nombres coincidan exactamente
-    if (sprintName) {
-      const trimmedSprintName = sprintName.trim();
-      console.log('[DEVELOPER_METRICS] Filtrando por current_sprint:', {
-        sprintName: trimmedSprintName,
-        sprintNameQuoted: `"${trimmedSprintName}"`,
-        sprintNameLength: trimmedSprintName.length,
-        originalSprintName: sprintName,
-        originalLength: sprintName.length
-      });
-      // Usar el nombre trimmeado para la comparación
-      query = query.eq('current_sprint', trimmedSprintName);
-    } else {
-      console.log('[DEVELOPER_METRICS] ⚠️ No hay sprint seleccionado, obteniendo TODOS los issues del developer (sin filtrar por sprint)');
+      if (!issueSprintsError && issueSprints && issueSprints.length > 0) {
+        // Extraer issues y mapear status_at_sprint_close y story_points_at_close
+        issues = issueSprints.map(is => {
+          const issue = is.issues;
+          if (issue) {
+            // Para sprints cerrados, usar status_at_sprint_close y story_points_at_close
+            return {
+              ...issue,
+              status_at_sprint_close: is.status_at_sprint_close,
+              story_points_at_close: is.story_points_at_close
+            };
+          }
+          return null;
+        }).filter(Boolean);
+
+        // Filtrar por squad si se especifica
+        if (squadId) {
+          issues = issues.filter(issue => {
+            return issue.initiatives?.squad_id === squadId;
+          });
+        }
+
+        console.log(`[DEVELOPER_METRICS] Issues encontrados via issue_sprints (sprint cerrado): ${issues.length}`);
+      }
     }
 
-    const { data: issues, error } = await query;
-    if (error) {
-      console.error('[DEVELOPER_METRICS] Error en query:', error);
-      throw error;
+    // Estrategia 2: Para sprints activos o si no hay resultados, usar current_sprint
+    if (issues.length === 0) {
+      let query = supabase
+        .from('issues')
+        .select(`
+          id,
+          issue_key,
+          summary,
+          current_status,
+          current_story_points,
+          current_sprint,
+          assignee_id,
+          initiative_id,
+          initiatives(
+            id,
+            squad_id,
+            squads(
+              id,
+              squad_key,
+              squad_name
+            )
+          )
+        `)
+        .eq('assignee_id', developerId);
+
+      // Filtrar por current_sprint para sprints activos
+      if (sprintName && !isSprintClosed) {
+        const trimmedSprintName = sprintName.trim();
+        query = query.eq('current_sprint', trimmedSprintName);
+      }
+
+      const { data: queryIssues, error } = await query;
+      if (error) {
+        console.error('[DEVELOPER_METRICS] Error en query:', error);
+        throw error;
+      }
+      
+      issues = queryIssues || [];
+
+      // Filtrar por squad si se especifica
+      if (squadId) {
+        issues = issues.filter(issue => {
+          return issue.initiatives?.squad_id === squadId;
+        });
+      }
+
+      console.log(`[DEVELOPER_METRICS] Issues encontrados via current_sprint: ${issues.length}`);
     }
-    
-    // Debug: Verificar qué current_sprint tienen los issues obtenidos
-    const uniqueSprints = [...new Set((issues || []).map(i => i.current_sprint).filter(Boolean))];
-    console.log('[DEVELOPER_METRICS] Issues obtenidos antes de filtrar por squad:', {
-      total: issues?.length || 0,
-      sprintNameFilter: sprintName,
-      uniqueCurrentSprints: uniqueSprints,
-      sampleIssues: (issues || []).slice(0, 3).map(i => ({
-        key: i.issue_key,
-        current_sprint: i.current_sprint,
-        current_sprintQuoted: `"${i.current_sprint}"`,
-        matches: sprintName ? i.current_sprint === sprintName : 'N/A (no filter)'
-      }))
+
+    // Calcular métricas usando el estado correcto según si el sprint está cerrado o no
+    const tickets = issues.map(issue => {
+      // Para sprints cerrados, usar status_at_sprint_close y story_points_at_close
+      // Para sprints activos, usar current_status y current_story_points
+      const status = isSprintClosed && issue.status_at_sprint_close 
+        ? issue.status_at_sprint_close 
+        : issue.current_status;
+      const storyPoints = isSprintClosed && issue.story_points_at_close !== null && issue.story_points_at_close !== undefined
+        ? issue.story_points_at_close
+        : (issue.current_story_points || 0);
+
+      return {
+        id: issue.id,
+        key: issue.issue_key,
+        summary: issue.summary,
+        status: status,
+        storyPoints: storyPoints,
+        hasSP: storyPoints > 0,
+        squad: issue.initiatives?.squads?.squad_name || 'Unknown'
+      };
     });
-
-    // Filtrar por squad si se especifica (después de obtener los datos)
-    let filteredIssues = issues || [];
-    if (squadId) {
-      filteredIssues = filteredIssues.filter(issue => {
-        return issue.initiatives?.squad_id === squadId;
-      });
-    }
-    
-    console.log('[DEVELOPER_METRICS] Issues después de filtrar por squad:', {
-      total: filteredIssues.length,
-      sprintNameFilter: sprintName,
-      uniqueCurrentSprints: [...new Set(filteredIssues.map(i => i.current_sprint).filter(Boolean))],
-      issuesBySprint: filteredIssues.reduce((acc, issue) => {
-        const sprint = issue.current_sprint || 'Backlog';
-        acc[sprint] = (acc[sprint] || 0) + 1;
-        return acc;
-      }, {})
-    });
-
-    // Calcular métricas
-    const tickets = filteredIssues.map(issue => ({
-      id: issue.id,
-      key: issue.issue_key,
-      summary: issue.summary,
-      status: issue.current_status,
-      storyPoints: issue.current_story_points || 0,
-      hasSP: (issue.current_story_points || 0) > 0,
-      squad: issue.initiatives?.squads?.squad_name || 'Unknown'
-    }));
 
     // Estados considerados como "Dev Done"
     // Basado en devPerformanceService.js
@@ -329,7 +378,7 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       statusBreakdown
     };
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo métricas:', error);
+    console.error('[DEVELOPER_METRICS] Error getting metrics:', error);
     throw error;
   }
 };
@@ -340,11 +389,11 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
  */
 export const getDeveloperById = async (developerId) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   if (!developerId) {
-    throw new Error('Developer ID es requerido');
+    throw new Error('Developer ID is required');
   }
 
   // Validar que el ID sea un UUID válido (formato básico)
@@ -364,7 +413,7 @@ export const getDeveloperById = async (developerId) => {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('[DEVELOPER_METRICS] Error obteniendo developer:', error);
+    console.error('[DEVELOPER_METRICS] Error getting developer:', error);
     throw error;
   }
 };

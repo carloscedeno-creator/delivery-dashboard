@@ -42,7 +42,7 @@ export const login = async (email, password) => {
   }
   
   if (!supabaseClient) {
-    return { success: false, error: 'Supabase no está configurado' };
+    return { success: false, error: 'Supabase is not configured' };
   }
 
   try {
@@ -60,7 +60,7 @@ export const login = async (email, password) => {
     });
 
     if (error) {
-      console.error('[AUTH] Error en autenticación:', error);
+      console.error('[AUTH] Authentication error:', error);
       return { success: false, error: error.message };
     }
 
@@ -81,7 +81,7 @@ export const login = async (email, password) => {
     });
 
     if (sessionError) {
-      console.error('[AUTH] Error creando sesión:', sessionError);
+      console.error('[AUTH] Error creating session:', sessionError);
       return { success: false, error: 'Error creating session' };
     }
 
@@ -160,7 +160,7 @@ export const getSession = () => {
 
     return session;
   } catch (error) {
-    console.error('[AUTH] Error leyendo sesión:', error);
+    console.error('[AUTH] Error reading session:', error);
     return null;
   }
 };
@@ -222,7 +222,7 @@ export const validateSession = async () => {
       user: updatedSession.user
     };
   } catch (error) {
-    console.error('[AUTH] Error validando sesión:', error);
+    console.error('[AUTH] Error validating session:', error);
     return { valid: false };
   }
 };
@@ -434,7 +434,7 @@ export const resetPassword = async (token, newPassword) => {
     });
 
     if (error) {
-      console.error('[AUTH] Error reseteando contraseña:', error);
+      console.error('[AUTH] Error resetting password:', error);
       return { success: false, error: error.message };
     }
 

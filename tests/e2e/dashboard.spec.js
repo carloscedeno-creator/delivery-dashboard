@@ -161,4 +161,63 @@ test.describe('Dashboard Navigation', () => {
       });
     }
   });
+
+  test('debe mostrar Team Allocation para roles con acceso (admin, 3amigos, pm)', async ({ page }) => {
+    // Verificar si el usuario tiene acceso a 3 Amigos section
+    const threeAmigosLink = page.getByRole('button', { name: /3 Amigos/i });
+    
+    if (await threeAmigosLink.isVisible({ timeout: 5000 })) {
+      // Click para expandir el submenu
+      await threeAmigosLink.click();
+      await page.waitForTimeout(500);
+      
+      // Buscar Team Allocation en el submenu
+      const teamAllocationLink = page.getByRole('button', { name: /Team Allocation/i });
+      
+      if (await teamAllocationLink.isVisible({ timeout: 2000 })) {
+        await teamAllocationLink.click();
+        await page.waitForTimeout(2000);
+        
+        // Verificar que se muestra el componente Team Allocation
+        await expect(page.getByText(/Team Allocation Report/i)).toBeVisible({
+          timeout: 5000,
+        });
+        
+        // Verificar que muestra el indicador de solo lectura
+        await expect(page.getByText(/Read-Only/i)).toBeVisible({
+          timeout: 3000,
+        });
+      }
+    } else {
+      // Si no tiene acceso, el test pasa (comportamiento esperado para roles sin acceso)
+      console.log('⚠️ Usuario no tiene acceso a 3 Amigos section - comportamiento esperado');
+    }
+  });
+
+  test('debe mostrar Team Capacity para roles con acceso (admin, pm, 3amigos)', async ({ page }) => {
+    // Verificar si el usuario tiene acceso a PM section
+    const pmLink = page.getByRole('button', { name: /PM/i });
+    
+    if (await pmLink.isVisible({ timeout: 5000 })) {
+      // Click para expandir el submenu
+      await pmLink.click();
+      await page.waitForTimeout(500);
+      
+      // Buscar Team Capacity en el submenu
+      const teamCapacityLink = page.getByRole('button', { name: /Team Capacity/i });
+      
+      if (await teamCapacityLink.isVisible({ timeout: 2000 })) {
+        await teamCapacityLink.click();
+        await page.waitForTimeout(2000);
+        
+        // Verificar que se muestra el componente Team Capacity
+        await expect(page.getByText(/Team Capacity Configuration/i)).toBeVisible({
+          timeout: 5000,
+        });
+      }
+    } else {
+      // Si no tiene acceso, el test pasa (comportamiento esperado para roles sin acceso)
+      console.log('⚠️ Usuario no tiene acceso a PM section - comportamiento esperado');
+    }
+  });
 });

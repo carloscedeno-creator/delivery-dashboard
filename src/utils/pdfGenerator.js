@@ -1,5 +1,5 @@
 /**
- * Utilidad para generar PDFs de Project Metrics
+ * Utility for generating Project Metrics PDFs
  */
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -7,15 +7,15 @@ import { getDeveloperMetricsData } from './developerMetricsApi';
 import { supabase } from './supabaseApi';
 
 /**
- * Obtiene los issues completos con todos los campos necesarios para el PDF
+ * Gets complete issues with all necessary fields for the PDF
  */
 export const getIssuesForPDF = async (squadId, sprintId, supabase) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado');
+    throw new Error('Supabase is not configured');
   }
 
   try {
-    // Obtener initiative_ids del squad
+    // Get initiative_ids from squad
     let initiativeIds = null;
     if (squadId) {
       const { data: initiatives, error: initiativesError } = await supabase
@@ -31,7 +31,7 @@ export const getIssuesForPDF = async (squadId, sprintId, supabase) => {
       }
     }
 
-    // Obtener el nombre del sprint
+    // Get sprint name
     let sprintName = null;
     if (sprintId) {
       const { data: sprint, error: sprintError } = await supabase
@@ -44,8 +44,8 @@ export const getIssuesForPDF = async (squadId, sprintId, supabase) => {
       sprintName = sprint?.sprint_name;
     }
 
-    // Construir query para obtener issues con todos los campos necesarios
-    // Nota: Algunos campos pueden no existir en la BD, usar valores por defecto
+    // Build query to get issues with all necessary fields
+    // Note: Some fields may not exist in DB, use default values
     let query = supabase
       .from('issues')
       .select(`
@@ -62,27 +62,27 @@ export const getIssuesForPDF = async (squadId, sprintId, supabase) => {
         )
       `);
 
-    // Filtrar por initiatives del squad
+    // Filter by squad initiatives
     if (initiativeIds) {
       query = query.in('initiative_id', initiativeIds);
     }
 
-    // Filtrar por current_sprint
+    // Filter by current_sprint
     if (sprintName) {
       query = query.eq('current_sprint', sprintName);
     }
 
-    // Obtener todos los issues sin límite
+    // Get all issues without limit
     const { data: issues, error } = await query;
 
     if (error) throw error;
     
-    console.log(`[PDF_GENERATOR] Issues obtenidos para PDF: ${(issues || []).length}`);
+    console.log(`[PDF_GENERATOR] Issues retrieved for PDF: ${(issues || []).length}`);
 
-    // Obtener assignee_ids únicos
+    // Get unique assignee_ids
     const assigneeIds = [...new Set((issues || []).map(i => i.assignee_id).filter(Boolean))];
     
-    // Obtener información de developers
+    // Get developer information
     let developersMap = new Map();
     if (assigneeIds.length > 0) {
       try {
@@ -97,33 +97,33 @@ export const getIssuesForPDF = async (squadId, sprintId, supabase) => {
           });
         }
       } catch (error) {
-        console.warn('[PDF_GENERATOR] Error obteniendo developers:', error);
+        console.warn('[PDF_GENERATOR] Error getting developers:', error);
       }
     }
 
-    // Formatear los issues para la tabla y ordenarlos por key
+    // Format issues for table and sort by key
     const formattedIssues = (issues || []).map(issue => {
-      // Determinar issue type basado en el key (Bug si contiene "BUG", Task por defecto)
+      // Determine issue type based on key (Bug if contains "BUG", Task by default)
       const issueType = issue.issue_key?.toUpperCase().includes('BUG') ? 'Bug' : 'Task';
       
-      // Obtener assignee
+      // Get assignee
       const developer = issue.assignee_id ? developersMap.get(issue.assignee_id) : null;
       const assignee = developer?.display_name || developer?.email || 'Unassigned';
       
-      // Priority puede no estar en la BD, usar Medium por defecto
-      // Status ya está disponible
+      // Priority may not be in DB, use Medium as default
+      // Status is already available
       return {
         issueType: issueType,
         key: issue.issue_key || '',
         assignee: assignee,
-        priority: 'Medium', // Por defecto, ya que puede no estar en la BD
+        priority: 'Medium', // Default, as it may not be in DB
         status: issue.current_status || 'Unknown',
         storyPoint: issue.current_story_points || 0,
         summary: issue.summary || ''
       };
     });
     
-    // Ordenar por key para consistencia
+    // Sort by key for consistency
     formattedIssues.sort((a, b) => {
       if (!a.key && !b.key) return 0;
       if (!a.key) return 1;
@@ -131,17 +131,17 @@ export const getIssuesForPDF = async (squadId, sprintId, supabase) => {
       return a.key.localeCompare(b.key);
     });
     
-    console.log(`[PDF_GENERATOR] Issues formateados y ordenados: ${formattedIssues.length}`);
+    console.log(`[PDF_GENERATOR] Issues formatted and sorted: ${formattedIssues.length}`);
     return formattedIssues;
   } catch (error) {
-    console.error('[PDF_GENERATOR] Error obteniendo issues:', error);
+    console.error('[PDF_GENERATOR] Error getting issues:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene el sprint goal
- * Nota: La columna sprint_goal puede no existir en la base de datos
+ * Gets the sprint goal
+ * Note: The sprint_goal column may not exist in the database
  */
 export const getSprintGoal = async (sprintId, supabase) => {
   if (!supabase || !sprintId) {
@@ -149,17 +149,17 @@ export const getSprintGoal = async (sprintId, supabase) => {
   }
 
   try {
-    // Intentar obtener sprint_goal, pero si no existe, retornar null sin error
+    // Try to get sprint_goal, but if it doesn't exist, return null without error
     const { data, error } = await supabase
       .from('sprints')
       .select('sprint_goal')
       .eq('id', sprintId)
       .single();
 
-    // Si el error es porque la columna no existe, simplemente retornar null
+    // If error is because column doesn't exist, simply return null
     if (error) {
       if (error.code === '42703' || error.message?.includes('does not exist')) {
-        console.log('[PDF_GENERATOR] La columna sprint_goal no existe en la tabla sprints');
+        console.log('[PDF_GENERATOR] The sprint_goal column does not exist in the sprints table');
         return null;
       }
       throw error;
@@ -167,14 +167,14 @@ export const getSprintGoal = async (sprintId, supabase) => {
     
     return data?.sprint_goal || null;
   } catch (error) {
-    // Si hay un error diferente, loguearlo pero no fallar
-    console.warn('[PDF_GENERATOR] No se pudo obtener sprint goal:', error.message);
+    // If there's a different error, log it but don't fail
+    console.warn('[PDF_GENERATOR] Could not get sprint goal:', error.message);
     return null;
   }
 };
 
 /**
- * Convierte un elemento HTML a imagen usando html2canvas
+ * Converts an HTML element to image using html2canvas
  */
 const elementToImage = async (element, options = {}) => {
   const canvas = await html2canvas(element, {
@@ -188,7 +188,7 @@ const elementToImage = async (element, options = {}) => {
 };
 
 /**
- * Obtiene métricas de developers que trabajaron en el sprint
+ * Gets metrics for developers who worked in the sprint
  */
 const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
   if (!supabase || !squadId || !sprintId) {
@@ -196,7 +196,7 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
   }
 
   try {
-    // Obtener el nombre del sprint
+    // Get sprint name
     const { data: sprint, error: sprintError } = await supabase
       .from('sprints')
       .select('sprint_name')
@@ -208,7 +208,7 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
 
     if (!sprintName) return [];
 
-    // Obtener initiative_ids del squad
+    // Get initiative_ids from squad
     const { data: initiatives, error: initiativesError } = await supabase
       .from('initiatives')
       .select('id')
@@ -219,7 +219,7 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
 
     if (initiativeIds.length === 0) return [];
 
-    // Obtener assignee_ids únicos de issues en el sprint
+    // Get unique assignee_ids from issues in the sprint
     const { data: issues, error: issuesError } = await supabase
       .from('issues')
       .select('assignee_id')
@@ -233,7 +233,7 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
 
     if (assigneeIds.length === 0) return [];
 
-    // Obtener información de developers
+    // Get developer information
     const { data: developers, error: devsError } = await supabase
       .from('developers')
       .select('id, display_name, email')
@@ -243,7 +243,7 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
 
     if (devsError) throw devsError;
 
-    // Obtener métricas para cada developer
+    // Get metrics for each developer
     const developersMetrics = await Promise.all(
       (developers || []).map(async (dev) => {
         try {
@@ -255,7 +255,7 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
             tickets: metrics.tickets
           };
         } catch (error) {
-          console.warn(`[PDF_GENERATOR] Error obteniendo métricas para developer ${dev.id}:`, error);
+          console.warn(`[PDF_GENERATOR] Error getting metrics for developer ${dev.id}:`, error);
           return null;
         }
       })
@@ -263,23 +263,23 @@ const getDevelopersMetricsForSprint = async (squadId, sprintId) => {
 
     return developersMetrics.filter(Boolean);
   } catch (error) {
-    console.error('[PDF_GENERATOR] Error obteniendo métricas de developers:', error);
+    console.error('[PDF_GENERATOR] Error getting developer metrics:', error);
     return [];
   }
 };
 
 /**
- * Genera un PDF con el reporte de Project Metrics
+ * Generates a PDF with the Project Metrics report
  */
 export const generateProjectMetricsPDF = async ({
   squadName,
   sprintName,
   sprintGoal,
-  chartElements, // Array de elementos HTML de los gráficos
-  issues, // Array de issues formateados
-  metricsData, // Datos de métricas para el resumen
-  squadId, // ID del squad para obtener métricas de developers
-  sprintId // ID del sprint para obtener métricas de developers
+  chartElements, // Array of HTML elements for charts
+  issues, // Array of formatted issues
+  metricsData, // Metrics data for summary
+  squadId, // Squad ID to get developer metrics
+  sprintId // Sprint ID to get developer metrics
 }) => {
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -288,7 +288,7 @@ export const generateProjectMetricsPDF = async ({
   const contentWidth = pageWidth - (margin * 2);
   let yPosition = margin;
 
-  // Función para agregar una nueva página si es necesario
+  // Function to add a new page if necessary
   const checkPageBreak = (requiredHeight) => {
     if (yPosition + requiredHeight > pageHeight - margin) {
       doc.addPage();
@@ -298,7 +298,7 @@ export const generateProjectMetricsPDF = async ({
     return false;
   };
 
-  // PORTADA
+  // COVER PAGE
   doc.setTextColor(0, 0, 0); // Negro
   doc.setFontSize(32);
   doc.setFont('helvetica', 'bold');
@@ -312,14 +312,14 @@ export const generateProjectMetricsPDF = async ({
   doc.text(sprintName || 'Unknown Sprint', pageWidth / 2, pageHeight / 2 + 15, { align: 'center' });
   
   doc.setFontSize(12);
-  doc.setTextColor(100, 100, 100); // Gris
-  doc.text(new Date().toLocaleDateString('es-ES', { 
+  doc.setTextColor(100, 100, 100); // Gray
+  doc.text(new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
     month: 'long', 
     day: 'numeric' 
   }), pageWidth / 2, pageHeight / 2 + 35, { align: 'center' });
 
-  // Nueva página para el contenido
+  // New page for content
   doc.addPage();
   yPosition = margin;
 
@@ -369,7 +369,7 @@ export const generateProjectMetricsPDF = async ({
       checkPageBreak(120);
       
       try {
-        // Esperar un poco para que el gráfico se renderice completamente
+        // Wait a bit for chart to render completely
         await new Promise(resolve => setTimeout(resolve, 500));
         
         const imgData = await elementToImage(chartElement, {
@@ -379,7 +379,7 @@ export const generateProjectMetricsPDF = async ({
           height: chartElement.offsetHeight
         });
         
-        // Calcular dimensiones manteniendo proporción
+        // Calculate dimensions maintaining proportion
         const maxWidth = contentWidth;
         const maxHeight = 100;
         const imgWidth = chartElement.offsetWidth;
@@ -391,18 +391,18 @@ export const generateProjectMetricsPDF = async ({
         doc.addImage(imgData, 'PNG', margin, yPosition, finalWidth, finalHeight);
         yPosition += finalHeight + 15;
       } catch (error) {
-        console.error('[PDF_GENERATOR] Error convirtiendo gráfico a imagen:', error);
+        console.error('[PDF_GENERATOR] Error converting chart to image:', error);
         doc.setTextColor(255, 100, 100);
         doc.setFontSize(10);
-        doc.text(`Error al generar gráfico ${i + 1}`, margin, yPosition);
+        doc.text(`Error generating chart ${i + 1}`, margin, yPosition);
         yPosition += 20;
       }
     }
   }
 
-  // TABLA DE ISSUES
+  // ISSUES TABLE
   if (issues && issues.length > 0) {
-    console.log(`[PDF_GENERATOR] Generando tabla con ${issues.length} issues`);
+    console.log(`[PDF_GENERATOR] Generating table with ${issues.length} issues`);
     checkPageBreak(50);
     
     doc.setTextColor(0, 0, 0); // Negro
@@ -421,14 +421,14 @@ export const generateProjectMetricsPDF = async ({
       summary: contentWidth - 140
     };
 
-    // Función helper para dibujar los encabezados de la tabla
+    // Helper function to draw table headers
     const drawTableHeader = () => {
-      // Línea superior del encabezado
+      // Top line of header
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.5);
       doc.line(margin, yPosition, margin + contentWidth, yPosition);
       
-      doc.setTextColor(0, 0, 0); // Negro
+      doc.setTextColor(0, 0, 0); // Black
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       
@@ -447,42 +447,42 @@ export const generateProjectMetricsPDF = async ({
       xPos += colWidths.sp;
       doc.text('Summary', xPos, yPosition + 6);
       
-      // Línea inferior del encabezado
+      // Bottom line of header
       yPosition += 8;
       doc.line(margin, yPosition, margin + contentWidth, yPosition);
       yPosition += 5;
     };
 
-    // Dibujar encabezados iniciales
+    // Draw initial headers
     drawTableHeader();
 
-    // Filas de la tabla
+    // Table rows
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(0, 0, 0); // Negro
     
     issues.forEach((issue, index) => {
-      // Log para debugging
+      // Log for debugging
       if (index === 0 || index === Math.floor(issues.length / 2) || index === issues.length - 1) {
-        console.log(`[PDF_GENERATOR] Procesando issue ${index + 1}/${issues.length}: ${issue.key}`);
+        console.log(`[PDF_GENERATOR] Processing issue ${index + 1}/${issues.length}: ${issue.key}`);
       }
       
-      // Calcular altura necesaria para esta fila (puede tener múltiples líneas)
+      // Calculate height needed for this row (may have multiple lines)
       const summaryLines = doc.splitTextToSize(issue.summary || '', colWidths.summary - 2);
       const assigneeLines = doc.splitTextToSize(issue.assignee || 'Unassigned', colWidths.assignee - 2);
       const maxLines = Math.max(summaryLines.length, assigneeLines.length, 1);
       const lineHeight = 4;
       const rowHeight = maxLines * lineHeight + 4;
       
-      // Verificar si necesitamos una nueva página (incluyendo espacio para el encabezado si es necesario)
+      // Check if we need a new page (including space for header if necessary)
       if (yPosition + rowHeight + 10 > pageHeight - margin) {
         doc.addPage();
         yPosition = margin;
-        // Redibujar encabezados en la nueva página
+        // Redraw headers on new page
         drawTableHeader();
       }
       
-      // Renderizar cada campo con texto negro
+      // Render each field with black text
       let currentY = yPosition + 5;
       
       // Type
@@ -493,7 +493,7 @@ export const generateProjectMetricsPDF = async ({
       doc.setTextColor(0, 0, 0);
       doc.text(issue.key || '', margin + 2 + colWidths.type, currentY);
       
-      // Assignee (puede tener múltiples líneas)
+      // Assignee (may have multiple lines)
       doc.setTextColor(0, 0, 0);
       if (Array.isArray(assigneeLines)) {
         assigneeLines.forEach((line, lineIdx) => {
@@ -517,7 +517,7 @@ export const generateProjectMetricsPDF = async ({
       doc.setTextColor(0, 0, 0);
       doc.text(String(issue.storyPoint || 0), margin + 2 + colWidths.type + colWidths.key + colWidths.assignee + colWidths.priority + colWidths.status, currentY);
       
-      // Summary (puede tener múltiples líneas)
+      // Summary (may have multiple lines)
       doc.setTextColor(0, 0, 0);
       if (Array.isArray(summaryLines)) {
         summaryLines.forEach((line, lineIdx) => {
@@ -529,25 +529,25 @@ export const generateProjectMetricsPDF = async ({
         doc.text(summaryLines, margin + 2 + colWidths.type + colWidths.key + colWidths.assignee + colWidths.priority + colWidths.status + colWidths.sp, currentY);
       }
       
-      // Línea separadora entre filas
+      // Separator line between rows
       yPosition += rowHeight;
-      doc.setDrawColor(200, 200, 200); // Gris claro para las líneas
+      doc.setDrawColor(200, 200, 200); // Light gray for lines
       doc.setLineWidth(0.2);
       doc.line(margin, yPosition, margin + contentWidth, yPosition);
       yPosition += 2;
     });
   } else {
-    // Si no hay issues, mostrar mensaje
+    // If no issues, show message
     checkPageBreak(20);
     doc.setTextColor(150, 150, 150);
     doc.setFontSize(10);
     doc.text('No Jira tickets found for the selected squad and sprint.', margin, yPosition);
   }
 
-  // MÉTRICAS POR DEVELOPER
+  // DEVELOPER METRICS
   if (squadId && sprintId) {
     try {
-      console.log('[PDF_GENERATOR] Obteniendo métricas de developers...');
+      console.log('[PDF_GENERATOR] Getting developer metrics...');
       const developersMetrics = await getDevelopersMetricsForSprint(squadId, sprintId);
       
       if (developersMetrics && developersMetrics.length > 0) {
@@ -563,21 +563,21 @@ export const generateProjectMetricsPDF = async ({
         developersMetrics.forEach((devData, index) => {
           const { developer, metrics, statusBreakdown } = devData;
           
-          // Verificar si necesitamos una nueva página
-          const sectionHeight = 80; // Altura estimada por developer
+          // Check if we need a new page
+          const sectionHeight = 80; // Estimated height per developer
           if (yPosition + sectionHeight > pageHeight - margin) {
             doc.addPage();
             yPosition = margin;
           }
 
-          // Nombre del developer
+          // Developer name
           doc.setTextColor(0, 0, 0);
           doc.setFontSize(12);
           doc.setFont('helvetica', 'bold');
           doc.text(developer.display_name || developer.email || 'Unknown Developer', margin, yPosition);
           yPosition += 8;
 
-          // Métricas principales
+          // Main metrics
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
           doc.text(`Total Tickets: ${metrics.totalTickets || 0}`, margin, yPosition);
@@ -590,7 +590,7 @@ export const generateProjectMetricsPDF = async ({
           doc.text(`Tickets without SP: ${metrics.noSP || 0}`, margin + 120, yPosition);
           yPosition += 8;
 
-          // Breakdown por status
+          // Status breakdown
           if (statusBreakdown && Object.keys(statusBreakdown).length > 0) {
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
@@ -598,7 +598,7 @@ export const generateProjectMetricsPDF = async ({
             yPosition += 5;
             
             doc.setFont('helvetica', 'normal');
-            const statusEntries = Object.entries(statusBreakdown).slice(0, 5); // Limitar a 5 estados principales
+            const statusEntries = Object.entries(statusBreakdown).slice(0, 5); // Limit to 5 main statuses
             statusEntries.forEach(([status, data]) => {
               doc.text(`${status}: ${data.count} (${data.percentage}%)`, margin + 5, yPosition);
               yPosition += 4;
@@ -607,7 +607,7 @@ export const generateProjectMetricsPDF = async ({
 
           yPosition += 5;
           
-          // Línea separadora
+          // Separator line
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.2);
           doc.line(margin, yPosition, margin + contentWidth, yPosition);
@@ -615,12 +615,12 @@ export const generateProjectMetricsPDF = async ({
         });
       }
     } catch (error) {
-      console.error('[PDF_GENERATOR] Error agregando métricas de developers:', error);
-      // Continuar sin las métricas de developers si hay error
+      console.error('[PDF_GENERATOR] Error adding developer metrics:', error);
+      // Continue without developer metrics if there's an error
     }
   }
 
-  // Guardar el PDF
+  // Save the PDF
   const fileName = `Project_Metrics_${squadName?.replace(/\s+/g, '_') || 'Unknown'}_${sprintName?.replace(/\s+/g, '_') || 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 };

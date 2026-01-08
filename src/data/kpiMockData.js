@@ -78,24 +78,21 @@ export const mockPoorScenario = {
 
 // Datos mock para Quality KPIs
 export const mockQualityKPIData = {
-  developmentQualityScore: 82,
+  developmentQualityScore: 82, // Will be calculated
   changeFailureRate: {
     percentage: 3.2,
-    score: 85,
     totalDeploys: 150,
     failedDeploys: 5
   },
-  planningAccuracy: {
-    percentage: 72,
-    score: 80,
-    plannedSP: 200,
-    completedSP: 144
-  },
   netBugFlow: {
-    value: 0.8,
-    score: 75,
+    value: 1.05, // Ratio: bugs resolved / bugs created (target: ≥ 1.0)
     bugsCreated: 25,
-    bugsResolved: 20
+    bugsResolved: 26
+  },
+  reworkRate: {
+    percentage: 3.5, // Percentage of work that needs to be redone (target: < 5%)
+    totalTasks: 200,
+    reworkedTasks: 7
   },
   trends: [
     { week: 'Wk 1', qualityScore: 78, changeFailure: 4.0, planningAcc: 68, bugFlow: 0.9 },
@@ -111,23 +108,24 @@ export const mockQualityKPIData = {
 
 // Datos mock para Team Health KPIs
 export const mockTeamHealthKPIData = {
-  teamHealthScore: 75,
-  sprintCompletion: {
-    percentage: 88,
-    score: 85,
-    completedSprints: 22,
-    totalSprints: 25
-  },
-  velocity: {
-    averageSP: 45,
-    score: 80,
-    trend: 'stable',
-    lastSprints: [42, 45, 47, 44, 46]
-  },
-  teamSatisfaction: {
-    score: 72,
+  teamHealthScore: 75, // Will be calculated
+  enps: {
+    value: 42, // Employee Net Promoter Score (target: > 40)
     surveyResponses: 18,
-    averageRating: 4.2
+    promoters: 10,
+    detractors: 4,
+    passives: 4
+  },
+  planningAccuracy: {
+    percentage: 72, // Percentage of planned work completed (target: 65-80%)
+    plannedSP: 200,
+    completedSP: 144,
+    addedSP: 20
+  },
+  capacityAccuracy: {
+    ratio: 0.95, // Actual capacity / Planned capacity (target: 0.85-1.15 to avoid burnout)
+    actualHours: 380,
+    plannedHours: 400
   },
   trends: [
     { week: 'Wk 1', healthScore: 72, completion: 85, velocity: 42, satisfaction: 4.0 },

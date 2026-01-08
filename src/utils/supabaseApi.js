@@ -1,35 +1,38 @@
 /**
- * Servicio de Supabase para obtener métricas de delivery
- * Conecta con la base de datos Supabase que se actualiza cada 30 minutos desde Jira
+ * Supabase service for obtaining delivery metrics
+ * Connects to Supabase database that is updated every 30 minutes from Jira
  */
 
 import { createClient } from '@supabase/supabase-js';
 
-// Configuración desde variables de entorno
-// También intenta valores por defecto si están disponibles
+// Configuration from environment variables
+// Also tries default values if available
+// Note: For GitHub Pages deployment, if env vars are not available during build,
+// these defaults will be used. The anon key is public and safe to include in client-side code.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://sywkskwkexwwdzrbwinp.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Default anon key - replace with your actual key if deploying without env vars
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || null;
 
-// Validar que las variables estén configuradas
+// Validate that variables are configured
 if (!supabaseAnonKey) {
-  console.warn('⚠️ VITE_SUPABASE_ANON_KEY no está configurado. Configura esta variable en tu archivo .env');
-  console.warn('   Para obtenerla: Supabase Dashboard > Settings > API > anon public key');
+  console.warn('⚠️ VITE_SUPABASE_ANON_KEY is not configured. Set this variable in your .env file');
+  console.warn('   To get it: Supabase Dashboard > Settings > API > anon public key');
 }
 
-// Crear cliente de Supabase solo si tenemos la clave
+// Create Supabase client only if we have the key
 export const supabase = supabaseUrl && supabaseAnonKey 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 /**
- * Obtiene métricas de sprints desde Supabase
- * @param {string} projectKey - Clave del proyecto (default: 'OBD')
- * @param {Object} options - Opciones adicionales
- * @returns {Promise<Array>} Array de métricas de sprints
+ * Gets sprint metrics from Supabase
+ * @param {string} projectKey - Project key (default: 'OBD')
+ * @param {Object} options - Additional options
+ * @returns {Promise<Array>} Array of sprint metrics
  */
 export const getSprintMetrics = async (projectKey = 'OBD', options = {}) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
@@ -38,15 +41,15 @@ export const getSprintMetrics = async (projectKey = 'OBD', options = {}) => {
       .select('*')
       .eq('project_name', projectKey.toUpperCase());
 
-    // Ordenar por fecha de fin (más recientes primero)
+    // Sort by end date (most recent first)
     query = query.order('end_date', { ascending: false, nullsFirst: false });
 
-    // Limitar resultados si se especifica
+    // Limit results if specified
     if (options.limit) {
       query = query.limit(options.limit);
     }
 
-    // Filtrar por estado si se especifica
+    // Filter by state if specified
     if (options.state) {
       query = query.eq('state', options.state);
     }
@@ -54,26 +57,26 @@ export const getSprintMetrics = async (projectKey = 'OBD', options = {}) => {
     const { data, error } = await query;
 
     if (error) {
-      console.error('[SUPABASE] Error obteniendo métricas de sprints:', error);
+      console.error('[SUPABASE] Error getting sprint metrics:', error);
       throw error;
     }
 
     return data || [];
   } catch (error) {
-    console.error('[SUPABASE] Error en getSprintMetrics:', error);
+    console.error('[SUPABASE] Error in getSprintMetrics:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene métricas de desarrolladores por sprint
- * @param {string} projectKey - Clave del proyecto (default: 'OBD')
- * @param {Object} options - Opciones adicionales
- * @returns {Promise<Array>} Array de métricas de desarrolladores
+ * Gets developer metrics by sprint
+ * @param {string} projectKey - Project key (default: 'OBD')
+ * @param {Object} options - Additional options
+ * @returns {Promise<Array>} Array of developer metrics
  */
 export const getDeveloperMetrics = async (projectKey = 'OBD', options = {}) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
@@ -82,21 +85,21 @@ export const getDeveloperMetrics = async (projectKey = 'OBD', options = {}) => {
       .select('*')
       .eq('project_name', projectKey.toUpperCase());
 
-    // Ordenar por sprint y desarrollador
+    // Sort by sprint and developer
     query = query.order('sprint_name', { ascending: false });
     query = query.order('developer_name', { ascending: true });
 
-    // Limitar resultados si se especifica
+    // Limit results if specified
     if (options.limit) {
       query = query.limit(options.limit);
     }
 
-    // Filtrar por sprint específico si se especifica
+    // Filter by specific sprint if specified
     if (options.sprintName) {
       query = query.eq('sprint_name', options.sprintName);
     }
 
-    // Filtrar por desarrollador específico si se especifica
+    // Filter by specific developer if specified
     if (options.developerName) {
       query = query.eq('developer_name', options.developerName);
     }
@@ -104,25 +107,25 @@ export const getDeveloperMetrics = async (projectKey = 'OBD', options = {}) => {
     const { data, error } = await query;
 
     if (error) {
-      console.error('[SUPABASE] Error obteniendo métricas de desarrolladores:', error);
+      console.error('[SUPABASE] Error getting developer metrics:', error);
       throw error;
     }
 
     return data || [];
   } catch (error) {
-    console.error('[SUPABASE] Error en getDeveloperMetrics:', error);
+    console.error('[SUPABASE] Error in getDeveloperMetrics:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene métricas globales del proyecto
- * @param {string} projectKey - Clave del proyecto (default: 'OBD')
- * @returns {Promise<Object>} Objeto con métricas globales
+ * Gets global project metrics
+ * @param {string} projectKey - Project key (default: 'OBD')
+ * @returns {Promise<Object>} Object with global metrics
  */
 export const getGlobalMetrics = async (projectKey = 'OBD') => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
@@ -141,25 +144,25 @@ export const getGlobalMetrics = async (projectKey = 'OBD') => {
       .single();
 
     if (error) {
-      console.error('[SUPABASE] Error obteniendo métricas globales:', error);
+      console.error('[SUPABASE] Error getting global metrics:', error);
       throw error;
     }
 
     return data;
   } catch (error) {
-    console.error('[SUPABASE] Error en getGlobalMetrics:', error);
+    console.error('[SUPABASE] Error in getGlobalMetrics:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene el sprint activo actual
- * @param {string} projectKey - Clave del proyecto (default: 'OBD')
- * @returns {Promise<Object>} Objeto con datos del sprint activo
+ * Gets the current active sprint
+ * @param {string} projectKey - Project key (default: 'OBD')
+ * @returns {Promise<Object>} Object with active sprint data
  */
 export const getActiveSprint = async (projectKey = 'OBD') => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
@@ -173,35 +176,35 @@ export const getActiveSprint = async (projectKey = 'OBD') => {
       .single();
 
     if (error) {
-      // Si no hay sprint activo, no es un error crítico
+      // If there's no active sprint, it's not a critical error
       if (error.code === 'PGRST116') {
-        console.log('[SUPABASE] No hay sprint activo actualmente');
+        console.log('[SUPABASE] No active sprint currently');
         return null;
       }
-      console.error('[SUPABASE] Error obteniendo sprint activo:', error);
+      console.error('[SUPABASE] Error getting active sprint:', error);
       throw error;
     }
 
     return data;
   } catch (error) {
-    console.error('[SUPABASE] Error en getActiveSprint:', error);
+    console.error('[SUPABASE] Error in getActiveSprint:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene issues por estado
- * @param {string} projectKey - Clave del proyecto (default: 'OBD')
- * @param {Object} options - Opciones adicionales
- * @returns {Promise<Array>} Array de issues agrupados por estado
+ * Gets issues by status
+ * @param {string} projectKey - Project key (default: 'OBD')
+ * @param {Object} options - Additional options
+ * @returns {Promise<Array>} Array of issues grouped by status
  */
 export const getIssuesByStatus = async (projectKey = 'OBD', options = {}) => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
-    // Primero obtener el project_id
+    // First get the project_id
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('id')
@@ -209,21 +212,21 @@ export const getIssuesByStatus = async (projectKey = 'OBD', options = {}) => {
       .single();
 
     if (projectError || !project) {
-      throw new Error(`Proyecto ${projectKey} no encontrado`);
+      throw new Error(`Project ${projectKey} not found`);
     }
 
-    // Obtener issues agrupados por estado
+    // Get issues grouped by status
     const { data, error } = await supabase
       .from('issues')
       .select('current_status, current_story_points')
       .eq('project_id', project.id);
 
     if (error) {
-      console.error('[SUPABASE] Error obteniendo issues por estado:', error);
+      console.error('[SUPABASE] Error getting issues by status:', error);
       throw error;
     }
 
-    // Agrupar por estado
+    // Group by status
     const grouped = data.reduce((acc, issue) => {
       const status = issue.current_status || 'Unassigned';
       if (!acc[status]) {
@@ -240,19 +243,19 @@ export const getIssuesByStatus = async (projectKey = 'OBD', options = {}) => {
 
     return Object.values(grouped).sort((a, b) => b.count - a.count);
   } catch (error) {
-    console.error('[SUPABASE] Error en getIssuesByStatus:', error);
+    console.error('[SUPABASE] Error in getIssuesByStatus:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene todos los desarrolladores activos
- * @param {string} projectKey - Clave del proyecto (default: 'OBD')
- * @returns {Promise<Array>} Array de desarrolladores
+ * Gets all active developers
+ * @param {string} projectKey - Project key (default: 'OBD')
+ * @returns {Promise<Array>} Array of developers
  */
 export const getDevelopers = async (projectKey = 'OBD') => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
@@ -263,50 +266,50 @@ export const getDevelopers = async (projectKey = 'OBD') => {
       .order('display_name', { ascending: true });
 
     if (error) {
-      console.error('[SUPABASE] Error obteniendo desarrolladores:', error);
+      console.error('[SUPABASE] Error getting developers:', error);
       throw error;
     }
 
     return data || [];
   } catch (error) {
-    console.error('[SUPABASE] Error en getDevelopers:', error);
+    console.error('[SUPABASE] Error in getDevelopers:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene datos de delivery roadmap desde Supabase
- * @returns {Promise<Array>} Array de proyectos con métricas
+ * Gets delivery roadmap data from Supabase
+ * @returns {Promise<Array>} Array of projects with metrics
  */
 export const getDeliveryRoadmapData = async () => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
-    // Obtener squads
+    // Get squads
     const { data: squads, error: squadsError } = await supabase
       .from('squads')
       .select('id, squad_key, squad_name')
       .order('squad_name', { ascending: true });
 
     if (squadsError) {
-      console.error('[SUPABASE] Error obteniendo squads:', squadsError);
+      console.error('[SUPABASE] Error getting squads:', squadsError);
       throw squadsError;
     }
 
-    // Obtener initiatives (incluyendo fechas de épicas)
+    // Get initiatives (including epic dates)
     const { data: initiatives, error: initiativesError } = await supabase
       .from('initiatives')
       .select('id, squad_id, initiative_key, initiative_name, created_at, start_date, end_date')
       .order('initiative_name', { ascending: true });
 
     if (initiativesError) {
-      console.error('[SUPABASE] Error obteniendo initiatives:', initiativesError);
+      console.error('[SUPABASE] Error getting initiatives:', initiativesError);
       throw initiativesError;
     }
 
-    // Obtener métricas de sprints más recientes
+    // Get most recent sprint metrics
     const { data: sprintMetrics, error: metricsError } = await supabase
       .from('v_sprint_metrics_complete')
       .select('*')
@@ -314,63 +317,63 @@ export const getDeliveryRoadmapData = async () => {
       .limit(100);
 
     if (metricsError) {
-      console.warn('[SUPABASE] Error obteniendo métricas:', metricsError);
+      console.warn('[SUPABASE] Error getting metrics:', metricsError);
     }
 
-    // Obtener issues
+    // Get issues
     const { data: issues, error: issuesError } = await supabase
       .from('issues')
       .select('id, initiative_id, current_status, current_story_points, assignee_id');
 
     if (issuesError) {
-      console.warn('[SUPABASE] Error obteniendo issues:', issuesError);
+      console.warn('[SUPABASE] Error getting issues:', issuesError);
     }
 
-    // Obtener desarrolladores
+    // Get developers
     const { data: developers, error: devsError } = await supabase
       .from('developers')
       .select('id, display_name');
 
     if (devsError) {
-      console.warn('[SUPABASE] Error obteniendo developers:', devsError);
+      console.warn('[SUPABASE] Error getting developers:', devsError);
     }
 
-    // Crear mapa de desarrolladores
+    // Create developer map
     const devMap = new Map((developers || []).map(d => [d.id, d.display_name]));
 
-    // Crear mapa de squads
+    // Create squad map
     const squadMap = new Map((squads || []).map(s => [s.id, s]));
 
-    // Validar que haya datos en Supabase
+    // Validate that there is data in Supabase
     if (!squads || squads.length === 0) {
-      throw new Error('No hay squads en Supabase. Verifica que el servicio de sync haya ejecutado.');
+      throw new Error('No squads in Supabase. Verify that the sync service has run.');
     }
 
     if (!initiatives || initiatives.length === 0) {
-      throw new Error('No hay initiatives en Supabase. Verifica que el servicio de sync haya ejecutado.');
+      throw new Error('No initiatives in Supabase. Verify that the sync service has run.');
     }
 
-    console.log('[SUPABASE] Datos encontrados:', {
+    console.log('[SUPABASE] Data found:', {
       squads: squads.length,
       initiatives: initiatives.length,
       issues: (issues || []).length,
       developers: (developers || []).length
     });
 
-    // Construir datos de delivery roadmap
+    // Build delivery roadmap data
     const roadmapData = [];
 
-    // Procesar iniciativas normales
+    // Process normal initiatives
     for (const initiative of initiatives || []) {
       const squad = squadMap.get(initiative.squad_id);
       if (!squad) continue;
 
-      // Obtener issues de esta iniciativa
+      // Get issues for this initiative
       const initiativeIssues = (issues || []).filter(
         issue => issue.initiative_id === initiative.id
       );
 
-      // Calcular métricas básicas
+      // Calculate basic metrics
       const totalSP = initiativeIssues.reduce((sum, issue) => 
         sum + (issue.current_story_points || 0), 0
       );
@@ -381,23 +384,23 @@ export const getDeliveryRoadmapData = async () => {
         })
         .reduce((sum, issue) => sum + (issue.current_story_points || 0), 0);
 
-      // Calcular SPI (simplificado: basado en SP completados vs total)
+      // Calculate SPI (simplified: based on completed SP vs total)
       const spi = totalSP > 0 ? (completedSP / totalSP) : 0;
 
-      // Calcular porcentaje de completitud
+      // Calculate completion percentage
       const completionPercentage = totalSP > 0 ? Math.round((completedSP / totalSP) * 100) : 0;
 
-      // Obtener fechas de la épica (prioridad) o del sprint más reciente (fallback)
-      // Prioridad 1: Usar fechas de la épica (start_date, end_date de initiatives)
-      // Prioridad 2: Usar fechas del sprint más reciente
-      // Prioridad 3: Usar created_at como start_date
+      // Get dates from epic (priority) or most recent sprint (fallback)
+      // Priority 1: Use epic dates (start_date, end_date from initiatives)
+      // Priority 2: Use most recent sprint dates
+      // Priority 3: Use created_at as start_date
       let startDate = null;
       let endDate = null;
 
       if (initiative.start_date) {
         startDate = new Date(initiative.start_date).toISOString().split('T')[0];
       } else {
-        // Fallback: usar sprint más reciente
+        // Fallback: use most recent sprint
         const squadMetrics = (sprintMetrics || []).filter(
           m => m.project_name === squad.squad_key || m.squad_key === squad.squad_key
         );
@@ -410,14 +413,14 @@ export const getDeliveryRoadmapData = async () => {
       if (initiative.end_date) {
         endDate = new Date(initiative.end_date).toISOString().split('T')[0];
       } else {
-        // Si no hay end_date, estimar basado en start_date o created_at
+        // If no end_date, estimate based on start_date or created_at
         const baseDate = initiative.start_date || initiative.created_at;
         const estimatedEnd = new Date(baseDate);
-        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3); // 3 meses después
+        estimatedEnd.setMonth(estimatedEnd.getMonth() + 3); // 3 months later
         endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
-      // Asegurar que ambas fechas estén presentes (última validación)
+      // Ensure both dates are present (final validation)
       if (!startDate) {
         startDate = new Date(initiative.created_at).toISOString().split('T')[0];
       }
@@ -427,7 +430,7 @@ export const getDeliveryRoadmapData = async () => {
         endDate = estimatedEnd.toISOString().split('T')[0];
       }
 
-      // Obtener asignaciones de desarrolladores
+      // Get developer assignments
       const devIds = [...new Set(
         initiativeIssues
           .map(issue => issue.assignee_id)
@@ -435,7 +438,7 @@ export const getDeliveryRoadmapData = async () => {
       )];
       const devNames = devIds.map(id => devMap.get(id)).filter(Boolean);
 
-      // Asegurar que ambas fechas estén presentes
+      // Ensure both dates are present
       if (!startDate) {
         startDate = new Date(initiative.created_at).toISOString().split('T')[0];
       }
@@ -463,7 +466,7 @@ export const getDeliveryRoadmapData = async () => {
       roadmapData.push(roadmapItem);
     }
 
-    // Procesar issues sin iniciativa agrupados por squad
+    // Process issues without initiative grouped by squad
     const issuesWithoutInitiative = (issues || []).filter(issue => !issue.initiative_id);
     const squadIdsWithUnassignedIssues = [...new Set(issuesWithoutInitiative.map(issue => issue.squad_id).filter(Boolean))];
 
@@ -499,7 +502,7 @@ export const getDeliveryRoadmapData = async () => {
 
       roadmapData.push({
         squad: squad.squad_name || squad.squad_key,
-        initiative: 'Otros',
+        initiative: 'Others',
         start: latestSprint?.start_date 
           ? new Date(latestSprint.start_date).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
@@ -510,36 +513,36 @@ export const getDeliveryRoadmapData = async () => {
         spi: parseFloat(spi.toFixed(2)),
         allocation: devNames.length,
         comments: `${unassignedIssues.length} issues, ${totalSP} SP total`,
-        scope: 'Otros',
+        scope: 'Others',
         dev: devNames.join(', ') || 'Unassigned',
         percentage: completionPercentage
       });
     }
 
-    // Validar que se generaron datos
+    // Validate that data was generated
     if (roadmapData.length === 0) {
-      throw new Error('No se pudieron generar datos de roadmap desde Supabase. Verifica que haya initiatives con issues asociados.');
+      throw new Error('Could not generate roadmap data from Supabase. Verify that there are initiatives with associated issues.');
     }
 
-    console.log('[SUPABASE] Roadmap data generado:', roadmapData.length, 'items');
+    console.log('[SUPABASE] Roadmap data generated:', roadmapData.length, 'items');
     return roadmapData;
   } catch (error) {
-    console.error('[SUPABASE] Error en getDeliveryRoadmapData:', error);
+    console.error('[SUPABASE] Error in getDeliveryRoadmapData:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene datos de asignación de desarrolladores desde Supabase
- * @returns {Promise<Array>} Array de asignaciones
+ * Gets developer allocation data from Supabase
+ * @returns {Promise<Array>} Array of allocations
  */
 export const getDeveloperAllocationData = async () => {
   if (!supabase) {
-    throw new Error('Supabase no está configurado. Verifica las variables de entorno.');
+    throw new Error('Supabase is not configured. Check environment variables.');
   }
 
   try {
-    // Obtener sprints activos o más recientes por squad
+    // Get active or most recent sprints by squad
     const { data: activeSprints, error: sprintsError } = await supabase
       .from('sprints')
       .select('id, squad_id, start_date, end_date, state, sprint_name')
@@ -547,10 +550,10 @@ export const getDeveloperAllocationData = async () => {
       .order('end_date', { ascending: false });
 
     if (sprintsError) {
-      console.warn('[SUPABASE] Error obteniendo sprints:', sprintsError);
+      console.warn('[SUPABASE] Error getting sprints:', sprintsError);
     }
 
-    // Crear mapa de sprint más reciente por squad
+    // Create map of most recent sprint by squad
     const squadSprintMap = new Map();
     if (activeSprints) {
       for (const sprint of activeSprints) {
@@ -560,18 +563,18 @@ export const getDeveloperAllocationData = async () => {
       }
     }
 
-    // Obtener issues con fechas para filtrar por sprint (incluyendo los sin iniciativa)
+    // Get issues with dates to filter by sprint (including those without initiative)
     const { data: issues, error: issuesError } = await supabase
       .from('issues')
       .select('id, squad_id, initiative_id, current_story_points, current_sprint, assignee_id, created_date, dev_start_date, dev_close_date, resolved_date');
 
     if (issuesError) {
-      console.error('[SUPABASE] Error obteniendo issues:', issuesError);
+      console.error('[SUPABASE] Error getting issues:', issuesError);
       throw issuesError;
     }
 
-    // Función para verificar si un issue está activo en el sprint actual
-    // Usa current_sprint (métrica real que define si está en el sprint seleccionado)
+    // Function to verify if an issue is active in the current sprint
+    // Uses current_sprint (real metric that defines if it's in the selected sprint)
     const isIssueActiveInSprint = (issue, sprint) => {
       if (!sprint) return false;
 
@@ -579,85 +582,85 @@ export const getDeveloperAllocationData = async () => {
       const sprintEnd = new Date(sprint.end_date);
       const now = new Date();
 
-      // Si el sprint ya terminó hace más de un sprint, no contar
+      // If sprint ended more than a sprint ago, don't count
       if (sprintEnd < now && sprint.state === 'closed') {
-        // Solo contar si terminó recientemente (último sprint cerrado)
+        // Only count if it ended recently (last closed sprint)
         const daysSinceEnd = (now - sprintEnd) / (1000 * 60 * 60 * 24);
-        if (daysSinceEnd > 14) return false; // Más de 2 semanas = no contar
+        if (daysSinceEnd > 14) return false; // More than 2 weeks = don't count
       }
 
-      // PRIORIDAD 1: Verificar si el issue tiene current_sprint que coincida con el sprint
-      // Esta es la fuente más confiable (métrica real del spreadsheet)
+      // PRIORITY 1: Check if issue has current_sprint that matches the sprint
+      // This is the most reliable source (real metric from spreadsheet)
       if (issue.current_sprint && issue.current_sprint === sprint.sprint_name) {
-        return true; // Está en el sprint, contar
+        return true; // It's in the sprint, count it
       }
 
-      // PRIORIDAD 2: Si NO tiene current_sprint, verificar fechas SOLO para tickets muy recientes
-      // Solo contar si fue creado DURANTE el sprint actual (no antes)
+      // PRIORITY 2: If it doesn't have current_sprint, check dates ONLY for very recent tickets
+      // Only count if it was created DURING the current sprint (not before)
       const issueCreated = issue.created_date ? new Date(issue.created_date) : null;
       
-      // Si fue creado durante el sprint actual, contarlo
+      // If it was created during the current sprint, count it
       if (issueCreated && issueCreated >= sprintStart && issueCreated <= sprintEnd) {
         return true;
       }
 
-      // NO contar issues viejos que se solapan por fechas de desarrollo
-      // Solo contamos si está explícitamente en el sprint o fue creado durante el sprint
+      // DON'T count old issues that overlap by development dates
+      // We only count if it's explicitly in the sprint or was created during the sprint
       return false;
     };
 
-    // Obtener initiatives
+    // Get initiatives
     const { data: initiatives, error: initiativesError } = await supabase
       .from('initiatives')
       .select('id, initiative_name, squad_id');
 
     if (initiativesError) {
-      console.error('[SUPABASE] Error obteniendo initiatives:', initiativesError);
+      console.error('[SUPABASE] Error getting initiatives:', initiativesError);
       throw initiativesError;
     }
 
-    // Obtener squads
+    // Get squads
     const { data: squads, error: squadsError } = await supabase
       .from('squads')
       .select('id, squad_name');
 
     if (squadsError) {
-      console.error('[SUPABASE] Error obteniendo squads:', squadsError);
+      console.error('[SUPABASE] Error getting squads:', squadsError);
       throw squadsError;
     }
 
-    // Obtener desarrolladores
+    // Get developers
     const { data: developers, error: devsError } = await supabase
       .from('developers')
       .select('id, display_name');
 
     if (devsError) {
-      console.error('[SUPABASE] Error obteniendo developers:', devsError);
+      console.error('[SUPABASE] Error getting developers:', devsError);
       throw devsError;
     }
 
-    // Validar que haya datos
+    // Validate that there is data
     if (!issues || issues.length === 0) {
-      throw new Error('No hay issues en Supabase. Verifica que el servicio de sync haya ejecutado.');
+      throw new Error('No issues in Supabase. Verify that the sync service has run.');
     }
 
     if (!initiatives || initiatives.length === 0) {
-      throw new Error('No hay initiatives en Supabase. Verifica que el servicio de sync haya ejecutado.');
+      throw new Error('No initiatives in Supabase. Verify that the sync service has run.');
     }
 
-    console.log('[SUPABASE] Datos para allocation:', {
+    console.log('[SUPABASE] Data for allocation:', {
       issues: issues.length,
       initiatives: initiatives.length,
       squads: (squads || []).length,
       developers: (developers || []).length
     });
 
-    // Crear mapas para búsqueda rápida
+    // Create maps for fast lookup
     const initiativeMap = new Map((initiatives || []).map(i => [i.id, i]));
     const squadMap = new Map((squads || []).map(s => [s.id, s]));
     const devMap = new Map((developers || []).map(d => [d.id, d]));
 
-    // Agrupar por iniciativa y desarrollador, filtrando solo issues activos en sprint actual
+    // Group by initiative and developer, filtering only issues active in current sprint
     const allocationMap = new Map();
     let filteredIssuesCount = 0;
     let totalIssuesCount = 0;
@@ -673,12 +676,12 @@ export const getDeveloperAllocationData = async () => {
       const squad = squadMap.get(initiative.squad_id);
       if (!squad) continue;
 
-      // Obtener el sprint actual para este squad
+      // Get current sprint for this squad
       const currentSprint = squadSprintMap.get(squad.id);
       
-      // Filtrar: solo contar issues activos en el sprint actual
+      // Filter: only count issues active in current sprint
       if (!isIssueActiveInSprint(issue, currentSprint)) {
-        continue; // Issue viejo o fuera del sprint, no contar
+        continue; // Old issue or outside sprint, don't count
       }
 
       filteredIssuesCount++;
@@ -697,26 +700,26 @@ export const getDeveloperAllocationData = async () => {
       allocation.totalSP += issue.current_story_points || 0;
     }
 
-    console.log('[SUPABASE] Issues filtrados por sprint:', {
+    console.log('[SUPABASE] Issues filtered by sprint:', {
       total: totalIssuesCount,
-      activos: filteredIssuesCount,
-      excluidos: totalIssuesCount - filteredIssuesCount
+      active: filteredIssuesCount,
+      excluded: totalIssuesCount - filteredIssuesCount
     });
 
-    // Convertir a array y calcular porcentajes
-    // Capacidad del sprint basada en la tabla de conversión:
-    // 1 SP = 4 horas
-    // 2 SP = 1 día (8 horas)
-    // 3 SP = 2-3 días (16-24 horas)
-    // 5 SP = 3-4 días (24-32 horas)
-    // Sprint = 2 semanas = 8.5 días de trabajo = 68 horas
-    // Capacidad = 68 horas / 4 horas por SP = 17 SP por sprint
-    const SPRINT_CAPACITY_SP = 17; // SP que puede hacer un desarrollador en un sprint
+    // Convert to array and calculate percentages
+    // Sprint capacity based on conversion table:
+    // 1 SP = 4 hours
+    // 2 SP = 1 day (8 hours)
+    // 3 SP = 2-3 days (16-24 hours)
+    // 5 SP = 3-4 days (24-32 hours)
+    // Sprint = 2 weeks = 8.5 working days = 68 hours
+    // Capacity = 68 hours / 4 hours per SP = 17 SP per sprint
+    const SPRINT_CAPACITY_SP = 17; // SP a developer can do in a sprint
     
     const allocations = Array.from(allocationMap.values()).map(allocation => {
-      // Calcular porcentaje basado en SP vs capacidad del sprint
-      // percentage = (SP asignados en esta iniciativa / capacidad del sprint) * 100
-      // No limitamos a 100% porque un desarrollador puede estar asignado a múltiples iniciativas
+      // Calculate percentage based on SP vs sprint capacity
+      // percentage = (SP assigned in this initiative / sprint capacity) * 100
+      // We don't limit to 100% because a developer can be assigned to multiple initiatives
       const percentage = Math.round((allocation.totalSP / SPRINT_CAPACITY_SP) * 100);
       
       return {
@@ -727,23 +730,23 @@ export const getDeveloperAllocationData = async () => {
       };
     });
 
-    // Validar que se generaron asignaciones
+    // Validate that allocations were generated
     if (allocations.length === 0) {
-      console.warn('[SUPABASE] No se generaron asignaciones. Puede que no haya issues con assignee_id.');
-      // Retornar array vacío en lugar de lanzar error, ya que puede ser válido
+      console.warn('[SUPABASE] No allocations generated. There may be no issues with assignee_id.');
+      // Return empty array instead of throwing error, as this may be valid
     }
 
-    console.log('[SUPABASE] Allocation data generado:', allocations.length, 'items');
+    console.log('[SUPABASE] Allocation data generated:', allocations.length, 'items');
     return allocations;
   } catch (error) {
-    console.error('[SUPABASE] Error en getDeveloperAllocationData:', error);
+    console.error('[SUPABASE] Error in getDeveloperAllocationData:', error);
     throw error;
   }
 };
 
 /**
- * Verifica la conexión con Supabase
- * @returns {Promise<boolean>} true si la conexión es exitosa
+ * Tests connection to Supabase
+ * @returns {Promise<boolean>} true if connection is successful
  */
 export const testConnection = async () => {
   if (!supabase) {
@@ -757,13 +760,13 @@ export const testConnection = async () => {
       .limit(1);
 
     if (error) {
-      console.error('[SUPABASE] Error de conexión:', error);
+      console.error('[SUPABASE] Connection error:', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('[SUPABASE] Error en testConnection:', error);
+    console.error('[SUPABASE] Error in testConnection:', error);
     return false;
   }
 };

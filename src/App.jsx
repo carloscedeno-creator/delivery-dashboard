@@ -10,12 +10,20 @@ const ProductRoadmapView = lazy(() => import('./components/ProductRoadmapView'))
 const DeliveryRoadmapView = lazy(() => import('./components/DeliveryRoadmapView'));
 const ProjectsMetrics = lazy(() => import('./components/ProjectsMetrics'));
 const DeveloperMetrics = lazy(() => import('./components/DeveloperMetrics'));
+const TeamCapacity = lazy(() => import('./components/TeamCapacity'));
+const TeamAllocation = lazy(() => import('./components/TeamAllocation'));
+const ProductDepartmentKPIs = lazy(() => import('./components/ProductDepartmentKPIs'));
 const UserAdministration = lazy(() => import('./components/UserAdministration'));
+const RoleAccess = lazy(() => import('./components/RoleAccess'));
 const KPIsView = lazy(() => import('./components/KPIsView'));
+const DeliveryKPIs = lazy(() => import('./components/DeliveryKPIs'));
+const QualityKPIs = lazy(() => import('./components/QualityKPIs'));
+const ENPSSurvey = lazy(() => import('./components/ENPSSurvey'));
+const ENPSSurveyManagement = lazy(() => import('./components/ENPSSurveyManagement'));
 import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
 import { getDeliveryRoadmapData, getDeveloperAllocationData } from './utils/supabaseApi';
-import { canAccessModule, getModulesForRole, MODULES } from './config/permissions';
+import { canAccessModule, getModulesForRoleSync, MODULES } from './config/permissions';
 import { getCurrentUser } from './utils/authService';
 
 // URLs de las hojas usando la configuración centralizada
@@ -50,6 +58,17 @@ function App() {
     const [currentUser, setCurrentUser] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     
+    // Listen for navigation to survey from login page
+    useEffect(() => {
+        const handleNavigateToSurvey = () => {
+            setActiveView('enps-survey');
+        };
+        window.addEventListener('navigateToSurvey', handleNavigateToSurvey);
+        return () => {
+            window.removeEventListener('navigateToSurvey', handleNavigateToSurvey);
+        };
+    }, []);
+    
     // Obtener usuario actual y verificar permisos
     useEffect(() => {
         const user = getCurrentUser();
@@ -62,18 +81,18 @@ function App() {
         
         // Verificar que el activeView sea accesible para el rol del usuario
         const userRole = user?.role || 'regular';
-        const allowedModules = getModulesForRole(userRole);
+        const allowedModules = getModulesForRoleSync(userRole);
         
-        if (!allowedModules.includes(activeView)) {
+        if (Array.isArray(allowedModules) && !allowedModules.includes(activeView)) {
             // Si el módulo actual no está permitido, redirigir al primer módulo permitido
-            console.warn(`[APP] Módulo ${activeView} no permitido para rol ${userRole}, redirigiendo a ${allowedModules[0]}`);
+            console.warn(`[APP] Module ${activeView} not allowed for role ${userRole}, redirecting to ${allowedModules[0]}`);
             setActiveView(allowedModules[0] || 'overall');
         }
     }, []);
     
     // Debug: Log cuando projectData cambia
     useEffect(() => {
-        console.log('🟡 [APP] projectData CAMBIÓ:', {
+        console.log('🟡 [APP] projectData CHANGED:', {
             length: projectData?.length || 0,
             isArray: Array.isArray(projectData),
             activeView,
@@ -82,6 +101,7 @@ function App() {
     }, [projectData, activeView]);
     const [productInitiatives, setProductInitiatives] = useState([]);
     const [productBugRelease, setProductBugRelease] = useState([]);
+    const [productRoadmapLastUpdate, setProductRoadmapLastUpdate] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [dataSource, setDataSource] = useState('csv'); // 'db' (Supabase) o 'csv'
@@ -104,14 +124,14 @@ function App() {
                 setError(null);
                 
                 if (source === 'db') {
-                    // Cargar desde Supabase (Base de Datos)
+                    // Load from Supabase (Database)
                     try {
-                        console.log('[APP] 🔄 Cargando datos desde Base de Datos (Supabase)...');
+                        console.log('[APP] 🔄 Loading data from Database (Supabase)...');
                         
-                        // Verificar que Supabase esté configurado antes de intentar cargar
+                        // Verify that Supabase is configured before attempting to load
                         const { supabase } = await import('./utils/supabaseApi.js');
                         if (!supabase) {
-                            throw new Error('Supabase no está configurado. Verifica las variables de entorno VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
+                            throw new Error('Supabase is not configured. Check environment variables VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
                         }
                         
                         const [deliveryData, allocationData] = await Promise.all([
@@ -121,7 +141,7 @@ function App() {
                         
                         // Validar que realmente hay datos
                         if (!deliveryData || deliveryData.length === 0) {
-                            throw new Error('Base de datos retornó datos vacíos. Verifica que el servicio de sync haya ejecutado.');
+                            throw new Error('Database returned empty data. Verify that the sync service has run.');
                         }
                         
                         console.log('[APP] 🔵 ANTES de setProjectData:', {
@@ -132,7 +152,7 @@ function App() {
                         setProjectData(deliveryData);
                         setDevAllocationData(allocationData);
                         setDataSource('db');
-                        console.log('[APP] ✅ Datos de delivery cargados desde Base de Datos:', {
+                        console.log('[APP] ✅ Delivery data loaded from Database:', {
                             projects: deliveryData.length,
                             allocations: allocationData.length,
                             sampleProject: deliveryData[0]?.initiative || 'N/A',
@@ -140,27 +160,27 @@ function App() {
                             sampleDelivery: deliveryData[0]?.delivery || 'N/A'
                         });
                     } catch (dbError) {
-                        // Si Supabase no está configurado o hay error, hacer fallback a CSV
-                        const isSupabaseNotConfigured = dbError.message?.includes('Supabase no está configurado') || 
-                                                       dbError.message?.includes('no está configurado');
+                        // If Supabase is not configured or there's an error, fallback to CSV
+                        const isSupabaseNotConfigured = dbError.message?.includes('Supabase is not configured') || 
+                                                       dbError.message?.includes('not configured');
                         
-                        console.warn('[APP] ⚠️ Error cargando desde Base de Datos:', dbError.message);
+                        console.warn('[APP] ⚠️ Error loading from Database:', dbError.message);
                         
                         if (isSupabaseNotConfigured) {
-                            console.info('[APP] ℹ️ Supabase no configurado, haciendo fallback a CSV...');
-                            // Hacer fallback automático a CSV
+                            console.info('[APP] ℹ️ Supabase not configured, falling back to CSV...');
+                            // Automatic fallback to CSV
                             throw new Error('FALLBACK_TO_CSV');
                         } else {
-                            // Para otros errores, mostrar mensaje pero también intentar fallback
-                            console.error('[APP] ❌ Error cargando desde Base de Datos:', dbError);
-                            setError(`Error cargando desde Base de Datos: ${dbError.message}. Intentando cargar desde CSV...`);
+                            // For other errors, show message but also try fallback
+                            console.error('[APP] ❌ Error loading from Database:', dbError);
+                            setError(`Error loading from Database: ${dbError.message}. Attempting to load from CSV...`);
                             throw new Error('FALLBACK_TO_CSV');
                         }
                     }
                 } else {
-                    // Cargar desde CSV
+                    // Load from CSV
                     try {
-                        console.log('[APP] 🔄 Cargando datos desde CSV...');
+                        console.log('[APP] 🔄 Loading data from CSV...');
                         const [projText, allocText] = await Promise.all([
                             fetchWithFallback(SHEET_URLS.project),
                             fetchWithFallback(SHEET_URLS.allocation)
@@ -170,19 +190,19 @@ function App() {
                         setDataSource('csv');
                         console.log('[APP] ✅ Datos de delivery cargados desde CSV');
                     } catch (csvError) {
-                        console.error('[APP] ❌ Error cargando CSV:', csvError);
-                        setError(`Error cargando CSV: ${csvError.message}`);
+                        console.error('[APP] ❌ Error loading CSV:', csvError);
+                        setError(`Error loading CSV: ${csvError.message}`);
                         throw csvError;
                     }
                 }
 
                 setLoading(false);
             } catch (err) {
-                // Si Supabase no está configurado, no establecer error aquí
-                // Dejar que el catch externo maneje el fallback a CSV
-                const isSupabaseNotConfigured = err.message?.includes('Supabase no está configurado');
+                // If Supabase is not configured, don't set error here
+                // Let external catch handle CSV fallback
+                const isSupabaseNotConfigured = err.message?.includes('Supabase is not configured');
                 if (!isSupabaseNotConfigured) {
-                    console.error("[APP] Error cargando datos:", err);
+                    console.error("[APP] Error loading data:", err);
                     setError(`Error: ${err.message}`);
                 }
                 setLoading(false);
@@ -191,44 +211,72 @@ function App() {
             }
     }, [fetchWithFallback]);
 
-    // Cargar Product Roadmap desde CSV siempre (independiente de la fuente de datos de delivery)
+    // Cargar Product Roadmap desde base de datos (product_department_kpis table)
     useEffect(() => {
         let isMounted = true;
         
         const loadProductRoadmap = async () => {
             try {
-                console.log('[APP] 🔄 Cargando Product Roadmap desde CSV...');
-                const [prodInitText, prodBugText] = await Promise.all([
-                    fetchWithFallback(SHEET_URLS.productInitiatives),
-                    fetchWithFallback(SHEET_URLS.productBugRelease)
+                console.log('[APP] 🔄 Loading Product Roadmap from database...');
+                
+                // Importar dinámicamente para evitar problemas de circular dependencies
+                const { getProductRoadmapInitiatives, getLastUpdateTimestamp } = await import('./services/productDepartmentKPIService');
+                const [initiatives, lastUpdate] = await Promise.all([
+                    getProductRoadmapInitiatives(),
+                    getLastUpdateTimestamp()
                 ]);
                 
                 if (!isMounted) return;
                 
-                const initiatives = parseCSV(prodInitText, 'productInitiatives');
-                const bugs = parseCSV(prodBugText, 'productBugRelease');
-                
-                console.log('[APP] ✅ Product Roadmap cargado desde CSV:', {
+                console.log('[APP] ✅ Product Roadmap cargado desde base de datos:', {
                     initiatives: initiatives.length,
-                    bugs: bugs.length,
-                    sampleInitiative: initiatives[0]
+                    bugs: 0, // productBugRelease no está en la base de datos aún
+                    sampleInitiative: initiatives[0],
+                    lastUpdate
                 });
                 
                 if (isMounted) {
                     setProductInitiatives(initiatives);
-                    setProductBugRelease(bugs);
+                    setProductBugRelease([]); // Empty array - bug/release data not in database yet
+                    setProductRoadmapLastUpdate(lastUpdate);
                 }
             } catch (err) {
-                console.error('[APP] ❌ Error cargando Product Roadmap desde CSV:', err);
+                console.error('[APP] ❌ Error loading Product Roadmap from database:', err);
                 console.error('[APP] ❌ Error details:', {
                     message: err.message,
                     stack: err.stack,
                     name: err.name
                 });
-                // Aún así establecer arrays vacíos para que el componente se renderice
-                if (isMounted) {
-                    setProductInitiatives([]);
-                    setProductBugRelease([]);
+                
+                // Fallback: try CSV if database fails
+                try {
+                    console.log('[APP] 🔄 Fallback: Loading Product Roadmap from CSV...');
+                    const [prodInitText, prodBugText] = await Promise.all([
+                        fetchWithFallback(SHEET_URLS.productInitiatives),
+                        fetchWithFallback(SHEET_URLS.productBugRelease)
+                    ]);
+                    
+                    if (!isMounted) return;
+                    
+                    const initiatives = parseCSV(prodInitText, 'productInitiatives');
+                    const bugs = parseCSV(prodBugText, 'productBugRelease');
+                    
+                    console.log('[APP] ✅ Product Roadmap cargado desde CSV (fallback):', {
+                        initiatives: initiatives.length,
+                        bugs: bugs.length
+                    });
+                    
+                    if (isMounted) {
+                        setProductInitiatives(initiatives);
+                        setProductBugRelease(bugs);
+                    }
+                } catch (csvErr) {
+                    console.error('[APP] ❌ Error loading Product Roadmap from CSV fallback:', csvErr);
+                    // Aún así establecer arrays vacíos para que el componente se renderice
+                    if (isMounted) {
+                        setProductInitiatives([]);
+                        setProductBugRelease([]);
+                    }
                 }
             }
         };
@@ -246,21 +294,21 @@ function App() {
             try {
                 await loadData('db');
             } catch (dbError) {
-                // Si Supabase no está configurado, usar CSV silenciosamente
-                const isSupabaseNotConfigured = dbError.message?.includes('Supabase no está configurado');
+                // If Supabase is not configured, use CSV silently
+                const isSupabaseNotConfigured = dbError.message?.includes('Supabase is not configured');
                 if (isSupabaseNotConfigured) {
-                    console.info('[APP] ℹ️ Supabase no configurado, usando CSV como fuente de datos');
+                    console.info('[APP] ℹ️ Supabase not configured, using CSV as data source');
                 } else {
-                    console.warn('[APP] ⚠️ No se pudo cargar desde BD, intentando CSV...', dbError.message);
+                    console.warn('[APP] ⚠️ Could not load from DB, trying CSV...', dbError.message);
                 }
                 try {
                     // Limpiar error anterior antes de intentar CSV
                     setError(null);
                     await loadData('csv');
                 } catch (csvError) {
-                    console.error('[APP] ❌ Error cargando CSV:', csvError);
-                    // Si CSV también falla, mostrar error
-                    setError(`No se pudo cargar datos. Error: ${csvError.message}`);
+                    console.error('[APP] ❌ Error loading CSV:', csvError);
+                    // If CSV also fails, show error
+                    setError(`Could not load data. Error: ${csvError.message}`);
                 }
             }
         };
@@ -274,26 +322,26 @@ function App() {
             console.log(`[APP] 🔄 Cambiando fuente de datos de ${dataSource} a ${newSource}`);
             setError(null); // Limpiar errores anteriores
             
-            // Verificar si Supabase está configurado antes de intentar usar BD
+            // Verify if Supabase is configured before attempting to use DB
             if (newSource === 'db') {
                 try {
                     const { supabase } = await import('./utils/supabaseApi.js');
                     if (!supabase) {
-                        console.warn('[APP] ⚠️ Supabase no está configurado');
-                        setError('Supabase no está configurado. Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en tu archivo .env');
+                        console.warn('[APP] ⚠️ Supabase is not configured');
+                        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
                         // No cambiar el dataSource, mantener el actual
                         return;
                     }
                     // Intentar una consulta simple para verificar que funciona
                     const { error: testError } = await supabase.from('squads').select('id').limit(1);
                     if (testError && (testError.message?.includes('Invalid API key') || testError.message?.includes('JWT'))) {
-                        console.warn('[APP] ⚠️ Supabase configurado pero con credenciales inválidas');
-                        setError('Las credenciales de Supabase son inválidas. Verifica VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY');
+                        console.warn('[APP] ⚠️ Supabase configured but with invalid credentials');
+                        setError('Supabase credentials are invalid. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
                         return;
                     }
                 } catch (importError) {
                     console.error('[APP] ❌ Error importando Supabase:', importError);
-                    setError('No se pudo verificar la configuración de Supabase');
+                    setError('Could not verify Supabase configuration');
                     return;
                 }
             }
@@ -304,7 +352,7 @@ function App() {
             } catch (err) {
                 // Si hay un error y se solicitó fallback a CSV, hacerlo automáticamente
                 if (err.message === 'FALLBACK_TO_CSV' && newSource === 'db') {
-                    console.info('[APP] ℹ️ Haciendo fallback automático a CSV');
+                    console.info('[APP] ℹ️ Automatically falling back to CSV');
                     setDataSource('csv');
                     try {
                         await loadData('csv');
@@ -312,10 +360,10 @@ function App() {
                         setTimeout(() => setError(null), 3000);
                     } catch (csvError) {
                         console.error('[APP] ❌ Error en fallback a CSV:', csvError);
-                        setError(`Error cargando CSV: ${csvError.message}`);
+                        setError(`Error loading CSV: ${csvError.message}`);
                     }
-                } else if (err.message?.includes('Supabase no está configurado') && newSource === 'db') {
-                    // Si Supabase no está configurado, cambiar a CSV automáticamente
+                } else if (err.message?.includes('Supabase is not configured') && newSource === 'db') {
+                    // If Supabase is not configured, automatically switch to CSV
                     console.info('[APP] ℹ️ Supabase no configurado, cambiando a CSV');
                     setDataSource('csv');
                     try {
@@ -323,7 +371,7 @@ function App() {
                         // Limpiar el error después de cargar CSV exitosamente
                         setTimeout(() => setError(null), 3000);
                     } catch (csvError) {
-                        setError(`Error cargando CSV: ${csvError.message}`);
+                        setError(`Error loading CSV: ${csvError.message}`);
                     }
                 } else {
                     // Para otros errores, mostrar mensaje
@@ -334,20 +382,20 @@ function App() {
         }
     }, [dataSource, loadData]);
 
-    // Si no hay usuario autenticado, mostrar Login
-    if (!currentUser) {
+    // Si no hay usuario autenticado, mostrar Login o encuesta pública
+    if (!currentUser && activeView !== 'enps-survey') {
         return (
             <Login 
                 onLoginSuccess={(user) => {
                     setCurrentUser(user);
-                    // Recargar la página para inicializar todo con el usuario autenticado
+                    // Reload page to initialize everything with authenticated user
                     window.location.reload();
                 }} 
             />
         );
     }
 
-    // Solo mostrar loading si estamos cargando delivery roadmap Y no es la vista de product
+    // Only show loading if we're loading delivery roadmap AND it's not the product view
     // El Product Roadmap se carga independientemente
     if (loading && activeView !== 'product') {
         return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div></div>;
@@ -366,24 +414,46 @@ function App() {
                 isOpen={sidebarOpen}
                 setIsOpen={setSidebarOpen}
             />
-            <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'} pt-8 px-8 pb-12`}>
+            <div className={`flex-1 transition-all duration-300 ${currentUser ? (sidebarOpen ? 'md:ml-64' : 'md:ml-16') : ''} pt-8 px-8 pb-12`}>
                 <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
-                    <button
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
-                        className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
-                        aria-label="Toggle sidebar"
-                    >
-                        <Menu size={24} />
-                    </button>
+                    {currentUser && (
+                        <button
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
+                            aria-label="Toggle sidebar"
+                        >
+                            <Menu size={24} />
+                        </button>
+                    )}
+                    {!currentUser && activeView === 'enps-survey' && (
+                        <a
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setActiveView('overall');
+                            }}
+                            className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors"
+                        >
+                            ← Back to Login
+                        </a>
+                    )}
                     <div className="flex-1">
                         <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
                             {activeView === 'overall' ? 'Overall Dashboard' : 
                              activeView === 'product' ? 'Product Roadmap' : 
                              activeView === 'delivery' ? 'Delivery Roadmap' :
-                             activeView === 'projects-metrics' ? 'Projects Metrics' :
+                             activeView === 'projects-metrics' ? 'Project Metrics' :
                              activeView === 'developer-metrics' ? 'Developer Metrics' :
-                             activeView === 'user-admin' ? 'User Administration' :
+                             activeView === 'team-capacity' ? 'Team Capacity' :
+                            activeView === 'team-allocation' ? 'Team Allocation' :
+                            activeView === 'product-department-kpis' ? 'Product Raw Manual Raw Data' :
+                            activeView === 'user-admin' ? 'User Administration' :
+                             activeView === 'role-access' ? 'Role Access' :
                              activeView === 'kpis' ? 'KPIs Dashboard' :
+                             activeView === 'delivery-kpis' ? 'Delivery KPIs' :
+                             activeView === 'technical-kpis' ? 'Technical KPIs' :
+                             activeView === 'product-kpis' ? 'Product KPIs' :
+                             activeView === 'enps-survey' ? 'Team Satisfaction Survey' :
                              activeView === 'software-engineering-benchmarks' ? 'Software Engineering Benchmark' :
                              'Dashboard'}
                         </h1>
@@ -393,8 +463,17 @@ function App() {
                              activeView === 'delivery' ? 'Execution & Resource Allocation' :
                              activeView === 'projects-metrics' ? 'Comprehensive project performance analytics' :
                              activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
-                             activeView === 'user-admin' ? 'User management and administration' :
+                             activeView === 'team-capacity' ? 'Configure team capacity for sprints' :
+                            activeView === 'team-allocation' ? 'View team allocation report by squad and sprint' :
+                            activeView === 'product-department-kpis' ? 'Manage Product Raw Manual Raw Data' :
+                            activeView === 'enps-survey-management' ? 'Create and manage periodic eNPS surveys' :
+                            activeView === 'user-admin' ? 'User management and administration' :
+                             activeView === 'role-access' ? 'Manage user roles and permissions' :
                              activeView === 'kpis' ? 'Engineering metrics and performance indicators' :
+                             activeView === 'delivery-kpis' ? 'Delivery performance metrics with filters' :
+                             activeView === 'technical-kpis' ? 'Technical quality and performance metrics' :
+                             activeView === 'product-kpis' ? 'Product department KPIs and metrics' :
+                             activeView === 'enps-survey' ? 'Share your feedback about working in this team' :
                              activeView === 'software-engineering-benchmarks' ? 'Compare engineering metrics and team benchmarks' :
                              'Dashboard'}
                         </p>
@@ -411,7 +490,7 @@ function App() {
                                 {dataSource === 'db' ? (
                                     <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                        <span>Base de Datos</span>
+                                        <span>Database</span>
                                     </div>
                                 ) : (
                                     <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300">
@@ -421,11 +500,22 @@ function App() {
                                 )}
                             </>
                         )}
-                        {/* Indicador fijo para Product Roadmap - siempre CSV */}
+                        {/* Indicador fijo para Product Roadmap - ahora usa base de datos */}
                         {activeView === 'product' && (
                             <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-slate-300 border border-amber-500/30">
                                 <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                                <span>Product Roadmap (CSV)</span>
+                                <span>
+                                    {productRoadmapLastUpdate 
+                                        ? `Last updated: ${new Date(productRoadmapLastUpdate).toLocaleString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric', 
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}`
+                                        : 'Product Roadmap (Database)'
+                                    }
+                                </span>
                             </div>
                         )}
                     </div>
@@ -439,8 +529,8 @@ function App() {
                     }>
                         {activeView === 'overall' && <OverallView />}
                         {activeView === 'product' && (() => {
-                            // Debug: Verificar que Product Roadmap solo use datos de CSV
-                            console.log('[APP] 🟢 Renderizando Product Roadmap con datos CSV:', {
+                            // Debug: Verificar que Product Roadmap use datos de base de datos
+                            console.log('[APP] 🟢 Renderizando Product Roadmap con datos de base de datos:', {
                                 initiativesCount: productInitiatives.length,
                                 bugsCount: productBugRelease.length,
                                 sampleInitiative: productInitiatives[0],
@@ -455,17 +545,65 @@ function App() {
                             );
                         })()}
                         {activeView === 'delivery' && <DeliveryRoadmapView projectData={projectData} devAllocationData={devAllocationData} />}
-                        {activeView === 'projects-metrics' && canAccessModule(currentUser?.role || 'regular', 'projects-metrics') && (
+                        {activeView === 'projects-metrics' && canAccessModule(currentUser?.role || 'regular', MODULES.PROJECTS_METRICS) && (
                             <ProjectsMetrics />
                         )}
-                        {activeView === 'developer-metrics' && canAccessModule(currentUser?.role || 'regular', 'developer-metrics') && (
+                        {activeView === 'developer-metrics' && canAccessModule(currentUser?.role || 'regular', MODULES.DEVELOPER_METRICS) && (
                             <DeveloperMetrics />
                         )}
-                        {activeView === 'user-admin' && canAccessModule(currentUser?.role || 'regular', 'user-admin') && (
+                        {activeView === 'team-capacity' && canAccessModule(currentUser?.role || 'regular', MODULES.TEAM_CAPACITY) && (
+                            <TeamCapacity />
+                        )}
+                        {activeView === 'team-allocation' && canAccessModule(currentUser?.role || 'regular', MODULES.TEAM_ALLOCATION) && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading...</p></div>}>
+                                <TeamAllocation />
+                            </Suspense>
+                        )}
+                        {activeView === 'product-department-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.PRODUCT_DEPARTMENT_KPIS) && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading Product Raw Manual Raw Data...</p></div>}>
+                                <ProductDepartmentKPIs />
+                            </Suspense>
+                        )}
+                        {activeView === 'enps-survey-management' && canAccessModule(currentUser?.role || 'regular', MODULES.ENPS_SURVEY_MANAGEMENT) && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading eNPS Survey Management...</p></div>}>
+                                <ENPSSurveyManagement />
+                            </Suspense>
+                        )}
+                        {activeView === 'user-admin' && canAccessModule(currentUser?.role || 'regular', MODULES.USER_ADMIN) && (
                             <UserAdministration currentUser={currentUser} />
+                        )}
+                        {activeView === 'role-access' && canAccessModule(currentUser?.role || 'regular', MODULES.ROLE_ACCESS) && (
+                            <RoleAccess />
                         )}
                         {activeView === 'kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.KPIS) && (
                             <KPIsView />
+                        )}
+                        {activeView === 'delivery-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.DELIVERY_KPIS) && (
+                            <KPIsView initialTab="delivery" />
+                        )}
+                        {activeView === 'technical-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.TECHNICAL_KPIS) && (
+                            <KPIsView initialTab="quality" />
+                        )}
+                        {activeView === 'product-kpis' && canAccessModule(currentUser?.role || 'regular', MODULES.PRODUCT_KPIS) && (
+                            <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/30">
+                                    <TrendingUp size={48} className="text-cyan-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-3">
+                                        Coming Soon
+                                    </h2>
+                                    <p className="text-slate-400 max-w-md mx-auto text-lg">
+                                        Product KPIs está en desarrollo. Pronto podrás ver métricas y KPIs relacionados con productos.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        {/* eNPS Survey - accessible without authentication */}
+                        {activeView === 'enps-survey' && (
+                            <Suspense fallback={<div className="glass rounded-2xl p-12 text-center"><p className="text-slate-400">Loading survey...</p></div>}>
+                                <ENPSSurvey />
+                            </Suspense>
                         )}
                         {activeView === 'software-engineering-benchmarks' && canAccessModule(currentUser?.role || 'regular', MODULES.SOFTWARE_ENGINEERING_BENCHMARKS) && (
                             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
@@ -482,7 +620,7 @@ function App() {
                                 </div>
                             </div>
                         )}
-                        {/* Verificar si el usuario intenta acceder a un módulo no permitido */}
+                        {/* Check if user is trying to access a non-allowed module */}
                         {!canAccessModule(currentUser?.role || 'regular', activeView) && (
                             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
                                 <AlertCircle size={48} className="text-rose-400" />

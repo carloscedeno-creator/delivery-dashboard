@@ -22,10 +22,10 @@ const UserAdministration = ({ currentUser }) => {
                 return;
             }
 
-            console.log('[USER ADMIN] 🔍 Intentando cargar usuarios desde producción...');
+            console.log('[USER ADMIN] 🔍 Attempting to load users from production...');
 
-            // Intentar primero con app_users (mencionado en el hint de producción)
-            console.log('[USER ADMIN] 1️⃣ Intentando tabla app_users...');
+            // Try first with app_users (mentioned in production hint)
+            console.log('[USER ADMIN] 1️⃣ Trying app_users table...');
             let { data, error: fetchError } = await supabase
                 .from('app_users')
                 .select('*')
@@ -55,7 +55,7 @@ const UserAdministration = ({ currentUser }) => {
                 }));
             } else {
                 // Si falla, intentar RPC (por si existe en producción)
-                console.log('[USER ADMIN] 2️⃣ app_users falló, intentando RPC get_all_users...');
+                console.log('[USER ADMIN] 2️⃣ app_users failed, trying RPC get_all_users...');
                 const rpcResult = await supabase.rpc('get_all_users');
                 
                 if (!rpcResult.error && rpcResult.data) {
@@ -79,10 +79,10 @@ const UserAdministration = ({ currentUser }) => {
 
                 // Mensaje simple sin sugerencias de modificar la BD
                 setError(
-                    `No se pudo cargar usuarios desde Supabase.\n\n` +
+                    `Could not load users from Supabase.\n\n` +
                     `Error: ${errorCode} - ${errorMsg}\n\n` +
-                    `Verifica que la tabla 'app_users' exista en producción\n` +
-                    `o que la función RPC 'get_all_users' esté disponible.`
+                    `Verify that the 'app_users' table exists in production\n` +
+                    `or that the RPC function 'get_all_users' is available.`
                 );
                 return;
             }

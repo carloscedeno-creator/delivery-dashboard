@@ -5,7 +5,7 @@ const DataSourceSelector = ({ dataSource, onSourceChange, disabled = false }) =>
     const [isOpen, setIsOpen] = useState(false);
     const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
 
-    // Verificar si Supabase está configurado intentando una conexión real
+    // Verify if Supabase is configured by attempting a real connection
     useEffect(() => {
         const checkSupabase = async () => {
             try {
@@ -30,11 +30,11 @@ const DataSourceSelector = ({ dataSource, onSourceChange, disabled = false }) =>
         { value: 'csv', label: 'CSV', icon: FileSpreadsheet, alwaysEnabled: true },
         { 
             value: 'db', 
-            label: 'Base de Datos', 
+            label: 'Database', 
             icon: Database, 
             alwaysEnabled: false,
             disabled: !isSupabaseConfigured,
-            tooltip: !isSupabaseConfigured ? 'Supabase no está configurado. Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env' : ''
+            tooltip: !isSupabaseConfigured ? 'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env' : ''
         }
     ];
 
