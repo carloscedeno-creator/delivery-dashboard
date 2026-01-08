@@ -3,6 +3,60 @@ import { Layout, Box, Truck, Map, Users, BarChart, Activity, Gauge, TrendingUp, 
 import { getNavbarModules } from '../config/permissions';
 import { getCurrentUser } from '../utils/authService';
 
+// Helper para obtener la ruta correcta del logo en desarrollo y producción
+const getLogoPath = () => {
+    const baseUrl = import.meta.env.BASE_URL || '';
+    // En desarrollo: BASE_URL es '/' o ''
+    // En producción: BASE_URL es '/delivery-dashboard/'
+    // Los archivos de public/ se copian a la raíz de dist/, así que la ruta debe ser relativa a BASE_URL
+    return `${baseUrl}logo.png`;
+};
+
+// Componente Logo con manejo robusto de errores y fallbacks
+const LogoImage = () => {
+    const [logoSrc, setLogoSrc] = useState(getLogoPath());
+    const [attempts, setAttempts] = useState(0);
+    const maxAttempts = 3;
+    
+    const handleError = (e) => {
+        const currentSrc = e.target.src;
+        console.warn('[Sidebar] Failed to load logo:', currentSrc, 'BASE_URL:', import.meta.env.BASE_URL, 'Attempt:', attempts + 1);
+        
+        if (attempts < maxAttempts) {
+            setAttempts(prev => prev + 1);
+            // Intentar rutas alternativas
+            const alternatives = [
+                '/logo.png', // Ruta absoluta desde raíz
+                '/delivery-dashboard/logo.png', // Ruta con base path
+                './logo.png', // Ruta relativa
+                'logo.png' // Solo nombre del archivo
+            ];
+            
+            const nextAlt = alternatives[attempts];
+            if (nextAlt) {
+                console.log('[Sidebar] Trying alternative logo path:', nextAlt);
+                setLogoSrc(nextAlt);
+            } else {
+                // Si todas las alternativas fallaron, ocultar el logo
+                e.target.style.display = 'none';
+            }
+        } else {
+            // Después de maxAttempts, ocultar el logo
+            e.target.style.display = 'none';
+        }
+    };
+    
+    return (
+        <img 
+            src={logoSrc}
+            alt="Agentic Logo" 
+            className="w-8 h-8 rounded-lg object-contain"
+            onError={handleError}
+            key={logoSrc} // Forzar re-render cuando cambia la src
+        />
+    );
+};
+
 // Mapeo de iconos
 const iconMap = {
     Layout,
@@ -90,19 +144,11 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                     <div className={`flex items-center ${isOpen ? 'justify-between' : 'justify-center'} p-4 border-b border-white/10`}>
                         {isOpen ? (
                             <div className="flex items-center gap-3">
-                                <img 
-                                    src={`${import.meta.env.BASE_URL}logo.png`}
-                                    alt="Agentic Logo" 
-                                    className="w-8 h-8 rounded-lg object-contain"
-                                />
+                                <LogoImage />
                                 <span className="text-white font-semibold text-sm">Dashboard</span>
                             </div>
                         ) : (
-                            <img 
-                                src={`${import.meta.env.BASE_URL}logo.png`}
-                                alt="Agentic Logo" 
-                                className="w-8 h-8 rounded-lg object-contain"
-                            />
+                            <LogoImage />
                         )}
                         <button
                             onClick={() => setIsOpen(!isOpen)}
