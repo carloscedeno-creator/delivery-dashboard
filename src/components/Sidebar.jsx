@@ -91,24 +91,32 @@ const Sidebar = ({ activeView, setActiveView, onLogout, isOpen, setIsOpen }) => 
                         {isOpen ? (
                             <div className="flex items-center gap-3">
                                 <img 
-                                    src={import.meta.env.BASE_URL ? `${import.meta.env.BASE_URL}logo.png` : '/logo.png'}
+                                    src={`${import.meta.env.BASE_URL || ''}logo.png`}
                                     alt="Agentic Logo" 
                                     className="w-8 h-8 rounded-lg object-contain"
                                     onError={(e) => {
-                                        console.error('[Sidebar] Failed to load logo:', e.target.src);
-                                        e.target.style.display = 'none';
+                                        console.error('[Sidebar] Failed to load logo:', e.target.src, 'BASE_URL:', import.meta.env.BASE_URL);
+                                        // Intentar con ruta alternativa
+                                        const altSrc = e.target.src.includes('/delivery-dashboard/') 
+                                            ? '/logo.png' 
+                                            : '/delivery-dashboard/logo.png';
+                                        e.target.src = altSrc;
                                     }}
                                 />
                                 <span className="text-white font-semibold text-sm">Dashboard</span>
                             </div>
                         ) : (
                             <img 
-                                src={import.meta.env.BASE_URL ? `${import.meta.env.BASE_URL}logo.png` : '/logo.png'}
+                                src={`${import.meta.env.BASE_URL || ''}logo.png`}
                                 alt="Agentic Logo" 
                                 className="w-8 h-8 rounded-lg object-contain"
                                 onError={(e) => {
-                                    console.error('[Sidebar] Failed to load logo:', e.target.src);
-                                    e.target.style.display = 'none';
+                                    console.error('[Sidebar] Failed to load logo:', e.target.src, 'BASE_URL:', import.meta.env.BASE_URL);
+                                    // Intentar con ruta alternativa
+                                    const altSrc = e.target.src.includes('/delivery-dashboard/') 
+                                        ? '/logo.png' 
+                                        : '/delivery-dashboard/logo.png';
+                                    e.target.src = altSrc;
                                 }}
                             />
                         )}
