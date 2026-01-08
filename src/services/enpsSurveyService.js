@@ -246,7 +246,7 @@ export const hasRespondedToday = async (respondentId = null, surveyId = null) =>
   let finalSurveyId = surveyId;
   if (!finalSurveyId) {
     try {
-      const { getActiveSurvey } = await import('./enpsSurveyManagementService');
+      const { getActiveSurvey } = await import('./enpsSurveyManagementService.js');
       const activeSurvey = await getActiveSurvey();
       if (activeSurvey) {
         finalSurveyId = activeSurvey.id;
