@@ -26,8 +26,12 @@
         "apply-migration": "node scripts/verify-and-apply-migration.js",
         "apply-kpi-migrations": "node scripts/apply-kpi-migrations.js",
         "populate-kpi-data": "node scripts/populate-initial-data.js",
+        "populate-mock-enps-survey": "node scripts/populate-mock-enps-survey.js",
         "diagnose-kpi": "node scripts/diagnose-kpi-data.js",
-        "apply-role-permission-migration": "node scripts/apply-role-permission-migration.js"
+        "apply-role-permission-migration": "node scripts/apply-role-permission-migration.js",
+        "import-product-kpis": "node scripts/import-product-kpis-csv.js",
+        "insert-product-kpis-data": "node scripts/insert-product-kpis-data.js",
+        "compare-velocity": "node scripts/compare-jira-velocity.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
