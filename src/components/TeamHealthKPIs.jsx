@@ -16,18 +16,29 @@ import { Q1_2026_TARGETS, TEAM_HEALTH_WEIGHTS } from '../config/kpiConfig';
 /**
  * Team Health KPIs Component
  * Shows the Team Health Score and its component metrics
+ * Recibe filtros como props desde KPIsView
  */
-const TeamHealthKPIs = () => {
+const TeamHealthKPIs = ({ filters = {} }) => {
   const [kpiData, setKpiData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Load real data from API
+  // Load real data from API when filters change
   useEffect(() => {
     const loadKPIData = async () => {
       try {
         setLoading(true);
-        const { getTeamHealthKPIData } = await import('../services/teamHealthKPIService');
-        const data = await getTeamHealthKPIData();
+        const { getTeamHealthKPIData } = await import('../services/teamHealthKPIService.js');
+        const data = await getTeamHealthKPIData({ filters });
+        console.log('[TeamHealthKPIs] 📥 Received KPI data:', {
+          hasData: !!data,
+          hasEnps: !!data?.enps,
+          enpsValue: data?.enps?.value,
+          enpsScore: data?.enps?.score,
+          enpsObject: data?.enps,
+          hasPlanningAccuracy: !!data?.planningAccuracy,
+          hasCapacityAccuracy: !!data?.capacityAccuracy,
+          teamHealthScore: data?.teamHealthScore
+        });
         setKpiData(data);
       } catch (error) {
         console.error('[TeamHealthKPIs] Error loading KPI data:', error);
@@ -38,7 +49,7 @@ const TeamHealthKPIs = () => {
     };
 
     loadKPIData();
-  }, []);
+  }, [filters]);
 
   if (loading) {
     return (
@@ -68,7 +79,8 @@ const TeamHealthKPIs = () => {
   const hasInsufficientData = availableMetrics < 2 || !kpiData.enps;
 
   // Calculate scores using the new functions
-  const enpsScore = kpiData.enps
+  // Note: enps.value can be 0, which is a valid value (not null/undefined)
+  const enpsScore = kpiData.enps !== null && kpiData.enps !== undefined
     ? calculateENPSScore(kpiData.enps.value)
     : null;
   const planningAccuracyScore = kpiData.planningAccuracy
@@ -230,11 +242,11 @@ const TeamHealthKPIs = () => {
       <div>
         <h3 className="text-xl font-bold text-white mb-4">Component Metrics</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {kpiData.enps ? (
+          {kpiData.enps !== null && kpiData.enps !== undefined ? (
             <KPICard
-              title="eNPS"
-              value={kpiData.enps.value}
-              label={`Score: ${enpsScore}/100 (${(TEAM_HEALTH_WEIGHTS.ENPS * 100).toFixed(0)}%)`}
+              title={kpiData.enps.isMock ? "eNPS (Mock Data)" : "eNPS"}
+              value={kpiData.enps.value.toFixed(1)}
+              label={`${kpiData.enps.isMock ? '📊 Mock Data | ' : ''}Score: ${enpsScore}/100 (${(TEAM_HEALTH_WEIGHTS.ENPS * 100).toFixed(0)}%) | Promoters: ${kpiData.enps.promoters}, Passives: ${kpiData.enps.passives || 0}, Detractors: ${kpiData.enps.detractors}, Total: ${kpiData.enps.totalResponses}`}
               icon={Smile}
               trend={kpiData.enps.value >= Q1_2026_TARGETS.ENPS ? 'positive' : 'negative'}
               color={getScoreColor(enpsScore)}
@@ -269,14 +281,23 @@ const TeamHealthKPIs = () => {
             />
           )}
           {kpiData.capacityAccuracy ? (
-            <KPICard
-              title="Capacity Accuracy"
-              value={`${(kpiData.capacityAccuracy.value * 100).toFixed(0)}%`}
-              label={`Ratio: ${kpiData.capacityAccuracy.value.toFixed(2)} | Score: ${capacityAccuracyScore}/100 (${(TEAM_HEALTH_WEIGHTS.CAPACITY_ACCURACY * 100).toFixed(0)}%)`}
-              icon={TrendingUp}
-              trend={kpiData.capacityAccuracy.value >= Q1_2026_TARGETS.CAPACITY_ACCURACY.min && kpiData.capacityAccuracy.value <= Q1_2026_TARGETS.CAPACITY_ACCURACY.max ? 'positive' : 'negative'}
-              color={getScoreColor(capacityAccuracyScore)}
-            />
+            <div>
+              <KPICard
+                title="Capacity Accuracy"
+                value={`${(kpiData.capacityAccuracy.value * 100).toFixed(0)}%`}
+                label={`Ratio: ${kpiData.capacityAccuracy.value.toFixed(2)} | Score: ${capacityAccuracyScore}/100 | Planned: ${kpiData.capacityAccuracy.plannedCapacity}h (${kpiData.capacityAccuracy.plannedSP} SP)`}
+                icon={TrendingUp}
+                trend={kpiData.capacityAccuracy.value >= Q1_2026_TARGETS.CAPACITY_ACCURACY.min && kpiData.capacityAccuracy.value <= Q1_2026_TARGETS.CAPACITY_ACCURACY.max ? 'positive' : 'negative'}
+                color={getScoreColor(capacityAccuracyScore)}
+              />
+              {kpiData.capacityAccuracy.carryoverSP > 0 && (
+                <div className="mt-2 glass rounded-xl p-3 border border-amber-500/30 bg-amber-500/10">
+                  <p className="text-xs text-amber-400">
+                    <strong>Carryover detected:</strong> {kpiData.capacityAccuracy.carryoverSP} SP ({kpiData.capacityAccuracy.carryoverCapacity}h) from previous sprint
+                  </p>
+                </div>
+              )}
+            </div>
           ) : (
             <KPICard
               title="Capacity Accuracy"
@@ -305,7 +326,7 @@ const TeamHealthKPIs = () => {
           <br />
           • <strong>Planning Accuracy:</strong> Percentage of planned work completed (target: {Q1_2026_TARGETS.PLANNING_ACCURACY.min}-{Q1_2026_TARGETS.PLANNING_ACCURACY.max}%)
           <br />
-          • <strong>Capacity Accuracy:</strong> Ratio of actual vs planned capacity (target: {Q1_2026_TARGETS.CAPACITY_ACCURACY.min * 100}-{Q1_2026_TARGETS.CAPACITY_ACCURACY.max * 100}% to avoid burnout)
+          • <strong>Capacity Accuracy:</strong> Ratio of actual vs planned capacity based on tickets with SP in "To Do", "Blocked", or "Reopen" states at sprint start. Considers carryover from previous sprint. (target: {Q1_2026_TARGETS.CAPACITY_ACCURACY.min * 100}-{Q1_2026_TARGETS.CAPACITY_ACCURACY.max * 100}% to avoid burnout)
         </p>
       </div>
     </div>

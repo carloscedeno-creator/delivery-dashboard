@@ -220,7 +220,7 @@ function App() {
                 console.log('[APP] 🔄 Loading Product Roadmap from database...');
                 
                 // Importar dinámicamente para evitar problemas de circular dependencies
-                const { getProductRoadmapInitiatives, getLastUpdateTimestamp } = await import('./services/productDepartmentKPIService');
+                const { getProductRoadmapInitiatives, getLastUpdateTimestamp } = await import('./services/productDepartmentKPIService.js');
                 const [initiatives, lastUpdate] = await Promise.all([
                     getProductRoadmapInitiatives(),
                     getLastUpdateTimestamp()
