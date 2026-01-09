@@ -23,7 +23,9 @@
     "test-access": "node scripts/test-jira-access.js",
     "apply-migrations": "node scripts/apply-migrations.js",
     "verify-schema": "node scripts/verify-schema.js",
-    "verify-post-deploy": "node scripts/verify-post-deploy.js"
+    "verify-post-deploy": "node scripts/verify-post-deploy.js",
+    "validate-retry": "node scripts/validar-retry-sync.js",
+    "validate-integrity": "node scripts/validar-integridad-supabase.js"
   },
   "keywords": [
     "jira",
