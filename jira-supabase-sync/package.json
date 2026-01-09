@@ -16,11 +16,14 @@
     "verify-config": "node scripts/verify-config.js",
     "generate-env-config": "node scripts/generate-env-config.js",
     "force-sync-issues": "node scripts/force-sync-specific-issues.js",
+    "force-sync-squad-sprint": "node scripts/force-sync-squad-sprint.js",
+    "verify-squad-sprint": "node scripts/verify-squad-sprint-data.js",
     "force-full-sync": "node scripts/force-full-sync.js",
     "test-jira": "node scripts/test-jira-query.js",
     "test-access": "node scripts/test-jira-access.js",
     "apply-migrations": "node scripts/apply-migrations.js",
-    "verify-schema": "node scripts/verify-schema.js"
+    "verify-schema": "node scripts/verify-schema.js",
+    "verify-post-deploy": "node scripts/verify-post-deploy.js"
   },
   "keywords": [
     "jira",

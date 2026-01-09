@@ -185,43 +185,95 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
               }
             }
           } else {
-            logger.info(`   ⚠️ No se encontraron issues del sprint actual desde Jira (puede que el sprint no tenga issues o JQL no funcione)`);
+            logger.info(`   ⚠️ No se encontraron issues del sprint actual desde Jira usando JQL (puede que el sprint no tenga issues o JQL no funcione)`);
             
-            // Fallback: buscar en Supabase si JQL no funciona
-            const { data: sprintIssues, error: sprintIssuesError } = await supabaseClient.client
-              .from('issue_sprints')
-              .select('issue_id')
-              .eq('sprint_id', currentSprint.id);
-            
-            if (!sprintIssuesError && sprintIssues && sprintIssues.length > 0) {
-              const issueIds = sprintIssues.map(si => si.issue_id);
-              
-              const { data: issues, error: issuesError } = await supabaseClient.client
-                .from('issues')
-                .select('issue_key')
-                .in('id', issueIds);
-              
-              if (!issuesError && issues) {
-                const issueKeys = issues.map(i => i.issue_key).filter(Boolean);
-                logger.info(`   📋 Sprint ${currentSprint.sprint_name}: ${issueKeys.length} issues (fallback desde Supabase)`);
+            // Fallback mejorado: Intentar obtener TODOS los issues del sprint usando sprint ID
+            // Esto asegura que capturamos tickets que fueron agregados después de la última sync completa
+            if (currentSprint.sprint_key) {
+              try {
+                logger.info(`   🔄 Intentando obtener issues usando sprint ID: ${currentSprint.sprint_key}...`);
+                const sprintIssuesById = await jiraClient.fetchSprintIssues(currentSprint.sprint_key);
                 
-                // Obtener detalles de cada issue desde Jira
-                for (const issueKey of issueKeys) {
-                  try {
-                    const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
-                    if (issueDetails) {
-                      const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
-                      if (!alreadyIncluded) {
-                        currentSprintIssues.push(issueDetails);
-                        logger.debug(`   📋 Issue de sprint actual agregado a cola: ${issueKey} (se comparará antes de actualizar)`);
+                if (sprintIssuesById && sprintIssuesById.length > 0) {
+                  logger.info(`   ✅ Encontrados ${sprintIssuesById.length} issues usando sprint ID`);
+                  
+                  // Obtener detalles completos de cada issue
+                  // fetchSprintIssues retorna un array de issues con estructura { key, id, ... }
+                  for (const sprintIssue of sprintIssuesById) {
+                    const issueKey = sprintIssue.key || sprintIssue.id;
+                    if (!issueKey) {
+                      logger.debug(`   ⚠️ Issue sin key válida, omitiendo: ${JSON.stringify(sprintIssue)}`);
+                      continue;
+                    }
+                    
+                    try {
+                      const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
+                      if (issueDetails) {
+                        const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
+                        if (!alreadyIncluded) {
+                          currentSprintIssues.push(issueDetails);
+                          logger.debug(`   📋 Issue de sprint actual agregado a cola: ${issueKey} (se comparará antes de actualizar)`);
+                        } else {
+                          logger.debug(`   ⏭️  Issue ${issueKey} ya está en el delta, omitiendo duplicado`);
+                        }
+                      }
+                    } catch (error) {
+                      if (error.status !== 404) {
+                        logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
                       }
                     }
-                  } catch (error) {
-                    if (error.status !== 404) {
-                      logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                  }
+                } else {
+                  logger.info(`   ⚠️ No se encontraron issues usando sprint ID, usando fallback desde Supabase`);
+                  // Continuar con fallback desde Supabase
+                }
+              } catch (sprintIdError) {
+                logger.warn(`   ⚠️ Error obteniendo issues usando sprint ID: ${sprintIdError.message}`);
+                logger.info(`   💡 Usando fallback desde Supabase`);
+              }
+            }
+            
+            // Fallback final: buscar en Supabase si los métodos anteriores no funcionaron
+            // Solo usar este fallback si no se encontraron issues con los métodos anteriores
+            if (currentSprintIssues.length === 0) {
+              logger.info(`   🔄 Usando fallback desde Supabase (solo tickets ya registrados)...`);
+              const { data: sprintIssues, error: sprintIssuesError } = await supabaseClient.client
+                .from('issue_sprints')
+                .select('issue_id')
+                .eq('sprint_id', currentSprint.id);
+              
+              if (!sprintIssuesError && sprintIssues && sprintIssues.length > 0) {
+                const issueIds = sprintIssues.map(si => si.issue_id);
+                
+                const { data: issues, error: issuesError } = await supabaseClient.client
+                  .from('issues')
+                  .select('issue_key')
+                  .in('id', issueIds);
+                
+                if (!issuesError && issues) {
+                  const issueKeys = issues.map(i => i.issue_key).filter(Boolean);
+                  logger.info(`   📋 Sprint ${currentSprint.sprint_name}: ${issueKeys.length} issues (fallback desde Supabase - solo tickets ya registrados)`);
+                  
+                  // Obtener detalles de cada issue desde Jira
+                  for (const issueKey of issueKeys) {
+                    try {
+                      const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
+                      if (issueDetails) {
+                        const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
+                        if (!alreadyIncluded) {
+                          currentSprintIssues.push(issueDetails);
+                          logger.debug(`   📋 Issue de sprint actual agregado a cola: ${issueKey} (se comparará antes de actualizar)`);
+                        }
+                      }
+                    } catch (error) {
+                      if (error.status !== 404) {
+                        logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                      }
                     }
                   }
                 }
+              } else {
+                logger.warn(`   ⚠️ No se encontraron issues en Supabase para el sprint ${currentSprint.sprint_name}`);
               }
             }
           }

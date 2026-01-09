@@ -6,21 +6,8 @@
 
 import { supabase } from './supabaseApi';
 
-/**
- * Determina si un estado indica que el ticket está completado
- */
-function isCompletedStatus(status) {
-  if (!status) return false;
-  const statusUpper = status.trim().toUpperCase();
-  return statusUpper === 'DONE' || 
-         statusUpper === 'DEVELOPMENT DONE' ||
-         statusUpper.includes('DEVELOPMENT DONE') ||
-         statusUpper.includes('DEV DONE') ||
-         (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
-         statusUpper === 'CLOSED' ||
-         statusUpper === 'RESOLVED' ||
-         statusUpper === 'COMPLETED';
-}
+import { supabase } from './supabaseApi';
+import { isCompletedStatusSync } from './statusHelper.js';
 
 /**
  * Obtiene datos del Sprint Burndown Chart para un sprint específico
@@ -237,8 +224,8 @@ export const getSprintBurndownData = async (sprintId) => {
             }
           }
           
-          // Si el ticket estaba completado en esta fecha
-          if (statusAtDate && isCompletedStatus(statusAtDate)) {
+          // Si el ticket estaba completado en esta fecha (usar helper centralizado)
+          if (statusAtDate && isCompletedStatusSync(statusAtDate, true)) {
             completedTickets.add(issueId);
             // Para Planning Accuracy: usar SOLO story_points_at_close (SP al final del sprint)
             const sp = Number(is.story_points_at_close) || 0;
@@ -246,8 +233,8 @@ export const getSprintBurndownData = async (sprintId) => {
           }
         } else {
           // Si no hay historial, usar status_at_sprint_close como aproximación
-          // Solo contar como completado si el estado al cierre era completado
-          if (isCompletedStatus(is.status_at_sprint_close)) {
+          // Solo contar como completado si el estado al cierre era completado (usar helper centralizado)
+          if (isCompletedStatusSync(is.status_at_sprint_close, true)) {
             // Solo contar al final del sprint si no hay historial
             if (dateTime >= sprintEnd.getTime()) {
               completedTickets.add(issueId);
