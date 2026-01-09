@@ -973,19 +973,24 @@ export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClie
           // Tarea 4: Detectar y guardar cambios de scope
           try {
             const { detectAndSaveScopeChanges } = await import('./scope-change-detector.js');
+            // En batch, el changelog está en rawData
+            const changelog = issueData.rawData?.changelog || issueData.changelog || null;
             await detectAndSaveScopeChanges(
               sprintId,
               issueId,
               {
                 key: issueData.key,
-                changelog: issueData.changelog,
+                changelog: changelog,
                 storyPoints: issueData.storyPoints,
               },
               sprint,
               spAtStart
             );
           } catch (scopeError) {
-            logger.debug(`⚠️ Error detectando cambios de scope para ${issueData.key} en sprint ${sprintName}: ${scopeError.message}`);
+            logger.warn(`⚠️ Error detectando cambios de scope para ${issueData.key} en sprint ${sprintName}: ${scopeError.message}`);
+            if (scopeError.stack) {
+              logger.debug(`   Stack: ${scopeError.stack}`);
+            }
             // No fallar el procesamiento completo por esto
           }
         }
