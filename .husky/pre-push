@@ -1,17 +1,38 @@
+#!/bin/sh
+# ⚠️ CHECKLIST OBLIGATORIO ANTES DE PUSH
+# Ver docs/CHECKLIST_PRE_PUSH.md para más detalles
+
 echo "🧪 Ejecutando pruebas antes de push..."
+echo "📋 Verifica que hayas actualizado las pruebas según los cambios realizados"
+echo "📚 Consulta docs/CHECKLIST_PRE_PUSH.md para el checklist completo"
+echo ""
 
 # Ejecutar pruebas unitarias
 echo "📦 Ejecutando pruebas unitarias..."
 npm run test || {
+  echo ""
   echo "❌ Las pruebas unitarias fallaron. Por favor, corrige los errores antes de hacer push."
+  echo "💡 Asegúrate de haber actualizado las pruebas según los cambios realizados"
+  echo "📚 Consulta docs/CHECKLIST_PRE_PUSH.md para más información"
+  exit 1
+}
+
+# Ejecutar linting
+echo ""
+echo "🔍 Ejecutando linting..."
+npm run lint || {
+  echo ""
+  echo "❌ El linting falló. Por favor, corrige los errores antes de hacer push."
   exit 1
 }
 
 # Ejecutar pruebas e2e solo con Chromium (más rápido)
 # En CI se ejecutan todas las pruebas e2e automáticamente
 if [ -z "$CI" ]; then
+  echo ""
   echo "🌐 Ejecutando pruebas e2e (Chromium)..."
   npx playwright test --project=chromium || {
+    echo ""
     echo "❌ Las pruebas e2e fallaron. Por favor, corrige los errores antes de hacer push."
     exit 1
   }
@@ -19,4 +40,5 @@ else
   echo "⏭️  Saltando pruebas e2e en CI (se ejecutan en GitHub Actions)"
 fi
 
+echo ""
 echo "✅ Todas las pruebas pasaron. Procediendo con push..."
