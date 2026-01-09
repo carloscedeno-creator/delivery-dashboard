@@ -5,6 +5,7 @@
 import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import { retryWithBackoff, delayBetweenPages } from '../utils/retry-helper.js';
 
 class JiraClient {
   constructor(domain = null, email = null, apiToken = null) {
@@ -69,15 +70,47 @@ class JiraClient {
 
         let response;
         try {
-          response = await this.client.get(url);
+          // Usar retry con exponential backoff para manejar rate limiting
+          response = await retryWithBackoff(
+            async () => {
+              return await this.client.get(url);
+            },
+            {
+              context: `fetchAllIssues:page-${pageCount}`,
+              maxRetries: 5,
+              initialDelay: 1000,
+              maxDelay: 60000,
+            }
+          );
         } catch (error) {
-          // Si falla, intentar con el endpoint JQL
-          logger.warn(`⚠️ Error con endpoint estándar, intentando con /search/jql...`);
+          // Si falla después de todos los reintentos, intentar con el endpoint JQL alternativo
+          logger.warn(`⚠️ Error con endpoint estándar después de reintentos, intentando con /search/jql...`);
           url = `/rest/api/3/search/jql?jql=${encodeURIComponent(query)}&maxResults=100&fields=${fieldsToFetch}&expand=changelog`;
           if (nextPageToken) {
             url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
           }
-          response = await this.client.get(url);
+          
+          // También aplicar retry al endpoint alternativo
+          try {
+            response = await retryWithBackoff(
+              async () => {
+                return await this.client.get(url);
+              },
+              {
+                context: `fetchAllIssues:page-${pageCount}:jql-endpoint`,
+                maxRetries: 3, // Menos reintentos para el endpoint alternativo
+                initialDelay: 1000,
+                maxDelay: 60000,
+              }
+            );
+          } catch (jqlError) {
+            logger.error(`❌ Error con ambos endpoints después de reintentos:`, {
+              standardError: error.message,
+              jqlError: jqlError.message,
+              status: jqlError.response?.status,
+            });
+            throw jqlError;
+          }
         }
         
         logger.debug(`📊 Respuesta de Jira: total=${response.data.total || 0}, issues.length=${response.data.issues?.length || 0}, startAt=${response.data.startAt || 0}, maxResults=${response.data.maxResults || 0}`);
@@ -103,9 +136,9 @@ class JiraClient {
           nextPageToken = null;
         }
 
-        // Pequeño delay para evitar rate limits
+        // Delay entre páginas para evitar rate limiting (200ms según plan)
         if (nextPageToken) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await delayBetweenPages(200);
         }
 
       } catch (error) {
@@ -252,6 +285,7 @@ class JiraClient {
   /**
    * Obtiene issues de un sprint usando la API Agile
    * Esto puede ser más eficiente que usar JQL
+   * Incluye retry automático con exponential backoff para manejar rate limiting
    * @param {number|string} sprintId - ID del sprint en Jira
    * @returns {Promise<Array>} Array de issues del sprint
    */
@@ -261,14 +295,31 @@ class JiraClient {
       let startAt = 0;
       const maxResults = 100;
       let hasMore = true;
+      let pageCount = 0;
 
       while (hasMore) {
-        const response = await this.client.get(
-          `/rest/agile/1.0/sprint/${sprintId}/issue?startAt=${startAt}&maxResults=${maxResults}`
+        pageCount++;
+        const url = `/rest/agile/1.0/sprint/${sprintId}/issue?startAt=${startAt}&maxResults=${maxResults}`;
+        
+        logger.debug(`📥 Obteniendo página ${pageCount} de issues del sprint ${sprintId} (startAt: ${startAt})`);
+
+        // Usar retry con exponential backoff para manejar rate limiting y errores temporales
+        const response = await retryWithBackoff(
+          async () => {
+            return await this.client.get(url);
+          },
+          {
+            context: `fetchSprintIssues:sprint-${sprintId}:page-${pageCount}`,
+            maxRetries: 5,
+            initialDelay: 1000,
+            maxDelay: 60000,
+          }
         );
         
         const issues = response.data.issues || [];
         allIssues.push(...issues);
+        
+        logger.debug(`✅ Página ${pageCount}: ${issues.length} issues obtenidos (Total acumulado: ${allIssues.length})`);
         
         // Verificar si hay más resultados
         const total = response.data.total || 0;
@@ -278,12 +329,21 @@ class JiraClient {
         if (issues.length === 0) {
           hasMore = false;
         }
+
+        // Delay entre páginas para evitar rate limiting (200ms según plan)
+        if (hasMore) {
+          await delayBetweenPages(200);
+        }
       }
 
-      logger.debug(`📋 Obtenidos ${allIssues.length} issues del sprint ${sprintId}`);
+      logger.success(`✅ Total de issues obtenidos del sprint ${sprintId}: ${allIssues.length} (${pageCount} páginas)`);
       return allIssues;
     } catch (error) {
-      logger.warn(`⚠️ Error obteniendo issues del sprint ${sprintId}:`, error.message);
+      logger.error(`❌ Error obteniendo issues del sprint ${sprintId} después de todos los reintentos:`, {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+      });
       return [];
     }
   }
