@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "sync": "node src/run-sync-once.js",
+    "sync:fast": "node src/run-sync-fast.js",
     "sync:integration": "node src/run-sync-integration-only.js",
     "sync:full-daily": "node src/run-full-sync-daily.js",
     "daily-full-sync": "node src/daily-full-sync-service.js",
@@ -25,7 +26,9 @@
     "verify-schema": "node scripts/verify-schema.js",
     "verify-post-deploy": "node scripts/verify-post-deploy.js",
     "validate-retry": "node scripts/validar-retry-sync.js",
-    "validate-integrity": "node scripts/validar-integridad-supabase.js"
+    "validate-integrity": "node scripts/validar-integridad-supabase.js",
+    "diagnostico-performance": "node scripts/diagnostico-performance.js",
+    "validar-cierre-sprint": "node scripts/validar-cierre-sprint.js"
   },
   "keywords": [
     "jira",

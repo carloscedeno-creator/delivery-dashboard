@@ -37,29 +37,42 @@ export async function fullSyncForProject(project, squadId, jiraClient) {
     
     if (epics.length > 0) {
       logger.info(`   Encontradas ${epics.length} épicas para procesar`);
-      for (const epic of epics) {
-        try {
-          // Obtener detalles completos de la épica para extraer fechas
-          const epicDetails = await jiraClient.fetchIssueDetails(epic.key);
-          let epicStartDate = null;
-          let epicEndDate = null;
-          
-          if (epicDetails && epicDetails.fields) {
-            const timelineDates = jiraClient.extractTimelineDates(epicDetails.fields);
-            epicStartDate = timelineDates.startDate;
-            epicEndDate = timelineDates.endDate;
+      logger.info(`   ⚡ Procesando épicas en paralelo (batches de 5)...`);
+      
+      // Procesar épicas en paralelo (batches más pequeños para épicas)
+      const EPIC_BATCH_SIZE = 5;
+      for (let i = 0; i < epics.length; i += EPIC_BATCH_SIZE) {
+        const batch = epics.slice(i, i + EPIC_BATCH_SIZE);
+        const batchPromises = batch.map(async (epic) => {
+          try {
+            // Obtener detalles completos de la épica para extraer fechas
+            const epicDetails = await jiraClient.fetchIssueDetails(epic.key);
+            let epicStartDate = null;
+            let epicEndDate = null;
+            
+            if (epicDetails && epicDetails.fields) {
+              const timelineDates = jiraClient.extractTimelineDates(epicDetails.fields);
+              epicStartDate = timelineDates.startDate;
+              epicEndDate = timelineDates.endDate;
+            }
+            
+            await supabaseClient.getOrCreateEpic(
+              squadId,
+              epic.key,
+              epic.fields.summary || 'N/A',
+              epicStartDate,
+              epicEndDate
+            );
+            return { success: true, key: epic.key };
+          } catch (error) {
+            logger.warn(`⚠️ Error procesando épica ${epic.key}:`, error.message);
+            return { success: false, key: epic.key, error: error.message };
           }
-          
-          await supabaseClient.getOrCreateEpic(
-            squadId,
-            epic.key,
-            epic.fields.summary || 'N/A',
-            epicStartDate,
-            epicEndDate
-          );
-        } catch (error) {
-          logger.warn(`⚠️ Error procesando épica ${epic.key}:`, error.message);
-        }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        const successful = batchResults.filter(r => r.success).length;
+        logger.debug(`   ✅ Batch épicas ${Math.floor(i / EPIC_BATCH_SIZE) + 1}: ${successful}/${batch.length} procesadas`);
       }
     }
 
@@ -68,7 +81,24 @@ export async function fullSyncForProject(project, squadId, jiraClient) {
     const { processIssuesWithClientBatch } = await import('../processors/issue-processor.js');
     const { successCount, errorCount } = await processIssuesWithClientBatch(squadId, jiraIssues, jiraClient);
 
-    // 5. Registrar finalización
+    // 5. Procesar cierre de sprints cerrados (Tarea 3: Mejorar Condiciones de Cierre)
+    try {
+      logger.info(`🔍 Validando y procesando sprints cerrados para ${project.projectKey}...`);
+      const { processAllClosedSprints } = await import('../processors/sprint-closure-processor.js');
+      const closureResult = await processAllClosedSprints(squadId, jiraClient);
+      
+      if (closureResult.updated > 0) {
+        logger.success(`   ✅ ${closureResult.updated} sprints cerrados actualizados con complete_date`);
+      }
+      if (closureResult.errors > 0) {
+        logger.warn(`   ⚠️ ${closureResult.errors} errores durante procesamiento de sprints cerrados`);
+      }
+    } catch (closureError) {
+      logger.warn(`⚠️ Error procesando cierre de sprints: ${closureError.message}`);
+      // No fallar la sincronización completa por esto
+    }
+
+    // 6. Registrar finalización
     await supabaseClient.logSync(squadId, 'full', 'completed', successCount);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -197,30 +227,45 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
                 if (sprintIssuesById && sprintIssuesById.length > 0) {
                   logger.info(`   ✅ Encontrados ${sprintIssuesById.length} issues usando sprint ID`);
                   
-                  // Obtener detalles completos de cada issue
+                  // Obtener detalles completos de cada issue EN PARALELO (optimización)
                   // fetchSprintIssues retorna un array de issues con estructura { key, id, ... }
-                  for (const sprintIssue of sprintIssuesById) {
-                    const issueKey = sprintIssue.key || sprintIssue.id;
-                    if (!issueKey) {
-                      logger.debug(`   ⚠️ Issue sin key válida, omitiendo: ${JSON.stringify(sprintIssue)}`);
-                      continue;
-                    }
-                    
-                    try {
-                      const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
-                      if (issueDetails) {
-                        const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
-                        if (!alreadyIncluded) {
-                          currentSprintIssues.push(issueDetails);
-                          logger.debug(`   📋 Issue de sprint actual agregado a cola: ${issueKey} (se comparará antes de actualizar)`);
-                        } else {
-                          logger.debug(`   ⏭️  Issue ${issueKey} ya está en el delta, omitiendo duplicado`);
+                  const issueKeys = sprintIssuesById
+                    .map(si => si.key || si.id)
+                    .filter(Boolean);
+                  
+                  logger.info(`   ⚡ Procesando ${issueKeys.length} issues en paralelo (batches de 10)...`);
+                  
+                  // Procesar en batches paralelos de 10 para evitar sobrecargar Jira
+                  const BATCH_SIZE_PARALLEL = 10;
+                  for (let i = 0; i < issueKeys.length; i += BATCH_SIZE_PARALLEL) {
+                    const batch = issueKeys.slice(i, i + BATCH_SIZE_PARALLEL);
+                    const batchPromises = batch.map(async (issueKey) => {
+                      try {
+                        const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
+                        if (issueDetails) {
+                          const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
+                          if (!alreadyIncluded) {
+                            return issueDetails;
+                          } else {
+                            logger.debug(`   ⏭️  Issue ${issueKey} ya está en el delta, omitiendo duplicado`);
+                            return null;
+                          }
                         }
+                        return null;
+                      } catch (error) {
+                        if (error.status !== 404) {
+                          logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                        }
+                        return null;
                       }
-                    } catch (error) {
-                      if (error.status !== 404) {
-                        logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
-                      }
+                    });
+                    
+                    const batchResults = await Promise.all(batchPromises);
+                    const validIssues = batchResults.filter(Boolean);
+                    currentSprintIssues.push(...validIssues);
+                    
+                    if (validIssues.length > 0) {
+                      logger.debug(`   ✅ Batch ${Math.floor(i / BATCH_SIZE_PARALLEL) + 1}: ${validIssues.length} issues obtenidos`);
                     }
                   }
                 } else {
@@ -254,21 +299,37 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
                   const issueKeys = issues.map(i => i.issue_key).filter(Boolean);
                   logger.info(`   📋 Sprint ${currentSprint.sprint_name}: ${issueKeys.length} issues (fallback desde Supabase - solo tickets ya registrados)`);
                   
-                  // Obtener detalles de cada issue desde Jira
-                  for (const issueKey of issueKeys) {
-                    try {
-                      const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
-                      if (issueDetails) {
-                        const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
-                        if (!alreadyIncluded) {
-                          currentSprintIssues.push(issueDetails);
-                          logger.debug(`   📋 Issue de sprint actual agregado a cola: ${issueKey} (se comparará antes de actualizar)`);
+                  // Obtener detalles de cada issue desde Jira EN PARALELO (optimización)
+                  logger.info(`   ⚡ Procesando ${issueKeys.length} issues en paralelo (batches de 10)...`);
+                  
+                  // Procesar en batches paralelos de 10 para evitar sobrecargar Jira
+                  const BATCH_SIZE_PARALLEL = 10;
+                  for (let i = 0; i < issueKeys.length; i += BATCH_SIZE_PARALLEL) {
+                    const batch = issueKeys.slice(i, i + BATCH_SIZE_PARALLEL);
+                    const batchPromises = batch.map(async (issueKey) => {
+                      try {
+                        const issueDetails = await jiraClient.fetchIssueDetails(issueKey);
+                        if (issueDetails) {
+                          const alreadyIncluded = jiraIssues.some(ji => ji.key === issueKey);
+                          if (!alreadyIncluded) {
+                            return issueDetails;
+                          }
                         }
+                        return null;
+                      } catch (error) {
+                        if (error.status !== 404) {
+                          logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
+                        }
+                        return null;
                       }
-                    } catch (error) {
-                      if (error.status !== 404) {
-                        logger.debug(`   ⚠️ No se pudo obtener ${issueKey} desde Jira: ${error.message}`);
-                      }
+                    });
+                    
+                    const batchResults = await Promise.all(batchPromises);
+                    const validIssues = batchResults.filter(Boolean);
+                    currentSprintIssues.push(...validIssues);
+                    
+                    if (validIssues.length > 0) {
+                      logger.debug(`   ✅ Batch ${Math.floor(i / BATCH_SIZE_PARALLEL) + 1}: ${validIssues.length} issues obtenidos`);
                     }
                   }
                 }
@@ -348,7 +409,24 @@ export async function incrementalSyncForProject(project, squadId, jiraClient) {
     const { processIssuesWithClientBatch } = await import('../processors/issue-processor.js');
     const { successCount, errorCount } = await processIssuesWithClientBatch(squadId, allIssues, jiraClient);
 
-    // 7. Registrar finalización
+    // 7. Procesar cierre de sprints cerrados (Tarea 3: Mejorar Condiciones de Cierre)
+    try {
+      logger.info(`🔍 Validando y procesando sprints cerrados para ${project.projectKey}...`);
+      const { processAllClosedSprints } = await import('../processors/sprint-closure-processor.js');
+      const closureResult = await processAllClosedSprints(squadId, jiraClient);
+      
+      if (closureResult.updated > 0) {
+        logger.success(`   ✅ ${closureResult.updated} sprints cerrados actualizados con complete_date`);
+      }
+      if (closureResult.errors > 0) {
+        logger.warn(`   ⚠️ ${closureResult.errors} errores durante procesamiento de sprints cerrados`);
+      }
+    } catch (closureError) {
+      logger.warn(`⚠️ Error procesando cierre de sprints: ${closureError.message}`);
+      // No fallar la sincronización completa por esto
+    }
+
+    // 8. Registrar finalización
     await supabaseClient.logSync(squadId, 'incremental', 'completed', successCount);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
