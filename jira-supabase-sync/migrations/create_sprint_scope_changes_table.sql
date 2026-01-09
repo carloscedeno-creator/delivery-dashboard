@@ -21,9 +21,11 @@ CREATE TABLE IF NOT EXISTS sprint_scope_changes (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   
-  -- Evitar duplicados: un issue solo puede tener un cambio del mismo tipo en el mismo sprint en el mismo día
-  CONSTRAINT unique_scope_change_per_day UNIQUE (sprint_id, issue_id, change_type, DATE(change_date))
 );
+
+-- Índice único para evitar duplicados básicos (la deduplicación por día se maneja en el código)
+CREATE UNIQUE INDEX IF NOT EXISTS unique_scope_change_basic 
+ON sprint_scope_changes(sprint_id, issue_id, change_type, change_date);
 
 -- Índices para mejorar performance
 CREATE INDEX IF NOT EXISTS idx_sprint_scope_changes_sprint_id ON sprint_scope_changes(sprint_id);
