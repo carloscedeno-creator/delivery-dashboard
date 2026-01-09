@@ -7,7 +7,7 @@
 
 import { JiraClient } from '../src/clients/jira-client.js';
 import { logger } from '../src/utils/logger.js';
-import { config } from '../config.js';
+import { config } from '../src/config.js';
 
 /**
  * Valida que el retry funciona correctamente
@@ -26,7 +26,8 @@ async function validarRetrySync() {
     
     // 2. Validar que fetchAllIssues funciona normalmente
     logger.info('📋 Test 2: Validar fetchAllIssues funciona normalmente...');
-    const allIssues = await jiraClient.fetchAllIssues('project = IN ORDER BY updated DESC');
+    // Usar query válido o dejar que use el default del config
+    const allIssues = await jiraClient.fetchAllIssues();
     logger.success(`✅ fetchAllIssues exitoso: ${allIssues.length} issues obtenidos`);
     
     // 3. Validar que el delay entre páginas funciona

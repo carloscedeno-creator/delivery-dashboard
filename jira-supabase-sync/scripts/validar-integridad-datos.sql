@@ -184,14 +184,16 @@ WHERE NOT EXISTS (
 );
 
 -- Verificar inconsistencias entre sprint_velocity y issue_sprints
+-- Nota: sprint_velocity es por sprint (no por squad), así que comparamos con la suma total de todos los squads
 SELECT 
   'Inconsistencias entre sprint_velocity y issue_sprints' as validacion,
   sv.sprint_id,
-  sv.squad_id,
-  sv.sp_committed as sp_committed_velocity,
-  sv.sp_completed as sp_completed_velocity,
+  sv.sprint_name,
+  sv.commitment as commitment_velocity,
+  sv.completed as completed_velocity,
   COUNT(DISTINCT is_rel.issue_id) as issues_count,
-  SUM(CASE WHEN is_rel.status_at_sprint_close IS NOT NULL THEN is_rel.story_points_at_start ELSE 0 END) as sp_committed_manual,
+  -- Cálculo manual: suma de todos los squads del sprint
+  SUM(CASE WHEN is_rel.status_at_sprint_close IS NOT NULL THEN is_rel.story_points_at_start ELSE 0 END) as commitment_manual,
   SUM(CASE 
     WHEN is_rel.status_at_sprint_close IS NOT NULL 
     AND EXISTS (
@@ -201,14 +203,35 @@ SELECT
     )
     THEN is_rel.story_points_at_close 
     ELSE 0 
-  END) as sp_completed_manual
+  END) as completed_manual,
+  -- Diferencia
+  ABS(COALESCE(sv.commitment, 0) - SUM(CASE WHEN is_rel.status_at_sprint_close IS NOT NULL THEN is_rel.story_points_at_start ELSE 0 END)) as diff_committed,
+  ABS(COALESCE(sv.completed, 0) - SUM(CASE 
+    WHEN is_rel.status_at_sprint_close IS NOT NULL 
+    AND EXISTS (
+      SELECT 1 FROM status_definitions sd 
+      WHERE sd.status_name = is_rel.status_at_sprint_close 
+      AND sd.is_completed = true
+    )
+    THEN is_rel.story_points_at_close 
+    ELSE 0 
+  END)) as diff_completed
 FROM sprint_velocity sv
-LEFT JOIN issue_sprints is_rel ON sv.sprint_id = is_rel.sprint_id AND sv.squad_id = is_rel.squad_id
-WHERE sv.sp_committed IS NOT NULL OR sv.sp_completed IS NOT NULL
-GROUP BY sv.sprint_id, sv.squad_id, sv.sp_committed, sv.sp_completed
-HAVING ABS(COALESCE(sv.sp_committed, 0) - COALESCE(sp_committed_manual, 0)) > 0.1
-   OR ABS(COALESCE(sv.sp_completed, 0) - COALESCE(sp_completed_manual, 0)) > 0.1
-ORDER BY ABS(COALESCE(sv.sp_committed, 0) - COALESCE(sp_committed_manual, 0)) DESC;
+LEFT JOIN issue_sprints is_rel ON sv.sprint_id = is_rel.sprint_id
+WHERE sv.commitment IS NOT NULL OR sv.completed IS NOT NULL
+GROUP BY sv.sprint_id, sv.sprint_name, sv.commitment, sv.completed
+HAVING ABS(COALESCE(sv.commitment, 0) - SUM(CASE WHEN is_rel.status_at_sprint_close IS NOT NULL THEN is_rel.story_points_at_start ELSE 0 END)) > 0.1
+   OR ABS(COALESCE(sv.completed, 0) - SUM(CASE 
+    WHEN is_rel.status_at_sprint_close IS NOT NULL 
+    AND EXISTS (
+      SELECT 1 FROM status_definitions sd 
+      WHERE sd.status_name = is_rel.status_at_sprint_close 
+      AND sd.is_completed = true
+    )
+    THEN is_rel.story_points_at_close 
+    ELSE 0 
+  END)) > 0.1
+ORDER BY diff_committed DESC, diff_completed DESC;
 
 -- ============================================
 -- 7. RESUMEN GENERAL DE INTEGRIDAD

@@ -6,8 +6,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { config } from '../config.js';
-import { logger } from '../utils/logger.js';
+import { config } from '../src/config.js';
+import { logger } from '../src/utils/logger.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
