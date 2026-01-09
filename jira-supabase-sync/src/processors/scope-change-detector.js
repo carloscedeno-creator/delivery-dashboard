@@ -258,6 +258,13 @@ export async function detectAndSaveScopeChanges(sprintId, issueId, issueData, sp
 
     // Solo detectar cambios si el sprint tiene fechas válidas
     if (!sprintStartDate || !sprintEndDate) {
+      logger.debug(`⏭️ [${issueData.key}] Sprint ${sprintName} sin fechas válidas, omitiendo detección de scope changes`);
+      return result;
+    }
+
+    // Verificar si hay changelog disponible
+    if (!changelog || !changelog.histories || changelog.histories.length === 0) {
+      logger.debug(`⏭️ [${issueData.key}] Sin changelog disponible para detección de scope changes`);
       return result;
     }
 
@@ -294,7 +301,9 @@ export async function detectAndSaveScopeChanges(sprintId, issueId, issueData, sp
         );
         if (saved) {
           result.removed = true;
-          logger.debug(`📝 Issue removido del sprint detectado: sprint ${sprintName}, issue ${issueData.key}`);
+          logger.info(`📝 Issue removido del sprint detectado: sprint ${sprintName}, issue ${issueData.key}, fecha: ${removedInfo.date.toISOString()}`);
+        } else {
+          logger.debug(`⏭️ Cambio de scope ya existe para ${issueData.key} en sprint ${sprintName} (tipo: removed)`);
         }
       }
     }
@@ -313,7 +322,9 @@ export async function detectAndSaveScopeChanges(sprintId, issueId, issueData, sp
         );
         if (saved) {
           result.spChanges++;
-          logger.debug(`📝 Cambio de SP detectado: sprint ${sprintName}, issue ${issueData.key}, ${change.before} → ${change.after}`);
+          logger.info(`📝 Cambio de SP detectado: sprint ${sprintName}, issue ${issueData.key}, ${change.before} → ${change.after}, fecha: ${change.date.toISOString()}`);
+        } else {
+          logger.debug(`⏭️ Cambio de scope ya existe para ${issueData.key} en sprint ${sprintName} (tipo: story_points_changed, fecha: ${change.date.toISOString()})`);
         }
       }
     }

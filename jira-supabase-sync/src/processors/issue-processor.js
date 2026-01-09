@@ -735,7 +735,10 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
             spAtStart
           );
         } catch (scopeError) {
-          logger.debug(`⚠️ Error detectando cambios de scope para ${jiraIssue.key} en sprint ${sprintName}: ${scopeError.message}`);
+          logger.warn(`⚠️ Error detectando cambios de scope para ${jiraIssue.key} en sprint ${sprintName}: ${scopeError.message}`);
+          if (scopeError.stack) {
+            logger.debug(`   Stack: ${scopeError.stack}`);
+          }
           // No fallar el procesamiento completo por esto
         }
       }
