@@ -719,6 +719,25 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
           }, {
             onConflict: 'issue_id,sprint_id',
           });
+
+        // Tarea 4: Detectar y guardar cambios de scope
+        try {
+          const { detectAndSaveScopeChanges } = await import('./scope-change-detector.js');
+          await detectAndSaveScopeChanges(
+            sprintId,
+            issueId,
+            {
+              key: jiraIssue.key,
+              changelog: jiraIssue.changelog,
+              storyPoints: issueData.storyPoints,
+            },
+            sprint,
+            spAtStart
+          );
+        } catch (scopeError) {
+          logger.debug(`⚠️ Error detectando cambios de scope para ${jiraIssue.key} en sprint ${sprintName}: ${scopeError.message}`);
+          // No fallar el procesamiento completo por esto
+        }
       }
     }
 
@@ -947,6 +966,25 @@ export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClie
             }, {
               onConflict: 'issue_id,sprint_id',
             });
+
+          // Tarea 4: Detectar y guardar cambios de scope
+          try {
+            const { detectAndSaveScopeChanges } = await import('./scope-change-detector.js');
+            await detectAndSaveScopeChanges(
+              sprintId,
+              issueId,
+              {
+                key: issueData.key,
+                changelog: issueData.changelog,
+                storyPoints: issueData.storyPoints,
+              },
+              sprint,
+              spAtStart
+            );
+          } catch (scopeError) {
+            logger.debug(`⚠️ Error detectando cambios de scope para ${issueData.key} en sprint ${sprintName}: ${scopeError.message}`);
+            // No fallar el procesamiento completo por esto
+          }
         }
       }
       

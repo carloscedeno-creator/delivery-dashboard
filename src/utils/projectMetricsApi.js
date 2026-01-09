@@ -706,3 +706,60 @@ export const getSprintById = async (sprintId) => {
   }
 };
 
+/**
+ * Obtiene cambios de scope para un sprint
+ * Tarea 4: Tracking Básico de Scope Changes
+ */
+export const getSprintScopeChanges = async (sprintId) => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  try {
+    // Obtener resumen de cambios de scope usando la vista
+    const { data: summary, error: summaryError } = await supabase
+      .from('sprint_scope_changes_summary')
+      .select('*')
+      .eq('sprint_id', sprintId)
+      .maybeSingle();
+
+    if (summaryError && summaryError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      throw summaryError;
+    }
+
+    // Obtener detalles de cambios
+    const { data: changes, error: changesError } = await supabase
+      .from('sprint_scope_changes')
+      .select(`
+        id,
+        change_type,
+        change_date,
+        story_points_before,
+        story_points_after,
+        issues!inner(
+          issue_key,
+          summary
+        )
+      `)
+      .eq('sprint_id', sprintId)
+      .order('change_date', { ascending: false });
+
+    if (changesError) throw changesError;
+
+    return {
+      summary: summary || {
+        issues_added: 0,
+        issues_removed: 0,
+        issues_sp_changed: 0,
+        sp_added: 0,
+        sp_removed: 0,
+        sp_net_change: 0,
+      },
+      changes: changes || [],
+    };
+  } catch (error) {
+    console.error('[PROJECT_METRICS] Error getting scope changes:', error);
+    throw error;
+  }
+};
+

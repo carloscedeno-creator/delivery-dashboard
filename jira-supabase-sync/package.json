@@ -28,7 +28,8 @@
     "validate-retry": "node scripts/validar-retry-sync.js",
     "validate-integrity": "node scripts/validar-integridad-supabase.js",
     "diagnostico-performance": "node scripts/diagnostico-performance.js",
-    "validar-cierre-sprint": "node scripts/validar-cierre-sprint.js"
+    "validar-cierre-sprint": "node scripts/validar-cierre-sprint.js",
+    "aplicar-migracion-scope-changes": "node scripts/aplicar-migracion-scope-changes.js"
   },
   "keywords": [
     "jira",
