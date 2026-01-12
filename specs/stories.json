@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "last_updated": "2024-12-19",
   "stories": [
     {
@@ -105,6 +105,222 @@
       "passes": true,
       "tests": [],
       "related_files": ["jira-supabase-sync/src/processors/sprint-closure-processor.js"]
+    },
+    {
+      "id": "story-008",
+      "title": "Overall View Dashboard",
+      "description": "Vista general de métricas combinando Product y Delivery insights",
+      "acceptance_criteria": [
+        "Component renders without errors",
+        "Shows 'Coming Soon' message when not implemented",
+        "Displays unified timeline placeholder",
+        "Accessible from main navigation"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/OverallView.jsx"]
+    },
+    {
+      "id": "story-009",
+      "title": "Delivery KPIs Display",
+      "description": "Visualización de Delivery Success Score y métricas componentes (Velocity, Cycle Time, Throughput)",
+      "acceptance_criteria": [
+        "Delivery Success Score calculated correctly",
+        "Velocity metric displayed with target comparison",
+        "Cycle Time metric displayed with breakdown",
+        "Throughput metric displayed",
+        "Charts render correctly (Delivery Score, Component Breakdown)",
+        "Filters work correctly (squad, sprint, date range)",
+        "Loading state shown during data fetch",
+        "Error state shown when data unavailable"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/DeliveryKPIs.jsx", "src/services/deliveryKPIService.js"]
+    },
+    {
+      "id": "story-010",
+      "title": "Quality KPIs Display",
+      "description": "Visualización de Quality KPIs (Rework Rate, Defect Rate)",
+      "acceptance_criteria": [
+        "Rework Rate calculated and displayed",
+        "Defect Rate calculated and displayed",
+        "Charts render correctly",
+        "Filters work correctly",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/QualityKPIs.jsx", "src/services/qualityKPIService.js"]
+    },
+    {
+      "id": "story-011",
+      "title": "Projects Metrics View",
+      "description": "Métricas detalladas por proyecto/squad y sprint con breakdown por Board State",
+      "acceptance_criteria": [
+        "Squad and sprint selectors work correctly",
+        "Metrics load for selected squad/sprint",
+        "Board State breakdown chart displays correctly",
+        "Scope Changes section displays when data available",
+        "PDF export button generates PDF successfully",
+        "Loading and error states handled",
+        "Uses statusHelper for status checking"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/ProjectsMetrics.jsx", "src/utils/projectMetricsApi.js"]
+    },
+    {
+      "id": "story-012",
+      "title": "Developer Metrics View",
+      "description": "Visualización de métricas individuales de performance por desarrollador",
+      "acceptance_criteria": [
+        "Squad, sprint, and developer selectors work correctly",
+        "Dev Done Rate calculated and displayed",
+        "Story Points completed shown",
+        "Charts render correctly (bar charts, pie charts)",
+        "Workload visualization displays",
+        "Uses statusHelper for Dev Done status checking",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/DeveloperMetrics.jsx", "src/utils/developerMetricsApi.js"]
+    },
+    {
+      "id": "story-013",
+      "title": "Team Capacity Management",
+      "description": "Configuración y visualización de capacidad del equipo por squad y sprint",
+      "acceptance_criteria": [
+        "Squad and sprint selectors work correctly",
+        "Capacity goal SP can be set",
+        "Capacity available SP can be set",
+        "Developer participations can be toggled",
+        "Developer capacity SP can be set per developer",
+        "Data saves successfully to database",
+        "SP Done recalculates after save",
+        "Last assignments loaded correctly",
+        "Only PM, admin, and 3amigos can edit"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/TeamCapacity.jsx", "src/services/teamCapacityService.js"]
+    },
+    {
+      "id": "story-014",
+      "title": "Team Allocation View",
+      "description": "Visualización de asignación de recursos y workload por desarrollador",
+      "acceptance_criteria": [
+        "Allocation chart displays correctly",
+        "Workload per developer shown",
+        "Squad and sprint filters work",
+        "Data loads from Supabase",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/TeamAllocation.jsx"]
+    },
+    {
+      "id": "story-015",
+      "title": "Product Roadmap View",
+      "description": "Gantt Chart y visualización de iniciativas de producto con timeline",
+      "acceptance_criteria": [
+        "Gantt Chart renders correctly",
+        "Product initiatives displayed on timeline",
+        "KPIs calculated (total initiatives, total effort, avg completion)",
+        "Charts render correctly (bar charts, pie charts)",
+        "Data loads from data sources",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/ProductRoadmapView.jsx", "src/components/GanttChart.jsx"]
+    },
+    {
+      "id": "story-016",
+      "title": "ENPS Survey System",
+      "description": "Sistema de Employee Net Promoter Score con encuestas tipo Kaizen",
+      "acceptance_criteria": [
+        "Active survey loads correctly",
+        "Questions organized by categories",
+        "User can select squad",
+        "User can answer questions (isDeveloper, isPM, custom answers)",
+        "Survey submits successfully",
+        "Prevents duplicate responses per day",
+        "Shows latest response if already responded",
+        "Categories can be expanded/collapsed"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/ENPSSurvey.jsx", "src/services/enpsSurveyService.js"]
+    },
+    {
+      "id": "story-017",
+      "title": "User Administration",
+      "description": "Administración de usuarios de la aplicación con roles y permisos",
+      "acceptance_criteria": [
+        "Users list loads from app_users table",
+        "User roles can be viewed",
+        "User roles can be updated (admin only)",
+        "User status displayed correctly",
+        "Loading and error states handled",
+        "Falls back to auth.users if app_users unavailable"
+      ],
+      "passes": true,
+      "tests": ["UserAdministration.test.jsx"],
+      "related_files": ["src/components/UserAdministration.jsx"]
+    },
+    {
+      "id": "story-018",
+      "title": "PDF Export for Projects Metrics",
+      "description": "Generación de PDF con métricas de proyecto para un squad y sprint",
+      "acceptance_criteria": [
+        "PDF generates successfully",
+        "PDF includes sprint information",
+        "PDF includes issues breakdown",
+        "PDF includes developer metrics",
+        "PDF includes scope changes if available",
+        "PDF download triggers correctly",
+        "Error handling for PDF generation failures"
+      ],
+      "passes": true,
+      "tests": ["pdfGenerator.test.js"],
+      "related_files": ["src/utils/pdfGenerator.js", "src/components/ProjectsMetrics.jsx"]
+    },
+    {
+      "id": "story-019",
+      "title": "Gantt Chart Component",
+      "description": "Componente reutilizable de Gantt Chart para visualizar timelines",
+      "acceptance_criteria": [
+        "Gantt Chart renders correctly",
+        "Items displayed on timeline with correct dates",
+        "Today line shows current date",
+        "Data normalization works for different formats",
+        "Status conversion works (text to percentage)",
+        "Invalid dates filtered out",
+        "Timeline scrolls correctly"
+      ],
+      "passes": true,
+      "tests": ["GanttChart.test.jsx"],
+      "related_files": ["src/components/GanttChart.jsx"]
+    },
+    {
+      "id": "story-020",
+      "title": "Sidebar Navigation",
+      "description": "Navegación principal con módulos organizados por permisos de rol",
+      "acceptance_criteria": [
+        "Sidebar renders correctly",
+        "Modules filtered by user role",
+        "Submenus expand/collapse correctly",
+        "Navigation updates active view",
+        "Toggle button works (mobile)",
+        "Overlay works on mobile",
+        "Modules hidden when user lacks permissions"
+      ],
+      "passes": true,
+      "tests": ["Sidebar.test.jsx"],
+      "related_files": ["src/components/Sidebar.jsx", "src/config/permissions.js"]
     }
   ]
 }
