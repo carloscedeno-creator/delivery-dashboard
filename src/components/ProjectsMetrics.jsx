@@ -22,6 +22,7 @@ const ProjectsMetrics = () => {
   const [squadInfo, setSquadInfo] = useState(null);
   const [sprintInfo, setSprintInfo] = useState(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [scopeChanges, setScopeChanges] = useState(null);
   
   // Refs para los gráficos
   const pieChartRef = useRef(null);
@@ -122,6 +123,16 @@ const ProjectsMetrics = () => {
       setSprintInfo(data);
     } catch (error) {
       console.error('[ProjectsMetrics] Error loading sprint info:', error);
+    }
+  };
+
+  const loadScopeChanges = async (sprintId) => {
+    try {
+      const data = await getSprintScopeChanges(sprintId);
+      setScopeChanges(data);
+    } catch (error) {
+      console.error('[ProjectsMetrics] Error loading scope changes:', error);
+      setScopeChanges(null);
     }
   };
 

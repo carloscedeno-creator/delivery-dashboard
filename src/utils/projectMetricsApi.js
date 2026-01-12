@@ -722,7 +722,7 @@ export const getSprintScopeChanges = async (sprintId) => {
       .select('*')
       .eq('sprint_id', sprintId)
       .maybeSingle();
-
+    
     if (summaryError && summaryError.code !== 'PGRST116') { // PGRST116 = no rows returned
       throw summaryError;
     }
@@ -762,4 +762,3 @@ export const getSprintScopeChanges = async (sprintId) => {
     throw error;
   }
 };
-

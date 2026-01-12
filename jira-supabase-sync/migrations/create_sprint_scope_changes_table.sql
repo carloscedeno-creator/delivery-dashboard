@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS sprint_scope_changes (
   story_points_after NUMERIC(10, 2),
   detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Índice único para evitar duplicados básicos (la deduplicación por día se maneja en el código)
