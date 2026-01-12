@@ -1,0 +1,110 @@
+{
+  "version": "1.0",
+  "last_updated": "2024-12-19",
+  "stories": [
+    {
+      "id": "story-001",
+      "title": "User Authentication",
+      "description": "Usuarios pueden iniciar sesión con email/password usando Supabase Auth",
+      "acceptance_criteria": [
+        "User can login with email/password",
+        "Session persists across page reloads",
+        "Logout clears session and redirects to login",
+        "Invalid credentials show error message",
+        "Loading state shown during authentication"
+      ],
+      "passes": true,
+      "tests": ["Login.test.jsx", "authService.test.js"],
+      "related_files": ["src/components/Login.jsx", "src/utils/authService.js"]
+    },
+    {
+      "id": "story-002",
+      "title": "Password Recovery",
+      "description": "Usuarios pueden recuperar su contraseña mediante email",
+      "acceptance_criteria": [
+        "User can request password reset via email",
+        "Reset token is generated and sent via email",
+        "User can reset password with valid token",
+        "Token expires after 1 hour",
+        "Token can only be used once"
+      ],
+      "passes": true,
+      "tests": ["ForgotPassword.test.jsx", "ResetPassword.test.jsx"],
+      "related_files": ["src/components/ForgotPassword.jsx", "src/components/ResetPassword.jsx"]
+    },
+    {
+      "id": "story-003",
+      "title": "Role-Based Access Control",
+      "description": "Sistema de permisos basado en roles para controlar acceso a módulos",
+      "acceptance_criteria": [
+        "Admin role has access to all modules",
+        "PM role has access to Delivery, Product, Projects Metrics",
+        "Developer role has access to Developer Metrics, Team Capacity",
+        "Viewer role has read-only access",
+        "Unauthorized modules are hidden from sidebar"
+      ],
+      "passes": true,
+      "tests": ["RoleAccess.test.jsx", "permissions.test.js"],
+      "related_files": ["src/config/permissions.js", "src/components/RoleAccess.jsx"]
+    },
+    {
+      "id": "story-004",
+      "title": "Status Unification System",
+      "description": "Sistema centralizado para determinar estatus 'Done' usando status_definitions",
+      "acceptance_criteria": [
+        "statusHelper.js provides centralized status checking",
+        "All modules use statusHelper instead of hardcoded logic",
+        "SQL function is_status_completed uses status_definitions table",
+        "RPC function calculate_squad_sprint_sp_done uses is_status_completed",
+        "KPIs show consistent values across modules"
+      ],
+      "passes": true,
+      "tests": ["statusHelper.test.js"],
+      "related_files": ["src/utils/statusHelper.js", "docs/supabase/update_calculate_sp_done_function.sql"]
+    },
+    {
+      "id": "story-005",
+      "title": "Sprint Scope Changes Tracking",
+      "description": "Detectar y mostrar cambios de scope durante sprints (issues agregados, removidos, cambios en SP)",
+      "acceptance_criteria": [
+        "System detects issues added to sprint after start",
+        "System detects issues removed from sprint before close",
+        "System detects Story Points changes during sprint",
+        "Changes are displayed in Projects Metrics",
+        "Changes are stored in sprint_scope_changes table"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["jira-supabase-sync/src/processors/scope-change-detector.js", "src/components/ProjectsMetrics.jsx"]
+    },
+    {
+      "id": "story-006",
+      "title": "Retry with Exponential Backoff",
+      "description": "Sistema de retry automático con exponential backoff para llamadas a Jira API",
+      "acceptance_criteria": [
+        "Retry helper handles rate limiting (429) with retry-after header",
+        "Exponential backoff for temporary errors",
+        "Detailed logging of retry attempts",
+        "Implemented in jira-client.js and sprint-closure-processor.js"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["jira-supabase-sync/src/utils/retry-helper.js"]
+    },
+    {
+      "id": "story-007",
+      "title": "Sprint Closure Processing",
+      "description": "Validación y procesamiento mejorado de cierre de sprints",
+      "acceptance_criteria": [
+        "Validates sprint state is 'closed'",
+        "Validates sprint has end_date",
+        "Verifies sprint status in Jira if sprint_key exists",
+        "Uses retry helper for Jira API calls",
+        "Integrated in main sync process"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["jira-supabase-sync/src/processors/sprint-closure-processor.js"]
+    }
+  ]
+}

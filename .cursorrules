@@ -1,0 +1,88 @@
+# Delivery Dashboard - Constitución Global
+
+**Framework:** Ralph-Compounding / Agentic Engineering  
+**Límite:** 200 líneas máximo (reglas pesadas en `/reference/`)
+
+---
+
+## 🎯 Tech Stack
+
+- **Frontend:** React 18.2 + Vite 5.1
+- **UI:** TailwindCSS + Lucide React Icons
+- **Charts:** Recharts 2.12
+- **Backend:** Supabase (PostgreSQL + Auth + Edge Functions)
+- **Sync:** Node.js (jira-supabase-sync)
+- **Testing:** Vitest 4.0 + React Testing Library
+- **Deployment:** GitHub Pages
+
+---
+
+## 📚 Referencias On-Demand
+
+**Cargar solo cuando sea relevante:**
+
+- `/reference/api_guidelines.md` - Patrones de API y Supabase
+- `/reference/ui_components.md` - Componentes React y patrones UI
+- `/reference/database_schema.md` - Esquema Supabase y funciones RPC
+- `/reference/deployment.md` - GitHub Pages y Edge Functions
+- `/reference/configuration.md` - Variables de entorno y setup
+- `/reference/troubleshooting.md` - Errores comunes y soluciones
+- `/reference/metrics_calculations.md` - Fórmulas de KPIs
+- `/reference/jira_integration.md` - Sync process y Jira API
+
+---
+
+## 🏗️ Arquitectura
+
+- **Componentes:** `src/components/` - React components
+- **Servicios:** `src/services/` - Business logic
+- **Utils:** `src/utils/` - Helpers y APIs
+- **Sync:** `jira-supabase-sync/` - Servicio de sincronización Jira→Supabase
+
+---
+
+## ✅ Estándares Globales
+
+### Logging
+- Usar `console.log` con prefijos: `[MODULE_NAME] Mensaje`
+- En desarrollo: logging detallado
+- En producción: solo errores críticos
+
+### Testing
+- Mínimo 5 tests por feature nueva
+- Mínimo 2 tests por bug fix
+- Tests corren automáticamente antes de commit (Husky)
+
+### Imports
+- Usar alias `@/` para imports absolutos: `@/components/Login`
+- No usar imports relativos profundos: `../../../components`
+
+### Git
+- Commits: `feat:`, `fix:`, `docs:`, `refactor:`
+- Branch: `V1.08` (versionado)
+- Pre-push: tests automáticos
+
+---
+
+## 🔄 Workflows
+
+### PRD-First Development
+- Siempre crear PRD en `/specs/prd.md` antes de codificar
+- Ver `/specs/stories.json` para user stories atomizadas
+
+### Context Reset
+- Planificar en una conversación
+- **RESET** (limpiar chat)
+- Ejecutar en conversación nueva
+
+### System Evolution
+- Cada bug → actualizar `/src/**/agents.md` o `/reference/`
+- Nunca solo "fix" - siempre mejorar el sistema
+
+---
+
+## 📖 Ver También
+
+- `/specs/prd.md` - PRD principal del proyecto
+- `AGENTS.md` - Constitución expandida y referencias
+- `.cursor/rules/` - Reglas específicas (testing, docs, best-practices)
