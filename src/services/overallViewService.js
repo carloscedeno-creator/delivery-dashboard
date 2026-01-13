@@ -53,7 +53,7 @@ export const getActiveSprints = async () => {
     const enrichedSprints = await Promise.all(
       sprints.map(async (sprint) => {
         // Get capacity data (use maybeSingle to handle missing records gracefully)
-        // Note: sp_done may not exist in table - use RPC function or default to 0
+        // Note: sp_done does NOT exist in table - must use RPC function to calculate
         const { data: capacity, error: capacityError } = await supabase
           .from('squad_sprint_capacity')
           .select('capacity_goal_sp, capacity_available_sp')
@@ -85,9 +85,12 @@ export const getActiveSprints = async () => {
           }
         }
         
-        // Add sp_done to capacity object
+        // Add sp_done to capacity object (always set, even if 0)
         if (capacity) {
           capacity.sp_done = spDone;
+        } else {
+          // Create minimal capacity object if none exists
+          capacity = { capacity_goal_sp: 0, capacity_available_sp: 0, sp_done: 0 };
         }
 
         // Calculate days remaining
