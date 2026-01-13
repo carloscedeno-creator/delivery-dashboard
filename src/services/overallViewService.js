@@ -54,7 +54,7 @@ export const getActiveSprints = async () => {
       sprints.map(async (sprint) => {
         // Get capacity data (use maybeSingle to handle missing records gracefully)
         // Note: sp_done does NOT exist in table - must use RPC function to calculate
-        const { data: capacity, error: capacityError } = await supabase
+        const { data: capacityData, error: capacityError } = await supabase
           .from('squad_sprint_capacity')
           .select('capacity_goal_sp, capacity_available_sp')
           .eq('squad_id', sprint.squad_id)
@@ -68,7 +68,7 @@ export const getActiveSprints = async () => {
         
         // Calculate sp_done using RPC function if capacity exists
         let spDone = 0;
-        if (capacity && !capacityError) {
+        if (capacityData && !capacityError) {
           try {
             const { data: spDoneData, error: rpcError } = await supabase
               .rpc('calculate_squad_sprint_sp_done', {
@@ -85,13 +85,10 @@ export const getActiveSprints = async () => {
           }
         }
         
-        // Add sp_done to capacity object (always set, even if 0)
-        if (capacity) {
-          capacity.sp_done = spDone;
-        } else {
-          // Create minimal capacity object if none exists
-          capacity = { capacity_goal_sp: 0, capacity_available_sp: 0, sp_done: 0 };
-        }
+        // Create capacity object (always set, even if 0)
+        const capacity = capacityData 
+          ? { ...capacityData, sp_done: spDone }
+          : { capacity_goal_sp: 0, capacity_available_sp: 0, sp_done: 0 };
 
         // Calculate days remaining
         const endDate = new Date(sprint.end_date);
@@ -141,11 +138,11 @@ export const getActiveSprints = async () => {
 export const getOverallKPIs = async () => {
   try {
     // Get KPIs without filters (all squads)
-    // Explicitly pass empty filters to ensure no squad filtering
+    // Explicitly pass empty filters object to ensure no squad filtering
     const [deliveryData, qualityData, healthData] = await Promise.all([
-      getDeliveryKPIData({ filterSquadId: undefined, filterSprintId: null }),
-      getQualityKPIData({ filterSquadId: undefined, filterSprintId: null }),
-      getTeamHealthKPIData({ filterSquadId: undefined, filterSprintId: null })
+      getDeliveryKPIData({ filters: {} }), // Empty filters = all squads
+      getQualityKPIData({ filters: {} }), // Empty filters = all squads
+      getTeamHealthKPIData({ filters: {} }) // Empty filters = all squads
     ]);
 
     // Calculate average velocity from recent sprints
@@ -304,17 +301,17 @@ export const getQuickAlerts = async () => {
 
     // 3. Blocked issues (if we have access to issues table)
     try {
-      // Query blocked issues - status is stored as text in issues table
-      // Use ilike for case-insensitive matching and handle potential variations
+      // Query blocked issues - use current_status field (standard field name)
+      // Silently fail if query doesn't work - blocked issues are optional
       const { data: blockedIssues, error: blockedError } = await supabase
         .from('issues')
-        .select('id, issue_key, summary, squad_id, sprint_id, status')
-        .or('status.ilike.BLOCKED,status.ilike.%blocked%')
+        .select('id, issue_key, summary, squad_id, sprint_id, current_status')
+        .or('current_status.ilike.BLOCKED,current_status.ilike.%blocked%')
         .limit(10);
       
       // Log error but don't fail - blocked issues are optional
       if (blockedError) {
-        console.debug('[OVERALL_VIEW] Error fetching blocked issues:', blockedError);
+        console.debug('[OVERALL_VIEW] Error fetching blocked issues (non-critical):', blockedError.message);
       }
 
       if (blockedIssues && blockedIssues.length > 0 && !blockedError) {
