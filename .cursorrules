@@ -77,6 +77,9 @@
 - Usar `.or()` con múltiples condiciones cuando hay variaciones posibles
 - Incluir manejo de errores con logging apropiado (`console.warn` para errores no críticos)
 - Validar datos antes de usar (usar optional chaining `?.`)
+- **OBLIGATORIO:** Verificar qué columnas existen en una tabla antes de hacer SELECT
+- **OBLIGATORIO:** Usar funciones RPC para datos calculados (no leer directamente de tabla si no existe)
+- Manejar casos donde funciones RPC pueden no existir (try-catch con defaults)
 - Ver `src/services/agents.md` para patrones completos y diferencias `.single()` vs `.maybeSingle()`
 
 ### Git

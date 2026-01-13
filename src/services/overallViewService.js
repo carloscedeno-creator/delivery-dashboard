@@ -53,9 +53,10 @@ export const getActiveSprints = async () => {
     const enrichedSprints = await Promise.all(
       sprints.map(async (sprint) => {
         // Get capacity data (use maybeSingle to handle missing records gracefully)
+        // Note: sp_done may not exist in table - use RPC function or default to 0
         const { data: capacity, error: capacityError } = await supabase
           .from('squad_sprint_capacity')
-          .select('capacity_goal_sp, capacity_available_sp, sp_done')
+          .select('capacity_goal_sp, capacity_available_sp')
           .eq('squad_id', sprint.squad_id)
           .eq('sprint_id', sprint.id)
           .maybeSingle();
@@ -63,6 +64,30 @@ export const getActiveSprints = async () => {
         // Log error but don't fail - capacity data is optional
         if (capacityError && capacityError.code !== 'PGRST116') {
           console.warn(`[OVERALL_VIEW] Error fetching capacity for sprint ${sprint.id}:`, capacityError);
+        }
+        
+        // Calculate sp_done using RPC function if capacity exists
+        let spDone = 0;
+        if (capacity && !capacityError) {
+          try {
+            const { data: spDoneData, error: rpcError } = await supabase
+              .rpc('calculate_squad_sprint_sp_done', {
+                p_squad_id: sprint.squad_id,
+                p_sprint_id: sprint.id
+              });
+            
+            if (!rpcError && spDoneData !== null && spDoneData !== undefined) {
+              spDone = Number(spDoneData) || 0;
+            }
+          } catch (rpcErr) {
+            // RPC function may not exist, use 0 as default
+            console.debug(`[OVERALL_VIEW] RPC calculate_squad_sprint_sp_done not available for sprint ${sprint.id}, using 0`);
+          }
+        }
+        
+        // Add sp_done to capacity object
+        if (capacity) {
+          capacity.sp_done = spDone;
         }
 
         // Calculate days remaining
@@ -113,10 +138,11 @@ export const getActiveSprints = async () => {
 export const getOverallKPIs = async () => {
   try {
     // Get KPIs without filters (all squads)
+    // Explicitly pass empty filters to ensure no squad filtering
     const [deliveryData, qualityData, healthData] = await Promise.all([
-      getDeliveryKPIData({}),
-      getQualityKPIData({}),
-      getTeamHealthKPIData({})
+      getDeliveryKPIData({ filterSquadId: undefined, filterSprintId: null }),
+      getQualityKPIData({ filterSquadId: undefined, filterSprintId: null }),
+      getTeamHealthKPIData({ filterSquadId: undefined, filterSprintId: null })
     ]);
 
     // Calculate average velocity from recent sprints
@@ -165,18 +191,48 @@ const calculateAverageVelocity = async () => {
 
     const sprintIds = sprints.map(s => s.id);
 
-    // Get SP Done for these sprints
-    const { data: capacities } = await supabase
-      .from('squad_sprint_capacity')
-      .select('sp_done')
-      .in('sprint_id', sprintIds)
-      .not('sp_done', 'is', null);
+    // Get SP Done for these sprints using RPC function
+    // Since sp_done may not exist in table, calculate for each sprint
+    const spDoneValues = await Promise.all(
+      sprints.map(async (sprint) => {
+        // Get squad_id for this sprint
+        const { data: sprintData } = await supabase
+          .from('sprints')
+          .select('squad_id')
+          .eq('id', sprint.id)
+          .single();
+        
+        if (!sprintData?.squad_id) {
+          return null;
+        }
+        
+        try {
+          const { data: spDoneData, error: rpcError } = await supabase
+            .rpc('calculate_squad_sprint_sp_done', {
+              p_squad_id: sprintData.squad_id,
+              p_sprint_id: sprint.id
+            });
+          
+          if (!rpcError && spDoneData !== null && spDoneData !== undefined) {
+            return Number(spDoneData) || 0;
+          }
+        } catch (rpcErr) {
+          // RPC function may not exist, skip this sprint
+          console.debug(`[OVERALL_VIEW] RPC calculate_squad_sprint_sp_done not available for sprint ${sprint.id}`);
+        }
+        
+        return null;
+      })
+    );
+    
+    // Filter out null values
+    const capacities = spDoneValues.filter(val => val !== null && val !== undefined);
 
     if (!capacities || capacities.length === 0) {
       return null;
     }
 
-    const totalSPDone = capacities.reduce((sum, cap) => sum + (cap.sp_done || 0), 0);
+    const totalSPDone = capacities.reduce((sum, spDone) => sum + (spDone || 0), 0);
     const averageSPDone = totalSPDone / capacities.length;
 
     return {
@@ -245,11 +301,18 @@ export const getQuickAlerts = async () => {
 
     // 3. Blocked issues (if we have access to issues table)
     try {
-      const { data: blockedIssues } = await supabase
+      // Query blocked issues - status is stored as text in issues table
+      // Use ilike for case-insensitive matching and handle potential variations
+      const { data: blockedIssues, error: blockedError } = await supabase
         .from('issues')
-        .select('id, issue_key, summary, squad_id, sprint_id')
-        .eq('status', 'BLOCKED')
+        .select('id, issue_key, summary, squad_id, sprint_id, status')
+        .or('status.ilike.BLOCKED,status.ilike.%blocked%')
         .limit(10);
+      
+      // Log error but don't fail - blocked issues are optional
+      if (blockedError) {
+        console.debug('[OVERALL_VIEW] Error fetching blocked issues:', blockedError);
+      }
 
       if (blockedIssues && blockedIssues.length > 0 && !blockedError) {
         alerts.push({

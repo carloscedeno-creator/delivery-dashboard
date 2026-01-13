@@ -70,6 +70,12 @@
 **Solución:** Usar función RPC `calculate_squad_sprint_sp_done` que usa `status_definitions`  
 **Regla agregada:** Siempre usar función RPC para cálculos de SP Done
 
+### Bug: Column sp_done does not exist en squad_sprint_capacity
+**Fecha:** 2024-12-19  
+**Problema:** Código intentaba leer `sp_done` directamente de tabla `squad_sprint_capacity`, pero esa columna no existe  
+**Solución:** Usar función RPC `calculate_squad_sprint_sp_done` para calcular `sp_done` dinámicamente  
+**Regla agregada:** Verificar qué columnas existen en una tabla antes de hacer SELECT. Usar funciones RPC para datos calculados.
+
 ---
 
 ## Referencias
