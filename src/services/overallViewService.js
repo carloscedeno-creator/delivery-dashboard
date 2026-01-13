@@ -138,9 +138,9 @@ export const getActiveSprints = async () => {
 export const getOverallKPIs = async () => {
   try {
     // Get KPIs without filters (all squads)
-    // Explicitly pass empty filters object to ensure no squad filtering
+    // Pass projectKey: null to prevent default 'OBD' from being used
     const [deliveryData, qualityData, healthData] = await Promise.all([
-      getDeliveryKPIData({ filters: {} }), // Empty filters = all squads
+      getDeliveryKPIData({ filters: {}, projectKey: null }), // No projectKey = all squads
       getQualityKPIData({ filters: {} }), // Empty filters = all squads
       getTeamHealthKPIData({ filters: {} }) // Empty filters = all squads
     ]);
@@ -301,12 +301,12 @@ export const getQuickAlerts = async () => {
 
     // 3. Blocked issues (if we have access to issues table)
     try {
-      // Query blocked issues - use current_status field (standard field name)
+      // Query blocked issues - use current_status field with simple ilike
       // Silently fail if query doesn't work - blocked issues are optional
       const { data: blockedIssues, error: blockedError } = await supabase
         .from('issues')
         .select('id, issue_key, summary, squad_id, sprint_id, current_status')
-        .or('current_status.ilike.BLOCKED,current_status.ilike.%blocked%')
+        .ilike('current_status', '%blocked%') // Simple ilike pattern matching
         .limit(10);
       
       // Log error but don't fail - blocked issues are optional

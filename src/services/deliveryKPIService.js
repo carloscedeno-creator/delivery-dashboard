@@ -11,6 +11,7 @@ import {
   calculateDeliverySuccessScore
 } from '../utils/kpiCalculations';
 import { mockDeliveryKPIData } from '../data/kpiMockData';
+import { filterRecentSprints } from '../utils/sprintFilterHelper.js';
 
 /**
  * Calcula el Cycle Time promedio desde métricas de sprint
@@ -167,8 +168,9 @@ export const getDeliveryKPIData = async (options = {}) => {
     // Construir query de métricas de sprint con filtros
     // Primero obtener los sprints del squad para filtrar la vista
     let squadIdToUse = filters.squadId;
-    if (!squadIdToUse) {
-      // Si no hay squadId, obtener squad_id desde projectKey
+    if (!squadIdToUse && projectKey) {
+      // Si no hay squadId pero hay projectKey, obtener squad_id desde projectKey
+      // Si projectKey es null/undefined, skip this (means "all squads")
       const { data: squad } = await supabase
         .from('squads')
         .select('id')
@@ -186,7 +188,7 @@ export const getDeliveryKPIData = async (options = {}) => {
       console.log(`[DELIVERY_KPI] 🔍 Filtering by squad_id: ${squadIdToUse}`);
       const { data: sprints, error: sprintsError } = await supabase
         .from('sprints')
-        .select('sprint_name')
+        .select('sprint_name, state, end_date, start_date, created_at')
         .eq('squad_id', squadIdToUse)
         .ilike('sprint_name', '%Sprint%');
       
@@ -195,8 +197,10 @@ export const getDeliveryKPIData = async (options = {}) => {
       }
       
       if (sprints && sprints.length > 0) {
-        squadSprintNames = sprints.map(s => s.sprint_name);
-        console.log(`[DELIVERY_KPI] ✅ Found ${squadSprintNames.length} sprints for squad:`, squadSprintNames.slice(0, 5));
+        // Filtrar para mantener solo últimos 10 cerrados + activos (NO futuros)
+        const filteredSprints = filterRecentSprints(sprints, squadIdToUse);
+        squadSprintNames = filteredSprints.map(s => s.sprint_name);
+        console.log(`[DELIVERY_KPI] ✅ Found ${squadSprintNames.length} sprints for squad (filtered):`, squadSprintNames.slice(0, 5));
       } else {
         console.warn(`[DELIVERY_KPI] ⚠️ No sprints found for squad_id: ${squadIdToUse}`);
       }
