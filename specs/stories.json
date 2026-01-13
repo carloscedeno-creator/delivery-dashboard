@@ -1,5 +1,5 @@
 {
-  "version": "1.1",
+  "version": "1.2",
   "last_updated": "2024-12-19",
   "stories": [
     {
@@ -321,6 +321,27 @@
       "passes": true,
       "tests": ["Sidebar.test.jsx"],
       "related_files": ["src/components/Sidebar.jsx", "src/config/permissions.js"]
+    },
+    {
+      "id": "story-021",
+      "title": "Overall View Dashboard Complete",
+      "description": "Vista general combinando Product y Delivery insights con KPIs principales, resumen de sprints activos, timeline unificado y alertas",
+      "acceptance_criteria": [
+        "KPIs principales cards display (Delivery Score, Quality Score, Team Health Score, Average Velocity)",
+        "Active sprints summary shows all active sprints by squad",
+        "Sprint progress displayed (SP Done / SP Goal)",
+        "Days remaining calculated and displayed for each active sprint",
+        "Visual alerts shown for sprints at risk (< 70% progress)",
+        "Unified timeline displays product initiatives and active sprints",
+        "Gantt chart shows combined timeline with critical items",
+        "Quick alerts section shows critical items (low velocity, blocked issues, sprints closing soon)",
+        "Data loads from Supabase without errors",
+        "Loading states shown during data fetch",
+        "Error states handled gracefully"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/OverallView.jsx", "src/services/overallViewService.js"]
     }
   ]
 }

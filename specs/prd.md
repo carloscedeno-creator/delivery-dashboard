@@ -52,9 +52,23 @@ Jira API → jira-supabase-sync (cada 30 min) → Supabase → Dashboard (React)
 - Permisos por módulo
 
 ### 2. Overall View
-- Vista general de métricas
-- KPIs principales
-- Resumen de sprints activos
+- **KPIs Principales (Cards):**
+  - Delivery Success Score (promedio de todos los squads)
+  - Development Quality Score (promedio de todos los squads)
+  - Team Health Score (promedio de todos los squads)
+  - Velocity promedio (últimos 6 sprints)
+- **Resumen de Sprints Activos:**
+  - Lista de sprints activos por squad
+  - Progreso de cada sprint (SP Done / SP Goal)
+  - Días restantes en sprint
+  - Alertas visuales para sprints en riesgo
+- **Timeline Unificado:**
+  - Vista combinada de iniciativas de producto y sprints activos
+  - Gantt chart simplificado con items críticos
+- **Alertas Rápidas:**
+  - Sprints con baja velocidad (< 70% del goal)
+  - Issues bloqueados por squad
+  - Sprints próximos a cerrar (últimos 3 días)
 
 ### 3. Delivery Metrics
 - Delivery KPIs (Velocity, Cycle Time, Throughput)
