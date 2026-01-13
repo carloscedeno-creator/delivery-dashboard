@@ -70,6 +70,15 @@
 - Usar optional chaining (`?.`) para acceder a propiedades de objetos que pueden ser null/undefined
 - **NUNCA** asumir que una función retorna un tipo primitivo sin verificar
 
+### Queries Supabase
+- **OBLIGATORIO:** Usar `.maybeSingle()` cuando el resultado puede no existir (no `.single()`)
+- **OBLIGATORIO:** Manejar errores de queries opcionales sin fallar la aplicación
+- Usar `.ilike()` para búsquedas de texto case-insensitive (no `.eq()` para texto)
+- Usar `.or()` con múltiples condiciones cuando hay variaciones posibles
+- Incluir manejo de errores con logging apropiado (`console.warn` para errores no críticos)
+- Validar datos antes de usar (usar optional chaining `?.`)
+- Ver `src/services/agents.md` para patrones completos y diferencias `.single()` vs `.maybeSingle()`
+
 ### Git
 - Commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - Branch: `V1.08` (versionado)

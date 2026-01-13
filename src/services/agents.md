@@ -4,6 +4,32 @@
 
 ---
 
+## ⚠️ CRITICAL: Supabase Query Patterns
+
+**ERRORES ENCONTRADOS:** Queries retornando 400 Bad Request
+- **Fecha:** 2024-12-19
+- **Archivos:** `overallViewService.js`
+- **Errores:** `.single()` fallando cuando no hay resultados, `.eq('status', 'BLOCKED')` fallando
+
+**REGLAS DE VERIFICACIÓN OBLIGATORIAS:**
+1. **SIEMPRE** usar `.maybeSingle()` cuando el resultado puede no existir (no `.single()`)
+2. **SIEMPRE** manejar errores de queries opcionales sin fallar la aplicación
+3. **SIEMPRE** usar `.ilike()` para búsquedas de texto case-insensitive
+4. **SIEMPRE** incluir manejo de errores con logging apropiado (`console.warn` para errores no críticos)
+5. **SIEMPRE** validar datos antes de usar (usar optional chaining `?.`)
+
+**Diferencia `.single()` vs `.maybeSingle()`:**
+- `.single()`: Espera exactamente 1 resultado, retorna error si hay 0 o >1
+- `.maybeSingle()`: Retorna null si no hay resultados, error solo si hay >1
+
+**Checklist antes de hacer queries:**
+- [ ] ¿El resultado puede no existir? → Usar `.maybeSingle()`
+- [ ] ¿Es una query opcional? → Manejar errores sin fallar
+- [ ] ¿Es búsqueda de texto? → Usar `.ilike()` para case-insensitive
+- [ ] ¿Hay variaciones posibles? → Usar `.or()` con múltiples condiciones
+
+---
+
 ## Patrones y Decisiones de Diseño
 
 ### Dev Performance Service

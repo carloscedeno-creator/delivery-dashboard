@@ -52,13 +52,18 @@ export const getActiveSprints = async () => {
     // Enrich with capacity and metrics data
     const enrichedSprints = await Promise.all(
       sprints.map(async (sprint) => {
-        // Get capacity data
-        const { data: capacity } = await supabase
+        // Get capacity data (use maybeSingle to handle missing records gracefully)
+        const { data: capacity, error: capacityError } = await supabase
           .from('squad_sprint_capacity')
           .select('capacity_goal_sp, capacity_available_sp, sp_done')
           .eq('squad_id', sprint.squad_id)
           .eq('sprint_id', sprint.id)
-          .single();
+          .maybeSingle();
+        
+        // Log error but don't fail - capacity data is optional
+        if (capacityError && capacityError.code !== 'PGRST116') {
+          console.warn(`[OVERALL_VIEW] Error fetching capacity for sprint ${sprint.id}:`, capacityError);
+        }
 
         // Calculate days remaining
         const endDate = new Date(sprint.end_date);
@@ -246,7 +251,7 @@ export const getQuickAlerts = async () => {
         .eq('status', 'BLOCKED')
         .limit(10);
 
-      if (blockedIssues && blockedIssues.length > 0) {
+      if (blockedIssues && blockedIssues.length > 0 && !blockedError) {
         alerts.push({
           type: 'blocked_issues',
           severity: 'medium',
