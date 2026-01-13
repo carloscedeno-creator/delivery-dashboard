@@ -56,6 +56,8 @@
 ### Imports
 - Usar alias `@/` para imports absolutos: `@/components/Login`
 - No usar imports relativos profundos: `../../../components`
+- **VERIFICAR ICONOS:** Antes de importar de `lucide-react`, verificar que el icono existe en https://lucide.dev/icons/
+- Iconos comunes válidos: `Calendar`, `Clock`, `AlertCircle`, `TrendingUp`, `BarChart3`, `Activity`, `Truck`, `Shield`, `Heart`
 
 ### Git
 - Commits: `feat:`, `fix:`, `docs:`, `refactor:`

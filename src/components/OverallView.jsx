@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Timeline
+  BarChart3
 } from 'lucide-react';
 import KPICard from './KPICard';
 import NoDataAvailable from './NoDataAvailable';
@@ -242,7 +242,7 @@ const OverallView = () => {
         <div className="glass rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <Timeline className="text-cyan-400" size={24} />
+              <BarChart3 className="text-cyan-400" size={24} />
               Unified Timeline
             </h2>
             <span className="text-sm text-slate-400">
