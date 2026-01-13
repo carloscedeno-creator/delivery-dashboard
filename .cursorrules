@@ -56,8 +56,13 @@
 ### Imports
 - Usar alias `@/` para imports absolutos: `@/components/Login`
 - No usar imports relativos profundos: `../../../components`
-- **VERIFICAR ICONOS:** Antes de importar de `lucide-react`, verificar que el icono existe en https://lucide.dev/icons/
-- Iconos comunes válidos: `Calendar`, `Clock`, `AlertCircle`, `TrendingUp`, `BarChart3`, `Activity`, `Truck`, `Shield`, `Heart`
+
+### Iconos (Lucide React)
+- **OBLIGATORIO:** Verificar que el icono existe en https://lucide.dev/icons/ antes de importar
+- **NUNCA** asumir que un icono existe sin verificar
+- Si no existe, buscar alternativa similar en la documentación
+- Iconos comunes válidos: `Calendar`, `Clock`, `AlertCircle`, `TrendingUp`, `BarChart3`, `Activity`, `Truck`, `Shield`, `Heart`, `SquareChartGantt`
+- Ver `src/components/agents.md` para lista completa y proceso de verificación
 
 ### Git
 - Commits: `feat:`, `fix:`, `docs:`, `refactor:`
