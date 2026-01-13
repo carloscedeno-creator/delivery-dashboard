@@ -80,6 +80,12 @@
 **Solución:** Reemplazado con `BarChart3`  
 **Regla agregada:** Verificar iconos en https://lucide.dev/icons/ antes de importar
 
+### Bug: TypeError en getScoreLabel - level.charAt is not a function
+**Fecha:** 2024-12-19  
+**Problema:** `getScoreLevel()` retorna un objeto `{label, color, min, max}`, pero se trató como string usando `.charAt()`  
+**Solución:** Cambiar a usar `level?.label` en lugar de tratar `level` como string  
+**Regla agregada:** Verificar tipo de retorno de funciones utilitarias antes de usar métodos específicos de tipo. Revisar cómo otros componentes usan la misma función.
+
 ---
 
 ## Referencias

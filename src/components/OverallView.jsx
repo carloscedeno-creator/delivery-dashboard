@@ -74,7 +74,8 @@ const OverallView = () => {
   const getScoreLabel = (score) => {
     if (score === null || score === undefined) return 'No data';
     const level = getScoreLevel(score);
-    return level.charAt(0).toUpperCase() + level.slice(1);
+    // getScoreLevel returns an object with 'label' property, not a string
+    return level?.label || 'Unknown';
   };
 
   const getRiskColor = (riskLevel) => {

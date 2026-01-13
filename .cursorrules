@@ -64,6 +64,12 @@
 - Iconos comunes válidos: `Calendar`, `Clock`, `AlertCircle`, `TrendingUp`, `BarChart3`, `Activity`, `Truck`, `Shield`, `Heart`, `SquareChartGantt`
 - Ver `src/components/agents.md` para lista completa y proceso de verificación
 
+### Verificación de Tipos de Retorno
+- **OBLIGATORIO:** Verificar el tipo de retorno de funciones utilitarias antes de usar métodos específicos de tipo
+- Revisar cómo otros componentes usan la misma función utilitaria
+- Usar optional chaining (`?.`) para acceder a propiedades de objetos que pueden ser null/undefined
+- **NUNCA** asumir que una función retorna un tipo primitivo sin verificar
+
 ### Git
 - Commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - Branch: `V1.08` (versionado)
