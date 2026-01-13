@@ -82,6 +82,27 @@
 - Manejar casos donde funciones RPC pueden no existir (try-catch con defaults)
 - Ver `src/services/agents.md` para patrones completos y diferencias `.single()` vs `.maybeSingle()`
 
+### Funciones RPC Supabase
+- **OBLIGATORIO:** Verificar firma exacta de función RPC antes de llamarla (consultar documentación SQL)
+- **OBLIGATORIO:** Consultar hint del error si la función no se encuentra (incluye firma sugerida)
+- **OBLIGATORIO:** No pasar parámetros que no existen en la función (remover completamente, no solo pasarlos como `null`)
+- Manejar errores con fallback apropiado (try-catch o función manual alternativa)
+- Ver `docs/ERROR_CALCULATE_REWORK_RATE_PARAMS_FIX.md` para ejemplo completo
+
+### Variables const vs let
+- **OBLIGATORIO:** No reasignar variables declaradas con `const`
+- **OBLIGATORIO:** Usar operador ternario para crear objetos condicionales con `const`
+- **OBLIGATORIO:** Usar nombres diferentes para datos de API vs objetos finales (ej: `capacityData` vs `capacity`)
+- Usar spread operator `{...data}` para crear nuevos objetos en lugar de mutar
+- Ver `docs/ERROR_ASSIGNMENT_CONSTANT_VARIABLE_FIX.md` para ejemplo completo
+
+### Filtros y Parámetros por Defecto
+- **OBLIGATORIO:** Verificar valores por defecto que pueden causar filtros no deseados
+- **OBLIGATORIO:** Pasar `null` explícitamente cuando se quieren datos sin filtros (ej: `projectKey: null`)
+- **OBLIGATORIO:** Validar que parámetros existen antes de usarlos (ej: `if (projectKey)`)
+- Documentar comportamiento cuando parámetros son `null` vs cuando tienen valor
+- Ver `docs/ERROR_PROJECTKEY_FILTER_FIX.md` para ejemplo completo
+
 ### Git
 - Commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - Branch: `V1.08` (versionado)

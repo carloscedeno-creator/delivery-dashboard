@@ -27,6 +27,12 @@
 - [ ] ¿Es una query opcional? → Manejar errores sin fallar
 - [ ] ¿Es búsqueda de texto? → Usar `.ilike()` para case-insensitive
 - [ ] ¿Hay variaciones posibles? → Usar `.or()` con múltiples condiciones
+- [ ] ¿La columna existe en la tabla? → Verificar esquema antes de SELECT
+- [ ] ¿Es un dato calculado? → Usar función RPC en lugar de leer de tabla
+- [ ] ¿Conozco la firma exacta de la función RPC? → Consultar documentación SQL
+- [ ] ¿Los parámetros coinciden con la firma? → Verificar nombre y orden, remover parámetros extra
+- [ ] ¿Voy a reasignar una variable? → Usar `let` en lugar de `const`, o usar operador ternario
+- [ ] ¿Quiero datos sin filtros? → Pasar `projectKey: null` explícitamente
 
 ---
 
@@ -75,6 +81,24 @@
 **Problema:** Código intentaba leer `sp_done` directamente de tabla `squad_sprint_capacity`, pero esa columna no existe  
 **Solución:** Usar función RPC `calculate_squad_sprint_sp_done` para calcular `sp_done` dinámicamente  
 **Regla agregada:** Verificar qué columnas existen en una tabla antes de hacer SELECT. Usar funciones RPC para datos calculados.
+
+### Bug: calculate_rework_rate con parámetros incorrectos
+**Fecha:** 2024-12-19  
+**Problema:** Código pasaba `p_squad_id` a función RPC `calculate_rework_rate`, pero esa función no acepta ese parámetro  
+**Solución:** Remover `p_squad_id` de parámetros, solo pasar `p_sprint_id`, `p_start_date`, `p_end_date`  
+**Regla agregada:** Verificar firma exacta de funciones RPC antes de llamarlas. Consultar documentación SQL o hint del error.
+
+### Bug: Assignment to constant variable
+**Fecha:** 2024-12-19  
+**Problema:** Código intentaba reasignar variable declarada con `const` cuando era `null`  
+**Solución:** Usar operador ternario para crear objeto condicionalmente, usar nombres diferentes para datos de API vs objeto final  
+**Regla agregada:** No reasignar variables `const`. Usar operador ternario para objetos condicionales. Usar nombres descriptivos diferentes.
+
+### Bug: projectKey default causando filtro no deseado
+**Fecha:** 2024-12-19  
+**Problema:** `getDeliveryKPIData` tiene `projectKey = 'OBD'` por defecto, causando filtro automático de squad cuando se quiere datos de todos los squads  
+**Solución:** Pasar `projectKey: null` explícitamente cuando se quieren todos los squads, validar `projectKey` antes de usarlo  
+**Regla agregada:** Pasar `projectKey: null` explícitamente para datos sin filtros. Validar parámetros antes de usarlos.
 
 ---
 
