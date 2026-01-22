@@ -73,6 +73,76 @@ export async function fullSync() {
     // 4. Procesar issues
     const { successCount, errorCount } = await processIssues(squadId, jiraIssues);
 
+    // 4.5. Procesar burndown charts para sprints cerrados (después de procesar issues)
+    try {
+      logger.info('📊 Procesando burndown charts para sprints cerrados...');
+      const { processSprintBurndown } = await import('../processors/sprint-burndown-processor.js');
+      
+      // Obtener sprints cerrados recientes (últimos 3 meses) para procesar
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      
+      const { data: closedSprints } = await supabaseClient.client
+        .from('sprints')
+        .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state')
+        .eq('state', 'closed')
+        .ilike('sprint_name', '%Sprint%')
+        .gte('end_date', threeMonthsAgo.toISOString())
+        .not('start_date', 'is', null)
+        .not('end_date', 'is', null)
+        .order('end_date', { ascending: false })
+        .limit(10); // Procesar solo los últimos 10 sprints para no sobrecargar
+      
+      if (closedSprints && closedSprints.length > 0) {
+        logger.info(`   Procesando ${closedSprints.length} sprints cerrados...`);
+        let processed = 0;
+        for (const sprint of closedSprints) {
+          try {
+            await processSprintBurndown(sprint);
+            processed++;
+          } catch (error) {
+            logger.warn(`   ⚠️ Error procesando sprint ${sprint.sprint_name}:`, error.message);
+          }
+        }
+        logger.success(`   ✅ Procesados ${processed}/${closedSprints.length} sprints`);
+      }
+    } catch (error) {
+      logger.warn('⚠️ Error procesando burndown charts (continuando...):', error.message);
+      // No fallar la sincronización completa si falla el burndown
+    }
+
+    // 4.6. Procesar velocity report para todos los sprints (después de procesar issues)
+    try {
+      logger.info('📊 Procesando Velocity Report para todos los sprints...');
+      const { processSprintVelocity } = await import('../processors/sprint-velocity-processor.js');
+      
+      // Obtener todos los sprints que tienen "Sprint" en el nombre
+      const { data: allSprints } = await supabaseClient.client
+        .from('sprints')
+        .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state')
+        .ilike('sprint_name', '%Sprint%')
+        .not('start_date', 'is', null)
+        .order('end_date', { ascending: false })
+        .limit(20); // Procesar los últimos 20 sprints
+      
+      if (allSprints && allSprints.length > 0) {
+        logger.info(`   Procesando ${allSprints.length} sprints...`);
+        let processed = 0;
+        for (const sprint of allSprints) {
+          try {
+            await processSprintVelocity(sprint);
+            processed++;
+          } catch (error) {
+            logger.warn(`   ⚠️ Error procesando velocity para sprint ${sprint.sprint_name}:`, error.message);
+          }
+        }
+        logger.success(`   ✅ Velocity procesado para ${processed}/${allSprints.length} sprints`);
+      }
+    } catch (error) {
+      logger.warn('⚠️ Error procesando Velocity Report (continuando...):', error.message);
+      // No fallar la sincronización completa si falla el velocity
+    }
+
     // 5. Registrar finalización
     await supabaseClient.logSync(squadId, 'full', 'completed', successCount);
 

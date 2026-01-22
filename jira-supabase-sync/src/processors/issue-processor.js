@@ -719,6 +719,28 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
           }, {
             onConflict: 'issue_id,sprint_id',
           });
+
+        // Tarea 4: Detectar y guardar cambios de scope
+        try {
+          const { detectAndSaveScopeChanges } = await import('./scope-change-detector.js');
+          await detectAndSaveScopeChanges(
+            sprintId,
+            issueId,
+            {
+              key: jiraIssue.key,
+              changelog: jiraIssue.changelog,
+              storyPoints: issueData.storyPoints,
+            },
+            sprint,
+            spAtStart
+          );
+        } catch (scopeError) {
+          logger.warn(`⚠️ Error detectando cambios de scope para ${jiraIssue.key} en sprint ${sprintName}: ${scopeError.message}`);
+          if (scopeError.stack) {
+            logger.debug(`   Stack: ${scopeError.stack}`);
+          }
+          // No fallar el procesamiento completo por esto
+        }
       }
     }
 
@@ -947,6 +969,30 @@ export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClie
             }, {
               onConflict: 'issue_id,sprint_id',
             });
+
+          // Tarea 4: Detectar y guardar cambios de scope
+          try {
+            const { detectAndSaveScopeChanges } = await import('./scope-change-detector.js');
+            // En batch, el changelog está en rawData
+            const changelog = issueData.rawData?.changelog || issueData.changelog || null;
+            await detectAndSaveScopeChanges(
+              sprintId,
+              issueId,
+              {
+                key: issueData.key,
+                changelog: changelog,
+                storyPoints: issueData.storyPoints,
+              },
+              sprint,
+              spAtStart
+            );
+          } catch (scopeError) {
+            logger.warn(`⚠️ Error detectando cambios de scope para ${issueData.key} en sprint ${sprintName}: ${scopeError.message}`);
+            if (scopeError.stack) {
+              logger.debug(`   Stack: ${scopeError.stack}`);
+            }
+            // No fallar el procesamiento completo por esto
+          }
         }
       }
       

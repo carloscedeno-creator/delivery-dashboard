@@ -1,0 +1,347 @@
+{
+  "version": "1.2",
+  "last_updated": "2024-12-19",
+  "stories": [
+    {
+      "id": "story-001",
+      "title": "User Authentication",
+      "description": "Usuarios pueden iniciar sesión con email/password usando Supabase Auth",
+      "acceptance_criteria": [
+        "User can login with email/password",
+        "Session persists across page reloads",
+        "Logout clears session and redirects to login",
+        "Invalid credentials show error message",
+        "Loading state shown during authentication"
+      ],
+      "passes": true,
+      "tests": ["Login.test.jsx", "authService.test.js"],
+      "related_files": ["src/components/Login.jsx", "src/utils/authService.js"]
+    },
+    {
+      "id": "story-002",
+      "title": "Password Recovery",
+      "description": "Usuarios pueden recuperar su contraseña mediante email",
+      "acceptance_criteria": [
+        "User can request password reset via email",
+        "Reset token is generated and sent via email",
+        "User can reset password with valid token",
+        "Token expires after 1 hour",
+        "Token can only be used once"
+      ],
+      "passes": true,
+      "tests": ["ForgotPassword.test.jsx", "ResetPassword.test.jsx"],
+      "related_files": ["src/components/ForgotPassword.jsx", "src/components/ResetPassword.jsx"]
+    },
+    {
+      "id": "story-003",
+      "title": "Role-Based Access Control",
+      "description": "Sistema de permisos basado en roles para controlar acceso a módulos",
+      "acceptance_criteria": [
+        "Admin role has access to all modules",
+        "PM role has access to Delivery, Product, Projects Metrics",
+        "Developer role has access to Developer Metrics, Team Capacity",
+        "Viewer role has read-only access",
+        "Unauthorized modules are hidden from sidebar"
+      ],
+      "passes": true,
+      "tests": ["RoleAccess.test.jsx", "permissions.test.js"],
+      "related_files": ["src/config/permissions.js", "src/components/RoleAccess.jsx"]
+    },
+    {
+      "id": "story-004",
+      "title": "Status Unification System",
+      "description": "Sistema centralizado para determinar estatus 'Done' usando status_definitions",
+      "acceptance_criteria": [
+        "statusHelper.js provides centralized status checking",
+        "All modules use statusHelper instead of hardcoded logic",
+        "SQL function is_status_completed uses status_definitions table",
+        "RPC function calculate_squad_sprint_sp_done uses is_status_completed",
+        "KPIs show consistent values across modules"
+      ],
+      "passes": true,
+      "tests": ["statusHelper.test.js"],
+      "related_files": ["src/utils/statusHelper.js", "docs/supabase/update_calculate_sp_done_function.sql"]
+    },
+    {
+      "id": "story-005",
+      "title": "Sprint Scope Changes Tracking",
+      "description": "Detectar y mostrar cambios de scope durante sprints (issues agregados, removidos, cambios en SP)",
+      "acceptance_criteria": [
+        "System detects issues added to sprint after start",
+        "System detects issues removed from sprint before close",
+        "System detects Story Points changes during sprint",
+        "Changes are displayed in Projects Metrics",
+        "Changes are stored in sprint_scope_changes table"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["jira-supabase-sync/src/processors/scope-change-detector.js", "src/components/ProjectsMetrics.jsx"]
+    },
+    {
+      "id": "story-006",
+      "title": "Retry with Exponential Backoff",
+      "description": "Sistema de retry automático con exponential backoff para llamadas a Jira API",
+      "acceptance_criteria": [
+        "Retry helper handles rate limiting (429) with retry-after header",
+        "Exponential backoff for temporary errors",
+        "Detailed logging of retry attempts",
+        "Implemented in jira-client.js and sprint-closure-processor.js"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["jira-supabase-sync/src/utils/retry-helper.js"]
+    },
+    {
+      "id": "story-007",
+      "title": "Sprint Closure Processing",
+      "description": "Validación y procesamiento mejorado de cierre de sprints",
+      "acceptance_criteria": [
+        "Validates sprint state is 'closed'",
+        "Validates sprint has end_date",
+        "Verifies sprint status in Jira if sprint_key exists",
+        "Uses retry helper for Jira API calls",
+        "Integrated in main sync process"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["jira-supabase-sync/src/processors/sprint-closure-processor.js"]
+    },
+    {
+      "id": "story-008",
+      "title": "Overall View Dashboard",
+      "description": "Vista general de métricas combinando Product y Delivery insights",
+      "acceptance_criteria": [
+        "Component renders without errors",
+        "Shows 'Coming Soon' message when not implemented",
+        "Displays unified timeline placeholder",
+        "Accessible from main navigation"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/OverallView.jsx"]
+    },
+    {
+      "id": "story-009",
+      "title": "Delivery KPIs Display",
+      "description": "Visualización de Delivery Success Score y métricas componentes (Velocity, Cycle Time, Throughput)",
+      "acceptance_criteria": [
+        "Delivery Success Score calculated correctly",
+        "Velocity metric displayed with target comparison",
+        "Cycle Time metric displayed with breakdown",
+        "Throughput metric displayed",
+        "Charts render correctly (Delivery Score, Component Breakdown)",
+        "Filters work correctly (squad, sprint, date range)",
+        "Loading state shown during data fetch",
+        "Error state shown when data unavailable"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/DeliveryKPIs.jsx", "src/services/deliveryKPIService.js"]
+    },
+    {
+      "id": "story-010",
+      "title": "Quality KPIs Display",
+      "description": "Visualización de Quality KPIs (Rework Rate, Defect Rate)",
+      "acceptance_criteria": [
+        "Rework Rate calculated and displayed",
+        "Defect Rate calculated and displayed",
+        "Charts render correctly",
+        "Filters work correctly",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/QualityKPIs.jsx", "src/services/qualityKPIService.js"]
+    },
+    {
+      "id": "story-011",
+      "title": "Projects Metrics View",
+      "description": "Métricas detalladas por proyecto/squad y sprint con breakdown por Board State",
+      "acceptance_criteria": [
+        "Squad and sprint selectors work correctly",
+        "Metrics load for selected squad/sprint",
+        "Board State breakdown chart displays correctly",
+        "Scope Changes section displays when data available",
+        "PDF export button generates PDF successfully",
+        "Loading and error states handled",
+        "Uses statusHelper for status checking"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/ProjectsMetrics.jsx", "src/utils/projectMetricsApi.js"]
+    },
+    {
+      "id": "story-012",
+      "title": "Developer Metrics View",
+      "description": "Visualización de métricas individuales de performance por desarrollador",
+      "acceptance_criteria": [
+        "Squad, sprint, and developer selectors work correctly",
+        "Dev Done Rate calculated and displayed",
+        "Story Points completed shown",
+        "Charts render correctly (bar charts, pie charts)",
+        "Workload visualization displays",
+        "Uses statusHelper for Dev Done status checking",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/DeveloperMetrics.jsx", "src/utils/developerMetricsApi.js"]
+    },
+    {
+      "id": "story-013",
+      "title": "Team Capacity Management",
+      "description": "Configuración y visualización de capacidad del equipo por squad y sprint",
+      "acceptance_criteria": [
+        "Squad and sprint selectors work correctly",
+        "Capacity goal SP can be set",
+        "Capacity available SP can be set",
+        "Developer participations can be toggled",
+        "Developer capacity SP can be set per developer",
+        "Data saves successfully to database",
+        "SP Done recalculates after save",
+        "Last assignments loaded correctly",
+        "Only PM, admin, and 3amigos can edit"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/TeamCapacity.jsx", "src/services/teamCapacityService.js"]
+    },
+    {
+      "id": "story-014",
+      "title": "Team Allocation View",
+      "description": "Visualización de asignación de recursos y workload por desarrollador",
+      "acceptance_criteria": [
+        "Allocation chart displays correctly",
+        "Workload per developer shown",
+        "Squad and sprint filters work",
+        "Data loads from Supabase",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/TeamAllocation.jsx"]
+    },
+    {
+      "id": "story-015",
+      "title": "Product Roadmap View",
+      "description": "Gantt Chart y visualización de iniciativas de producto con timeline",
+      "acceptance_criteria": [
+        "Gantt Chart renders correctly",
+        "Product initiatives displayed on timeline",
+        "KPIs calculated (total initiatives, total effort, avg completion)",
+        "Charts render correctly (bar charts, pie charts)",
+        "Data loads from data sources",
+        "Loading and error states handled"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/ProductRoadmapView.jsx", "src/components/GanttChart.jsx"]
+    },
+    {
+      "id": "story-016",
+      "title": "ENPS Survey System",
+      "description": "Sistema de Employee Net Promoter Score con encuestas tipo Kaizen",
+      "acceptance_criteria": [
+        "Active survey loads correctly",
+        "Questions organized by categories",
+        "User can select squad",
+        "User can answer questions (isDeveloper, isPM, custom answers)",
+        "Survey submits successfully",
+        "Prevents duplicate responses per day",
+        "Shows latest response if already responded",
+        "Categories can be expanded/collapsed"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/ENPSSurvey.jsx", "src/services/enpsSurveyService.js"]
+    },
+    {
+      "id": "story-017",
+      "title": "User Administration",
+      "description": "Administración de usuarios de la aplicación con roles y permisos",
+      "acceptance_criteria": [
+        "Users list loads from app_users table",
+        "User roles can be viewed",
+        "User roles can be updated (admin only)",
+        "User status displayed correctly",
+        "Loading and error states handled",
+        "Falls back to auth.users if app_users unavailable"
+      ],
+      "passes": true,
+      "tests": ["UserAdministration.test.jsx"],
+      "related_files": ["src/components/UserAdministration.jsx"]
+    },
+    {
+      "id": "story-018",
+      "title": "PDF Export for Projects Metrics",
+      "description": "Generación de PDF con métricas de proyecto para un squad y sprint",
+      "acceptance_criteria": [
+        "PDF generates successfully",
+        "PDF includes sprint information",
+        "PDF includes issues breakdown",
+        "PDF includes developer metrics",
+        "PDF includes scope changes if available",
+        "PDF download triggers correctly",
+        "Error handling for PDF generation failures"
+      ],
+      "passes": true,
+      "tests": ["pdfGenerator.test.js"],
+      "related_files": ["src/utils/pdfGenerator.js", "src/components/ProjectsMetrics.jsx"]
+    },
+    {
+      "id": "story-019",
+      "title": "Gantt Chart Component",
+      "description": "Componente reutilizable de Gantt Chart para visualizar timelines",
+      "acceptance_criteria": [
+        "Gantt Chart renders correctly",
+        "Items displayed on timeline with correct dates",
+        "Today line shows current date",
+        "Data normalization works for different formats",
+        "Status conversion works (text to percentage)",
+        "Invalid dates filtered out",
+        "Timeline scrolls correctly"
+      ],
+      "passes": true,
+      "tests": ["GanttChart.test.jsx"],
+      "related_files": ["src/components/GanttChart.jsx"]
+    },
+    {
+      "id": "story-020",
+      "title": "Sidebar Navigation",
+      "description": "Navegación principal con módulos organizados por permisos de rol",
+      "acceptance_criteria": [
+        "Sidebar renders correctly",
+        "Modules filtered by user role",
+        "Submenus expand/collapse correctly",
+        "Navigation updates active view",
+        "Toggle button works (mobile)",
+        "Overlay works on mobile",
+        "Modules hidden when user lacks permissions"
+      ],
+      "passes": true,
+      "tests": ["Sidebar.test.jsx"],
+      "related_files": ["src/components/Sidebar.jsx", "src/config/permissions.js"]
+    },
+    {
+      "id": "story-021",
+      "title": "Overall View Dashboard Complete",
+      "description": "Vista general combinando Product y Delivery insights con KPIs principales, resumen de sprints activos, timeline unificado y alertas",
+      "acceptance_criteria": [
+        "KPIs principales cards display (Delivery Score, Quality Score, Team Health Score, Average Velocity)",
+        "Active sprints summary shows all active sprints by squad",
+        "Sprint progress displayed (SP Done / SP Goal)",
+        "Days remaining calculated and displayed for each active sprint",
+        "Visual alerts shown for sprints at risk (< 70% progress)",
+        "Unified timeline displays product initiatives and active sprints",
+        "Gantt chart shows combined timeline with critical items",
+        "Quick alerts section shows critical items (low velocity, blocked issues, sprints closing soon)",
+        "Data loads from Supabase without errors",
+        "Loading states shown during data fetch",
+        "Error states handled gracefully"
+      ],
+      "passes": true,
+      "tests": [],
+      "related_files": ["src/components/OverallView.jsx", "src/services/overallViewService.js"]
+    }
+  ]
+}

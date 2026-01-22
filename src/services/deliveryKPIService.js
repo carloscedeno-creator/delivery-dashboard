@@ -1,9 +1,12 @@
 /**
  * Servicio para calcular Delivery KPIs desde datos reales de Supabase
  * Calcula Cycle Time, Deploy Frequency y PR Size basado en métricas disponibles
+ *
+ * ENH-001: Add Data Caching Layer - Integración con cache inteligente
  */
 
 import { supabase } from '../utils/supabaseApi.js';
+import { get, set, CACHE_TTL } from './cacheService.js';
 import {
   calculateCycleTimeScore,
   calculateDeployFrequencyScore,
@@ -11,6 +14,51 @@ import {
   calculateDeliverySuccessScore
 } from '../utils/kpiCalculations';
 import { mockDeliveryKPIData } from '../data/kpiMockData';
+import { filterRecentSprints } from '../utils/sprintFilterHelper.js';
+
+/**
+ * Obtiene Delivery KPI Data con cache inteligente (ENH-001)
+ * @param {string} projectKey - Key del proyecto (opcional)
+ * @param {boolean} useCache - Si usar cache (default: true)
+ * @returns {Promise<Object>} KPI Data
+ */
+export const getDeliveryKPIDataWithCache = async (projectKey = null, useCache = true) => {
+  const cacheKey = `kpi-delivery-${projectKey || 'all'}`;
+
+  if (useCache) {
+    // Try cache first
+    const cachedData = cacheService.get(cacheKey);
+    if (cachedData) {
+      console.log('[DeliveryKPIService] Cache hit for:', cacheKey);
+      return cachedData;
+    }
+  }
+
+  try {
+    // Cache miss - fetch fresh data
+    console.log('[DeliveryKPIService] Cache miss, fetching fresh data for:', cacheKey);
+    const freshData = await getDeliveryKPIData(projectKey);
+
+    // Cache the result
+    if (freshData) {
+      cacheService.set(cacheKey, freshData, CACHE_TTL.KPIs);
+      console.log('[DeliveryKPIService] Cached fresh data for:', cacheKey);
+    }
+
+    return freshData;
+  } catch (error) {
+    console.warn('[DeliveryKPIService] Error fetching data, trying cache fallback:', error);
+
+    // Fallback to cache even if expired
+    const cachedData = cacheService.get(cacheKey);
+    if (cachedData) {
+      console.log('[DeliveryKPIService] Using expired cache as fallback for:', cacheKey);
+      return cachedData;
+    }
+
+    throw error;
+  }
+};
 
 /**
  * Calcula el Cycle Time promedio desde métricas de sprint
@@ -115,9 +163,7 @@ const calculateDeployFrequencyFromMetrics = (sprintMetrics) => {
   };
 };
 
-// Simple in-memory cache to avoid repeated queries (5 minute TTL)
-const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Using the new intelligent cache service
 
 /**
  * Obtiene datos de Delivery KPIs desde Supabase con filtros opcionales
@@ -139,8 +185,8 @@ export const getDeliveryKPIData = async (options = {}) => {
   // Check cache first (if enabled and no filters that would change results)
   if (useCache && !filters.sprintId && !filters.developerId && !filters.startDate && !filters.endDate && !filters.squadId) {
     const cacheKey = 'deliveryKPIData';
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    const cached = get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL.KPIs) {
       console.log('[DELIVERY_KPI] ✅ Using cached data');
       return cached.data;
     }
@@ -167,8 +213,9 @@ export const getDeliveryKPIData = async (options = {}) => {
     // Construir query de métricas de sprint con filtros
     // Primero obtener los sprints del squad para filtrar la vista
     let squadIdToUse = filters.squadId;
-    if (!squadIdToUse) {
-      // Si no hay squadId, obtener squad_id desde projectKey
+    if (!squadIdToUse && projectKey) {
+      // Si no hay squadId pero hay projectKey, obtener squad_id desde projectKey
+      // Si projectKey es null/undefined, skip this (means "all squads")
       const { data: squad } = await supabase
         .from('squads')
         .select('id')
@@ -186,7 +233,7 @@ export const getDeliveryKPIData = async (options = {}) => {
       console.log(`[DELIVERY_KPI] 🔍 Filtering by squad_id: ${squadIdToUse}`);
       const { data: sprints, error: sprintsError } = await supabase
         .from('sprints')
-        .select('sprint_name')
+        .select('sprint_name, state, end_date, start_date, created_at')
         .eq('squad_id', squadIdToUse)
         .ilike('sprint_name', '%Sprint%');
       
@@ -195,8 +242,10 @@ export const getDeliveryKPIData = async (options = {}) => {
       }
       
       if (sprints && sprints.length > 0) {
-        squadSprintNames = sprints.map(s => s.sprint_name);
-        console.log(`[DELIVERY_KPI] ✅ Found ${squadSprintNames.length} sprints for squad:`, squadSprintNames.slice(0, 5));
+        // Filtrar para mantener solo últimos 10 cerrados + activos (NO futuros)
+        const filteredSprints = filterRecentSprints(sprints, squadIdToUse);
+        squadSprintNames = filteredSprints.map(s => s.sprint_name);
+        console.log(`[DELIVERY_KPI] ✅ Found ${squadSprintNames.length} sprints for squad (filtered):`, squadSprintNames.slice(0, 5));
       } else {
         console.warn(`[DELIVERY_KPI] ⚠️ No sprints found for squad_id: ${squadIdToUse}`);
       }
@@ -434,15 +483,10 @@ export const getDeliveryKPIData = async (options = {}) => {
     // Cache result if applicable
     if (useCache && !filters.sprintId && !filters.developerId && !filters.startDate && !filters.endDate && !filters.squadId) {
       const cacheKey = 'deliveryKPIData';
-      cache.set(cacheKey, {
+      set(cacheKey, {
         data: result,
         timestamp: Date.now()
-      });
-      // Clean old cache entries (keep only last 10)
-      if (cache.size > 10) {
-        const firstKey = cache.keys().next().value;
-        cache.delete(firstKey);
-      }
+      }, CACHE_TTL.KPIs);
     }
     
     return result;

@@ -4,6 +4,8 @@
  */
 
 import { supabase } from './supabaseApi';
+import { isDevDoneStatusSync } from './statusHelper.js';
+import { filterRecentSprints } from './sprintFilterHelper.js';
 
 /**
  * Obtiene todos los squads disponibles
@@ -38,16 +40,19 @@ export const getSprintsForSquad = async (squadId) => {
   try {
     const { data, error } = await supabase
       .from('sprints')
-      .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state, squad_id')
+      .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state, squad_id, created_at')
       .eq('squad_id', squadId)
       .ilike('sprint_name', '%Sprint%')
       .order('start_date', { ascending: false });
 
     if (error) throw error;
     
+    // Filtrar para mantener solo últimos 10 cerrados + activos (NO futuros)
+    const filteredSprints = filterRecentSprints(data || [], squadId);
+    
     // Determinar sprint actual (active state o el más reciente que no ha terminado)
     const now = new Date();
-    const sprintsWithCurrent = (data || []).map(sprint => {
+    const sprintsWithCurrent = filteredSprints.map(sprint => {
       // Un sprint está activo si:
       // 1. Tiene state === 'active', O
       // 2. No tiene end_date o end_date es en el futuro (y no está cerrado)
@@ -318,28 +323,16 @@ export const getDeveloperMetricsData = async (developerId, squadId = null, sprin
       };
     });
 
-    // Estados considerados como "Dev Done"
-    // Basado en devPerformanceService.js
-    const isDevDone = (status) => {
-      if (!status) return false;
-      const statusUpper = status.trim().toUpperCase();
-      return statusUpper === 'DONE' || 
-             statusUpper === 'DEVELOPMENT DONE' ||
-             statusUpper.includes('DEVELOPMENT DONE') ||
-             statusUpper.includes('DEV DONE') ||
-             (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
-             statusUpper === 'CLOSED' ||
-             statusUpper === 'RESOLVED' ||
-             statusUpper === 'COMPLETED';
-    };
+    // Usar helper centralizado para consistencia en todos los módulos
+    // Reemplazado función isDevDone local con statusHelper.js
 
     const totalTickets = tickets.length;
     const withSP = tickets.filter(t => t.hasSP).length;
     const noSP = tickets.filter(t => !t.hasSP).length;
     const totalSP = tickets.reduce((sum, t) => sum + t.storyPoints, 0);
-    const devDone = tickets.filter(t => isDevDone(t.status)).length;
+    const devDone = tickets.filter(t => isDevDoneStatusSync(t.status)).length;
     const devDoneSP = tickets
-      .filter(t => isDevDone(t.status) && t.hasSP)
+      .filter(t => isDevDoneStatusSync(t.status) && t.hasSP)
       .reduce((sum, t) => sum + t.storyPoints, 0);
     const totalSPAssigned = tickets
       .filter(t => t.hasSP)

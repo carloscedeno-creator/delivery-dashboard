@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "sync": "node src/run-sync-once.js",
+    "sync:fast": "node src/run-sync-fast.js",
     "sync:integration": "node src/run-sync-integration-only.js",
     "sync:full-daily": "node src/run-full-sync-daily.js",
     "daily-full-sync": "node src/daily-full-sync-service.js",
@@ -16,11 +17,19 @@
     "verify-config": "node scripts/verify-config.js",
     "generate-env-config": "node scripts/generate-env-config.js",
     "force-sync-issues": "node scripts/force-sync-specific-issues.js",
+    "force-sync-squad-sprint": "node scripts/force-sync-squad-sprint.js",
+    "verify-squad-sprint": "node scripts/verify-squad-sprint-data.js",
     "force-full-sync": "node scripts/force-full-sync.js",
     "test-jira": "node scripts/test-jira-query.js",
     "test-access": "node scripts/test-jira-access.js",
     "apply-migrations": "node scripts/apply-migrations.js",
-    "verify-schema": "node scripts/verify-schema.js"
+    "verify-schema": "node scripts/verify-schema.js",
+    "verify-post-deploy": "node scripts/verify-post-deploy.js",
+    "validate-retry": "node scripts/validar-retry-sync.js",
+    "validate-integrity": "node scripts/validar-integridad-supabase.js",
+    "diagnostico-performance": "node scripts/diagnostico-performance.js",
+    "validar-cierre-sprint": "node scripts/validar-cierre-sprint.js",
+    "aplicar-migracion-scope-changes": "node scripts/aplicar-migracion-scope-changes.js"
   },
   "keywords": [
     "jira",

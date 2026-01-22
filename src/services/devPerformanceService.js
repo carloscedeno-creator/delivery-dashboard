@@ -3,19 +3,17 @@
  * Business logic and calculations for Dev Performance module
  */
 
+import { isDevDoneStatusSync, isCompletedStatusSync } from '../utils/statusHelper.js';
+
 /**
  * Check if an issue status indicates "Dev Done"
  * @param {string} status - Issue status
  * @returns {boolean}
+ * @deprecated Use isDevDoneStatusSync from statusHelper.js instead
  */
 export const isDevDoneStatus = (status) => {
-    if (!status) return false;
-    const statusUpper = status.trim().toUpperCase();
-    return statusUpper === 'DONE' || 
-           statusUpper === 'DEVELOPMENT DONE' ||
-           statusUpper.includes('DEVELOPMENT DONE') ||
-           statusUpper.includes('DEV DONE') ||
-           (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO'));
+    // Usar helper centralizado para consistencia
+    return isDevDoneStatusSync(status);
 };
 
 /**
@@ -25,7 +23,8 @@ export const isDevDoneStatus = (status) => {
  */
 export const isIssueDevDone = (issue) => {
     const hasDevCloseDate = issue.dev_close_date !== null && issue.dev_close_date !== undefined;
-    const isDoneStatus = isDevDoneStatus(issue.current_status);
+    // Usar helper centralizado para consistencia (incluye DEV DONE)
+    const isDoneStatus = isCompletedStatusSync(issue.current_status, true); // true = incluye DEV DONE
     return hasDevCloseDate || isDoneStatus;
 };
 

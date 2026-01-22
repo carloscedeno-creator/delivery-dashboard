@@ -6,7 +6,8 @@ import {
   getSprintsForSquad, 
   getProjectMetricsData,
   getSquadById,
-  getSprintById
+  getSprintById,
+  getSprintScopeChanges
 } from '../utils/projectMetricsApi';
 import { generateProjectMetricsPDF, getIssuesForPDF, getSprintGoal } from '../utils/pdfGenerator';
 import { supabase } from '../utils/supabaseApi';
@@ -21,6 +22,7 @@ const ProjectsMetrics = () => {
   const [squadInfo, setSquadInfo] = useState(null);
   const [sprintInfo, setSprintInfo] = useState(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [scopeChanges, setScopeChanges] = useState(null);
   
   // Refs para los gráficos
   const pieChartRef = useRef(null);
@@ -71,6 +73,9 @@ const ProjectsMetrics = () => {
       loadMetrics();
       if (selectedSprint) {
         loadSprintInfo(selectedSprint);
+        loadScopeChanges(selectedSprint);
+      } else {
+        setScopeChanges(null);
       }
     }
   }, [selectedSquad, selectedSprint]);
@@ -90,9 +95,11 @@ const ProjectsMetrics = () => {
   const loadSprints = async (squadId) => {
     try {
       const data = await getSprintsForSquad(squadId);
-      setSprints(data || []);
+      // IMPORTANT: Filter to only include sprints with "Sprint" in the name (already filtered in API, but double-check)
+      const validSprints = (data || []).filter(s => s.sprint_name && s.sprint_name.includes('Sprint'));
+      setSprints(validSprints);
       // Seleccionar sprint actual o el primero
-      const currentSprint = data?.find(s => s.is_active) || data?.[0];
+      const currentSprint = validSprints.find(s => s.is_active) || validSprints[0];
       if (currentSprint) {
         setSelectedSprint(currentSprint.id);
       }
@@ -116,6 +123,16 @@ const ProjectsMetrics = () => {
       setSprintInfo(data);
     } catch (error) {
       console.error('[ProjectsMetrics] Error loading sprint info:', error);
+    }
+  };
+
+  const loadScopeChanges = async (sprintId) => {
+    try {
+      const data = await getSprintScopeChanges(sprintId);
+      setScopeChanges(data);
+    } catch (error) {
+      console.error('[ProjectsMetrics] Error loading scope changes:', error);
+      setScopeChanges(null);
     }
   };
 
@@ -295,7 +312,7 @@ const ProjectsMetrics = () => {
                 <option value="">Select Sprint</option>
                 {sprints.map((sprint) => (
                   <option key={sprint.id} value={sprint.id}>
-                    {sprint.sprint_name} {sprint.is_active && '⭐ Current'}
+                    {sprint.is_active && '⭐ '}{sprint.sprint_name}
                   </option>
                 ))}
               </select>
@@ -445,6 +462,86 @@ const ProjectsMetrics = () => {
               <div className="text-sm text-slate-400">Completed Story Points</div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Cambios de Scope - Tarea 4 */}
+      {scopeChanges && scopeChanges.summary && (
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-xl font-semibold text-white mb-4">Scope Changes</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div className="bg-slate-800/50 rounded-lg p-4">
+              <div className="text-sm text-slate-400 mb-1">Issues Added</div>
+              <div className="text-2xl font-bold text-green-400">
+                {scopeChanges.summary.issues_added || 0}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                +{scopeChanges.summary.sp_added || 0} SP
+              </div>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-4">
+              <div className="text-sm text-slate-400 mb-1">Issues Removed</div>
+              <div className="text-2xl font-bold text-red-400">
+                {scopeChanges.summary.issues_removed || 0}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                -{scopeChanges.summary.sp_removed || 0} SP
+              </div>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-4">
+              <div className="text-sm text-slate-400 mb-1">SP Changes</div>
+              <div className="text-2xl font-bold text-yellow-400">
+                {scopeChanges.summary.issues_sp_changed || 0}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Net: {scopeChanges.summary.sp_net_change >= 0 ? '+' : ''}{scopeChanges.summary.sp_net_change || 0} SP
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de cambios recientes */}
+          {scopeChanges.changes && scopeChanges.changes.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-semibold text-slate-300 mb-3">Recent Changes</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {scopeChanges.changes.slice(0, 10).map((change) => {
+                  const issue = change.issues;
+                  const changeTypeLabel = {
+                    'added': 'Added',
+                    'removed': 'Removed',
+                    'story_points_changed': 'SP Changed',
+                  }[change.change_type] || change.change_type;
+                  
+                  const changeTypeColor = {
+                    'added': 'text-green-400',
+                    'removed': 'text-red-400',
+                    'story_points_changed': 'text-yellow-400',
+                  }[change.change_type] || 'text-slate-400';
+
+                  return (
+                    <div key={change.id} className="flex items-center justify-between text-sm bg-slate-800/30 rounded p-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold ${changeTypeColor}`}>
+                          {changeTypeLabel}
+                        </span>
+                        <span className="text-slate-300">
+                          {issue?.issue_key || 'Unknown'}
+                        </span>
+                        {change.story_points_before !== null && change.story_points_after !== null && (
+                          <span className="text-slate-500">
+                            ({change.story_points_before} → {change.story_points_after} SP)
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-slate-500 text-xs">
+                        {new Date(change.change_date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

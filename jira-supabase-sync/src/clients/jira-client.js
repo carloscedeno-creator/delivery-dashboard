@@ -5,6 +5,7 @@
 import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import { retryWithBackoff, delayBetweenPages } from '../utils/retry-helper.js';
 
 class JiraClient {
   constructor(domain = null, email = null, apiToken = null) {
@@ -69,15 +70,47 @@ class JiraClient {
 
         let response;
         try {
-          response = await this.client.get(url);
+          // Usar retry con exponential backoff para manejar rate limiting
+          response = await retryWithBackoff(
+            async () => {
+              return await this.client.get(url);
+            },
+            {
+              context: `fetchAllIssues:page-${pageCount}`,
+              maxRetries: 5,
+              initialDelay: 1000,
+              maxDelay: 60000,
+            }
+          );
         } catch (error) {
-          // Si falla, intentar con el endpoint JQL
-          logger.warn(`⚠️ Error con endpoint estándar, intentando con /search/jql...`);
+          // Si falla después de todos los reintentos, intentar con el endpoint JQL alternativo
+          logger.warn(`⚠️ Error con endpoint estándar después de reintentos, intentando con /search/jql...`);
           url = `/rest/api/3/search/jql?jql=${encodeURIComponent(query)}&maxResults=100&fields=${fieldsToFetch}&expand=changelog`;
           if (nextPageToken) {
             url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
           }
-          response = await this.client.get(url);
+          
+          // También aplicar retry al endpoint alternativo
+          try {
+            response = await retryWithBackoff(
+              async () => {
+                return await this.client.get(url);
+              },
+              {
+                context: `fetchAllIssues:page-${pageCount}:jql-endpoint`,
+                maxRetries: 3, // Menos reintentos para el endpoint alternativo
+                initialDelay: 1000,
+                maxDelay: 60000,
+              }
+            );
+          } catch (jqlError) {
+            logger.error(`❌ Error con ambos endpoints después de reintentos:`, {
+              standardError: error.message,
+              jqlError: jqlError.message,
+              status: jqlError.response?.status,
+            });
+            throw jqlError;
+          }
         }
         
         logger.debug(`📊 Respuesta de Jira: total=${response.data.total || 0}, issues.length=${response.data.issues?.length || 0}, startAt=${response.data.startAt || 0}, maxResults=${response.data.maxResults || 0}`);
@@ -103,9 +136,9 @@ class JiraClient {
           nextPageToken = null;
         }
 
-        // Pequeño delay para evitar rate limits
+        // Delay entre páginas para evitar rate limiting (200ms según plan)
         if (nextPageToken) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await delayBetweenPages(200);
         }
 
       } catch (error) {
@@ -184,6 +217,134 @@ class JiraClient {
     } catch (error) {
       logger.debug(`⚠️ No se pudo obtener timeline para ${epicKey}:`, error.message);
       return null;
+    }
+  }
+
+  /**
+   * Obtiene datos de un sprint usando la API Agile de Jira
+   * Esta API puede tener información más detallada sobre el sprint
+   * @param {number|string} sprintId - ID del sprint en Jira
+   * @returns {Promise<Object|null>} Datos del sprint o null si no se encuentra
+   */
+  async fetchSprintData(sprintId) {
+    try {
+      // Intentar obtener datos del sprint usando la API Agile
+      // /rest/agile/1.0/sprint/{sprintId}
+      const response = await this.client.get(`/rest/agile/1.0/sprint/${sprintId}`);
+      return response.data;
+    } catch (error) {
+      logger.warn(`⚠️ Error obteniendo datos del sprint ${sprintId} desde API Agile:`, {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene el burndown chart data de un sprint usando la API Agile de Jira
+   * NOTA: Este endpoint puede no estar disponible en todas las versiones de Jira
+   * @param {number|string} sprintId - ID del sprint en Jira
+   * @param {number|string} boardId - ID del board (opcional, puede inferirse)
+   * @returns {Promise<Object|null>} Datos del burndown chart o null si no está disponible
+   */
+  async fetchSprintBurndown(sprintId, boardId = null) {
+    try {
+      // Intentar obtener datos del burndown desde la API Agile
+      // Endpoint: /rest/greenhopper/1.0/sprint/{sprintId}/burndownChart
+      // O alternativamente: /rest/agile/1.0/sprint/{sprintId}/burndownChart
+      let url = `/rest/greenhopper/1.0/sprint/${sprintId}/burndownChart`;
+      
+      if (boardId) {
+        url += `?rapidViewId=${boardId}`;
+      }
+
+      const response = await this.client.get(url);
+      return response.data;
+    } catch (error) {
+      // Intentar con el endpoint alternativo de Agile API
+      try {
+        let url = `/rest/agile/1.0/sprint/${sprintId}/burndownChart`;
+        if (boardId) {
+          url += `?boardId=${boardId}`;
+        }
+        const response = await this.client.get(url);
+        return response.data;
+      } catch (error2) {
+        logger.warn(`⚠️ No se pudo obtener burndown chart para sprint ${sprintId}:`, {
+          greenhopperError: error.message,
+          agileError: error2.message,
+          status: error.response?.status || error2.response?.status
+        });
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Obtiene issues de un sprint usando la API Agile
+   * Esto puede ser más eficiente que usar JQL
+   * Incluye retry automático con exponential backoff para manejar rate limiting
+   * @param {number|string} sprintId - ID del sprint en Jira
+   * @returns {Promise<Array>} Array de issues del sprint
+   */
+  async fetchSprintIssues(sprintId) {
+    try {
+      const allIssues = [];
+      let startAt = 0;
+      const maxResults = 100;
+      let hasMore = true;
+      let pageCount = 0;
+
+      while (hasMore) {
+        pageCount++;
+        const url = `/rest/agile/1.0/sprint/${sprintId}/issue?startAt=${startAt}&maxResults=${maxResults}`;
+        
+        logger.debug(`📥 Obteniendo página ${pageCount} de issues del sprint ${sprintId} (startAt: ${startAt})`);
+
+        // Usar retry con exponential backoff para manejar rate limiting y errores temporales
+        const response = await retryWithBackoff(
+          async () => {
+            return await this.client.get(url);
+          },
+          {
+            context: `fetchSprintIssues:sprint-${sprintId}:page-${pageCount}`,
+            maxRetries: 5,
+            initialDelay: 1000,
+            maxDelay: 60000,
+          }
+        );
+        
+        const issues = response.data.issues || [];
+        allIssues.push(...issues);
+        
+        logger.debug(`✅ Página ${pageCount}: ${issues.length} issues obtenidos (Total acumulado: ${allIssues.length})`);
+        
+        // Verificar si hay más resultados
+        const total = response.data.total || 0;
+        hasMore = startAt + issues.length < total;
+        startAt += issues.length;
+        
+        if (issues.length === 0) {
+          hasMore = false;
+        }
+
+        // Delay entre páginas para evitar rate limiting (200ms según plan)
+        if (hasMore) {
+          await delayBetweenPages(200);
+        }
+      }
+
+      logger.success(`✅ Total de issues obtenidos del sprint ${sprintId}: ${allIssues.length} (${pageCount} páginas)`);
+      return allIssues;
+    } catch (error) {
+      logger.error(`❌ Error obteniendo issues del sprint ${sprintId} después de todos los reintentos:`, {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+      });
+      return [];
     }
   }
 
@@ -305,4 +466,3 @@ class JiraClient {
 // Exportar tanto la clase como una instancia por defecto
 export { JiraClient };
 export default new JiraClient();
-

@@ -11,6 +11,8 @@ import {
   calculateTeamHealthScore
 } from '../utils/kpiCalculations';
 import { mockTeamHealthKPIData } from '../data/kpiMockData';
+import { isCompletedStatusSync } from '../utils/statusHelper.js';
+import { filterRecentClosedSprints } from '../utils/sprintFilterHelper.js';
 
 /**
  * Generates mock eNPS data for demonstration purposes
@@ -51,7 +53,7 @@ const calculateCompletedStoryPointsBatch = async (sprintIds) => {
     // Get sprint names first
     const { data: sprints, error: sprintsError } = await supabase
       .from('sprints')
-      .select('id, sprint_name')
+      .select('id, sprint_name, state, end_date, start_date, created_at')
       .in('id', sprintIds);
 
     if (sprintsError || !sprints || sprints.length === 0) {
@@ -59,10 +61,13 @@ const calculateCompletedStoryPointsBatch = async (sprintIds) => {
       return new Map();
     }
 
+    // Filtrar para mantener solo últimos 10 cerrados (protege promedios)
+    const filteredSprints = filterRecentClosedSprints(sprints, 10);
+
     // Create map of sprint_id -> sprint_name (only sprints with "Sprint" in name)
     const sprintIdToName = new Map();
     const sprintNames = [];
-    sprints.forEach(sprint => {
+    filteredSprints.forEach(sprint => {
       if (sprint.sprint_name && sprint.sprint_name.includes('Sprint')) {
         sprintIdToName.set(sprint.id, sprint.sprint_name);
         sprintNames.push(sprint.sprint_name);
@@ -73,18 +78,21 @@ const calculateCompletedStoryPointsBatch = async (sprintIds) => {
       return new Map();
     }
 
-    // Query all issues for all sprints in one query
-    const { data: allIssues, error: issuesError } = await supabase
-      .from('issues')
-      .select('current_story_points, current_status, current_sprint, status_by_sprint, issue_key')
-      .in('current_sprint', sprintNames);
+    // IMPORTANTE: Usar issue_sprints en lugar de current_sprint para sprints cerrados
+    // Esto asegura que solo contamos tickets que estaban en el sprint al momento del cierre
+    // Query issue_sprints para obtener tickets que pertenecían a cada sprint al momento del cierre
+    const { data: issueSprintRows, error: issueSprintError } = await supabase
+      .from('issue_sprints')
+      .select('issue_id, sprint_id, status_at_sprint_close, story_points_at_close')
+      .in('sprint_id', filteredSprints.map(s => s.id))
+      .not('status_at_sprint_close', 'is', null); // Solo tickets que estaban en el sprint al cierre
 
-    if (issuesError) {
-      console.warn(`[TEAM_HEALTH_KPI] Error fetching issues for sprints:`, issuesError);
+    if (issueSprintError) {
+      console.warn(`[TEAM_HEALTH_KPI] Error fetching issue_sprints for batch calculation:`, issueSprintError);
       return new Map();
     }
 
-    if (!allIssues || allIssues.length === 0) {
+    if (!issueSprintRows || issueSprintRows.length === 0) {
       return new Map();
     }
 
@@ -92,60 +100,32 @@ const calculateCompletedStoryPointsBatch = async (sprintIds) => {
     const completedSPBySprintId = new Map();
     
     // Initialize map with zeros
-    sprintIds.forEach(sprintId => {
-      completedSPBySprintId.set(sprintId, 0);
+    filteredSprints.forEach(sprint => {
+      if (sprint.sprint_name && sprint.sprint_name.includes('Sprint')) {
+        completedSPBySprintId.set(sprint.id, 0);
+      }
     });
 
-    // Create reverse map: sprint_name -> sprint_id
-    const sprintNameToId = new Map();
-    sprintIdToName.forEach((name, id) => {
-      sprintNameToId.set(name, id);
-    });
-
-    // Process issues and sum story points for completed ones
-    // Use historical status at sprint end when available (following Google Sheets logic)
-    allIssues.forEach(issue => {
-      if (!issue.current_sprint) return;
-
-      const sprintId = sprintNameToId.get(issue.current_sprint);
+    // Process issue_sprints and sum story points for completed ones
+    // IMPORTANTE: Solo contar tickets que estaban en el sprint al momento del cierre (status_at_sprint_close IS NOT NULL)
+    issueSprintRows.forEach(row => {
+      const sprintId = row.sprint_id;
       if (!sprintId) return;
 
-      const sprintName = issue.current_sprint;
-      let statusForCompletion = (issue.current_status || '').trim().toUpperCase();
-
-      // Use historical status if available (Google Sheets approach)
-      if (issue.status_by_sprint && typeof issue.status_by_sprint === 'object') {
-        const historicalStatus = issue.status_by_sprint[sprintName];
-        if (historicalStatus) {
-          statusForCompletion = historicalStatus.trim().toUpperCase();
-          console.log(`[TEAM_HEALTH_KPI] Using historical status for ${issue.issue_key} in ${sprintName}: "${statusForCompletion}"`);
-        }
-      } else if (typeof issue.status_by_sprint === 'string') {
-        try {
-          const statusHistory = JSON.parse(issue.status_by_sprint);
-          const historicalStatus = statusHistory[sprintName];
-          if (historicalStatus) {
-            statusForCompletion = historicalStatus.trim().toUpperCase();
-            console.log(`[TEAM_HEALTH_KPI] Using parsed historical status for ${issue.issue_key} in ${sprintName}: "${statusForCompletion}"`);
-          }
-        } catch (e) {
-          console.warn(`[TEAM_HEALTH_KPI] Error parsing status_by_sprint for ${issue.issue_key}:`, e.message);
-        }
+      // Si status_at_sprint_close es null, el ticket fue removido antes del cierre, excluirlo
+      if (!row.status_at_sprint_close) {
+        return;
       }
 
-      const isCompleted = statusForCompletion === 'DONE' ||
-                         statusForCompletion === 'DEVELOPMENT DONE' ||
-                         statusForCompletion.includes('DEVELOPMENT DONE') ||
-                         statusForCompletion.includes('DEV DONE') ||
-                         (statusForCompletion.includes('DONE') && !statusForCompletion.includes('TO DO') && !statusForCompletion.includes('TODO')) ||
-                         statusForCompletion === 'CLOSED' ||
-                         statusForCompletion === 'RESOLVED' ||
-                         statusForCompletion === 'COMPLETED';
+      // Usar helper centralizado para consistencia
+      const isCompleted = isCompletedStatusSync(row.status_at_sprint_close, true); // incluye DEV DONE
 
       if (isCompleted) {
+        // Usar story_points_at_close (SP al final del sprint) en lugar de current_story_points
+        const spAtClose = Number(row.story_points_at_close) || 0;
         const currentSP = completedSPBySprintId.get(sprintId) || 0;
-        completedSPBySprintId.set(sprintId, currentSP + (issue.current_story_points || 0));
-        console.log(`[TEAM_HEALTH_KPI] Issue ${issue.issue_key} counted as completed in ${sprintName}: ${issue.current_story_points} SP`);
+        completedSPBySprintId.set(sprintId, currentSP + spAtClose);
+        console.log(`[TEAM_HEALTH_KPI] Issue ${row.issue_id} counted as completed in sprint ${sprintId}: ${spAtClose} SP (from story_points_at_close)`);
       }
     });
 
@@ -313,6 +293,52 @@ const getBurndownDataForSprint = async (sprintId) => {
   }
 };
 
+/**
+ * Obtiene datos de sprint_velocity para un sprint si están disponibles
+ * Esta es la fuente MÁS PRECISA para Planning Accuracy (commitment vs completed)
+ * @param {string} sprintId - Sprint ID
+ * @returns {Promise<Object|null>} Datos de velocity {commitment, completed, commitment_tickets, completed_tickets} o null
+ */
+const getVelocityDataForSprint = async (sprintId) => {
+  if (!supabase || !sprintId) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('sprint_velocity')
+      .select('commitment, completed, commitment_tickets, completed_tickets, calculated_at')
+      .eq('sprint_id', sprintId)
+      .maybeSingle();
+
+    if (error) {
+      // Si la tabla no existe (PGRST205), retornar null silenciosamente
+      if (error.code === 'PGRST205') {
+        console.debug(`[TEAM_HEALTH_KPI] sprint_velocity table not found, skipping velocity data`);
+        return null;
+      }
+      console.debug(`[TEAM_HEALTH_KPI] Error fetching velocity data:`, error.message);
+      return null;
+    }
+
+    if (data && data.commitment !== null && data.completed !== null) {
+      console.log(`[TEAM_HEALTH_KPI] ✅ Found velocity data for sprint ${sprintId}: commitment=${data.commitment}, completed=${data.completed}`);
+      return {
+        commitment: Number(data.commitment) || 0,
+        completed: Number(data.completed) || 0,
+        commitment_tickets: data.commitment_tickets || 0,
+        completed_tickets: data.completed_tickets || 0,
+        calculated_at: data.calculated_at
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.debug(`[TEAM_HEALTH_KPI] Exception fetching velocity data:`, error.message);
+    return null;
+  }
+};
+
 const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = null) => {
   if (!supabase) {
     return null;
@@ -385,33 +411,38 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
         return {};
       };
 
-      const isCompletedStatus = (status) => {
-        if (!status) return false;
-        const s = String(status).trim().toUpperCase();
-        return s === 'DONE' ||
-          s === 'DEVELOPMENT DONE' ||
-          s.includes('DEVELOPMENT DONE') ||
-          s.includes('DEV DONE') ||
-          (s.includes('DONE') && !s.includes('TO DO') && !s.includes('TODO')) ||
-          s === 'CLOSED' ||
-          s === 'RESOLVED' ||
-          s === 'COMPLETED';
-      };
+      // Usar helper centralizado para consistencia
+      const isCompletedStatus = (status) => isCompletedStatusSync(status, true);
 
-      // PRIORITY 1: Try to use burndown data if available (most accurate historical data)
-      let burndownData = null;
+      // PRIORITY 1: Try to use sprint_velocity data (MOST ACCURATE for Planning Accuracy)
+      // Planning Accuracy = Completed SP / Commitment SP (al inicio del sprint)
+      // sprint_velocity tiene exactamente estos datos: commitment (SP al inicio) y completed (SP al final)
+      let velocityData = null;
       try {
-        burndownData = await getBurndownDataForSprint(sprintId);
-        if (burndownData && burndownData.totalCompleted !== undefined && burndownData.totalPlanned !== undefined) {
-          console.log(`[TEAM_HEALTH_KPI] ✅ Using burndown data for Planning Accuracy (source: ${burndownData.dataSource || 'unknown'})`);
+        velocityData = await getVelocityDataForSprint(sprintId);
+        if (velocityData && velocityData.commitment !== null && velocityData.completed !== null) {
+          console.log(`[TEAM_HEALTH_KPI] ✅ Using sprint_velocity data for Planning Accuracy: commitment=${velocityData.commitment}, completed=${velocityData.completed}`);
         }
       } catch (error) {
-        console.debug(`[TEAM_HEALTH_KPI] Burndown data not available, using fallback calculation`);
+        console.debug(`[TEAM_HEALTH_KPI] Velocity data not available, trying fallback sources`);
+      }
+
+      // PRIORITY 2: Try to use burndown data if velocity not available
+      let burndownData = null;
+      if (!velocityData) {
+        try {
+          burndownData = await getBurndownDataForSprint(sprintId);
+          if (burndownData && burndownData.totalCompleted !== undefined && burndownData.totalPlanned !== undefined) {
+            console.log(`[TEAM_HEALTH_KPI] ✅ Using burndown data for Planning Accuracy (source: ${burndownData.dataSource || 'unknown'})`);
+          }
+        } catch (error) {
+          console.debug(`[TEAM_HEALTH_KPI] Burndown data not available, using fallback calculation`);
+        }
       }
 
       // BEST source of truth: issue_sprints table (membership survives even if Sprint field later gets corrupted)
       // It also stores status_at_sprint_close which matches the "foto" concept.
-      // PRIORITY: Always use issue_sprints for Planning Accuracy as it's more direct and accurate
+      // PRIORITY 3: Use issue_sprints for Planning Accuracy if velocity/burndown not available
       // Get sprint close date to filter out tickets removed before closure
       let sprintCloseDate = null;
       if (sprint) {
@@ -428,18 +459,29 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
         }
       }
       
-      // Initialize with burndown data as fallback, but prefer issue_sprints
-      let plannedSP = burndownData?.totalPlanned || sprint?.planned_story_points || metric.total_story_points || 0;
-      let completedSP = burndownData?.totalCompleted || metric.completed_story_points || 0;
+      // Initialize with velocity data (most accurate), then burndown, then fallback to issue_sprints
+      let plannedSP = velocityData?.commitment || burndownData?.totalPlanned || sprint?.planned_story_points || metric.total_story_points || 0;
+      let completedSP = velocityData?.completed || burndownData?.totalCompleted || metric.completed_story_points || 0;
+      let calculatedFromVelocity = !!velocityData;
       let calculatedFromIssueSprints = false;
       
-      // Always try to calculate from issue_sprints first (most accurate for Planning Accuracy)
-      try {
-        const { data: issueSprintRows, error: issueSprintError } = await supabase
+      // Only calculate from issue_sprints if velocity data is not available
+      // Velocity data is more accurate because it uses commitment (SP al inicio) vs completed (SP al final)
+      if (!calculatedFromVelocity) {
+        try {
+        let issueSprintQuery = supabase
           .from('issue_sprints')
           .select('issue_id, sprint_id, status_at_sprint_close, story_points_at_start, story_points_at_close')
           .eq('sprint_id', sprintId)
           .limit(10000);
+        
+        // IMPORTANTE: Para sprints cerrados, solo contar tickets que estaban en el sprint al momento del cierre
+        // Si status_at_sprint_close es NULL, el ticket fue removido antes del cierre y NO debe contarse
+        if (sprintCloseDate) {
+          issueSprintQuery = issueSprintQuery.not('status_at_sprint_close', 'is', null);
+        }
+        
+        const { data: issueSprintRows, error: issueSprintError } = await issueSprintQuery;
 
         if (!issueSprintError && issueSprintRows && issueSprintRows.length > 0) {
           const issueIds = issueSprintRows.map(r => r.issue_id).filter(Boolean);
@@ -452,22 +494,22 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
           if (!issuesError && issues && issues.length > 0) {
             const issuesById = new Map(issues.map(i => [i.id, i]));
 
-            // PLANNING ACCURACY = (SP Cerrados / SP Totales al Final del Sprint) * 100
-            // SP Totales al Final = suma de story_points_at_close de TODOS los tickets que estaban en el sprint al cierre
-            // SP Cerrados = suma de story_points_at_close solo de los tickets completados
-            // IMPORTANT: Solo incluir tickets que estaban en el sprint al momento del cierre
-            // (status_at_sprint_close IS NOT NULL ya filtra esto)
+            // PLANNING ACCURACY = (SP Completados / SP Commitment al Inicio) * 100
+            // Para issue_sprints, usamos:
+            // - Commitment = story_points_at_start (SP al inicio del sprint) SOLO de tickets que estaban en el sprint al cierre
+            // - Completed = story_points_at_close de tickets completados
             
-            // Total SP al final del sprint = suma de story_points_at_close de todos los tickets
+            // Commitment SP = suma de story_points_at_start SOLO de tickets que estaban en el sprint al momento del cierre
+            // IMPORTANTE: Si status_at_sprint_close es NULL, el ticket fue removido antes del cierre y NO debe contarse
             plannedSP = issueSprintRows.reduce((sum, row) => {
               // Si status_at_sprint_close es null, el ticket fue removido antes del cierre, excluirlo
               if (!row.status_at_sprint_close && sprintCloseDate) {
                 return sum;
               }
               
-              // Usar story_points_at_close (SP al final del sprint)
-              const spAtClose = Number(row.story_points_at_close) || 0;
-              return sum + spAtClose;
+              // Usar story_points_at_start (SP al inicio del sprint) para commitment
+              const spAtStart = Number(row.story_points_at_start) || 0;
+              return sum + spAtStart;
             }, 0);
 
             // Completed SP = suma de story_points_at_close solo de los tickets completados
@@ -487,17 +529,18 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
             }, 0);
 
             calculatedFromIssueSprints = true;
-            console.log(`[TEAM_HEALTH_KPI] Planning Accuracy (sprint ${sprintName || sprintId}) from issue_sprints: Total SP at Close=${plannedSP}, Completed SP=${completedSP}, Links=${issueSprintRows.length}, Issues=${issues.length}`);
+            console.log(`[TEAM_HEALTH_KPI] Planning Accuracy (sprint ${sprintName || sprintId}) from issue_sprints: Commitment SP=${plannedSP}, Completed SP=${completedSP}, Links=${issueSprintRows.length}, Issues=${issues.length}`);
           }
         }
       } catch (e) {
-        console.warn('[TEAM_HEALTH_KPI] Failed to calculate Planning Accuracy via issue_sprints (falling back to burndown):', e?.message || e);
-        // If issue_sprints calculation failed, use burndown data if available
-        if (burndownData && burndownData.totalCompleted !== undefined) {
+        console.warn('[TEAM_HEALTH_KPI] Failed to calculate Planning Accuracy via issue_sprints:', e?.message || e);
+        // If issue_sprints calculation failed, use burndown data if available (already set above)
+        if (burndownData && burndownData.totalCompleted !== undefined && !calculatedFromVelocity) {
           plannedSP = burndownData.totalPlanned || plannedSP;
           completedSP = burndownData.totalCompleted || completedSP;
           console.log(`[TEAM_HEALTH_KPI] Planning Accuracy (sprint ${sprintName || sprintId}) from burndown (fallback): Planned=${plannedSP}, Completed=${completedSP}`);
         }
+      }
       }
 
       // Only use issues snapshot fallback if we didn't successfully calculate from issue_sprints
@@ -529,7 +572,8 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
         }
       }
 
-      // PLANNING ACCURACY = (SP Cerrados / SP Totales al Final del Sprint) * 100
+      // PLANNING ACCURACY = (SP Completados / SP Commitment al Inicio) * 100
+      // Usa commitment (SP al inicio) como denominador, no SP al final
       // No usamos carry over para el cálculo, solo para información adicional
       let carryOverCount = 0;
       
@@ -575,20 +619,26 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
         }
       }
       
-      // Planning Accuracy = (SP Cerrados / SP Totales al Final) * 100
+      // Planning Accuracy = (SP Completados / SP Commitment al Inicio) * 100
+      // Usa commitment (SP comprometidos al inicio) como base, no SP al final
       const percentage = plannedSP > 0 ? (completedSP / plannedSP) * 100 : (completedSP > 0 ? 100 : 0);
       const score = calculatePlanningAccuracyScore(percentage);
 
-      console.log(`[TEAM_HEALTH_KPI] Planning Accuracy calculation: Total SP at Close=${plannedSP}, Completed SP=${completedSP}, Percentage=${percentage.toFixed(2)}%, Carry Over Tickets=${carryOverCount}`);
+      const dataSource = calculatedFromVelocity ? 'sprint_velocity' : 
+                        calculatedFromIssueSprints ? 'issue_sprints' : 
+                        burndownData ? 'burndown' : 'fallback';
+      
+      console.log(`[TEAM_HEALTH_KPI] Planning Accuracy calculation (source: ${dataSource}): Commitment SP=${plannedSP}, Completed SP=${completedSP}, Percentage=${percentage.toFixed(2)}%, Carry Over Tickets=${carryOverCount}`);
 
       return {
         percentage: Math.round(percentage * 10) / 10,
         score,
-        plannedSP: plannedSP, // SP totales al final del sprint
+        plannedSP: plannedSP, // Commitment SP (SP comprometidos al inicio del sprint)
         completedSP,
         carryOverSP: 0, // Carry over no se usa en el cálculo, solo carryOverCount para información
         carryOverCount,
-        addedSP: 0 // Not used in Planning Accuracy
+        addedSP: 0, // Not used in Planning Accuracy
+        dataSource: dataSource // Indica la fuente de datos usada
       };
     }
 
@@ -598,14 +648,24 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
       const sprint = metric.sprints;
       let plannedSP = sprint?.planned_story_points || metric.total_story_points || 0;
       let completedSP = metric.completed_story_points || 0;
+      let dataSource = 'fallback';
       
-      // Try to get burndown data for more accurate metrics
+      // PRIORITY 1: Try to get velocity data (most accurate for Planning Accuracy)
       if (sprint?.id) {
         try {
-          const burndown = await getBurndownDataForSprint(sprint.id);
-          if (burndown && burndown.totalCompleted !== undefined && burndown.totalPlanned !== undefined) {
-            plannedSP = burndown.totalPlanned;
-            completedSP = burndown.totalCompleted;
+          const velocity = await getVelocityDataForSprint(sprint.id);
+          if (velocity && velocity.commitment !== null && velocity.completed !== null) {
+            plannedSP = velocity.commitment; // Commitment SP al inicio
+            completedSP = velocity.completed; // Completed SP al final
+            dataSource = 'sprint_velocity';
+          } else {
+            // PRIORITY 2: Try burndown data if velocity not available
+            const burndown = await getBurndownDataForSprint(sprint.id);
+            if (burndown && burndown.totalCompleted !== undefined && burndown.totalPlanned !== undefined) {
+              plannedSP = burndown.totalPlanned;
+              completedSP = burndown.totalCompleted;
+              dataSource = 'burndown';
+            }
           }
         } catch (error) {
           // Silently fall back to metric data
@@ -615,7 +675,8 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
       return {
         ...metric,
         enhancedPlannedSP: plannedSP,
-        enhancedCompletedSP: completedSP
+        enhancedCompletedSP: completedSP,
+        dataSource: dataSource
       };
     }));
     
@@ -661,11 +722,12 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
     
     console.log(`[TEAM_HEALTH_KPI] Calculated completed SP for ${sprintIds.length} sprints in batch (including DEVELOPMENT DONE)`);
 
-    // PLANNING ACCURACY = (SP Cerrados / SP Totales al Final del Sprint) * 100
-    // Para cada sprint, calcular desde issue_sprints usando story_points_at_close
+    // PLANNING ACCURACY = (SP Completados / SP Commitment al Inicio) * 100
+    // Usar datos mejorados de velocity/burndown si están disponibles, sino calcular desde issue_sprints
     let totalCompletedSP = 0;
-    let totalSPAtClose = 0;
+    let totalCommitmentSP = 0; // Cambiar de "SP at Close" a "Commitment SP"
     const percentages = [];
+    const dataSources = [];
     
     const isCompletedStatusForBatch = (status) => {
       if (!status) return false;
@@ -678,7 +740,7 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
              s === 'COMPLETED';
     };
 
-    // Calculate Planning Accuracy for each sprint using issue_sprints
+    // Calculate Planning Accuracy for each sprint
     for (const metric of validMetrics) {
       const sprint = metric.sprints;
       const sprintId = sprint?.id;
@@ -688,76 +750,108 @@ const calculatePlanningAccuracyFromMetrics = async (sprintId = null, squadId = n
         continue; // Skip invalid sprints
       }
 
-      // Get issue_sprints data for this sprint
-      const { data: issueSprintRows, error: issueSprintError } = await supabase
-        .from('issue_sprints')
-        .select('status_at_sprint_close, story_points_at_close')
-        .eq('sprint_id', sprintId)
-        .not('status_at_sprint_close', 'is', null)
-        .limit(10000);
+      // Use enhanced data if available (from velocity or burndown)
+      let sprintCommitmentSP = metric.enhancedPlannedSP || 0;
+      let sprintCompletedSP = metric.enhancedCompletedSP || 0;
+      let sprintDataSource = metric.dataSource || 'issue_sprints';
 
-      if (issueSprintError || !issueSprintRows || issueSprintRows.length === 0) {
-        console.warn(`[TEAM_HEALTH_KPI] No issue_sprints data for sprint ${sprintName}, skipping`);
-        continue;
+      // If we don't have enhanced data, calculate from issue_sprints
+      if (sprintDataSource === 'fallback') {
+        // IMPORTANTE: Para sprints cerrados, solo contar tickets que estaban en el sprint al momento del cierre
+        // Si status_at_sprint_close es NULL, el ticket fue removido antes del cierre y NO debe contarse
+        let issueSprintQuery = supabase
+          .from('issue_sprints')
+          .select('status_at_sprint_close, story_points_at_start, story_points_at_close')
+          .eq('sprint_id', sprintId)
+          .limit(10000);
+        
+        // Filtrar por status_at_sprint_close IS NOT NULL si el sprint está cerrado
+        if (sprint && (sprint.state === 'closed' || (sprint.end_date && new Date(sprint.end_date) < new Date()))) {
+          issueSprintQuery = issueSprintQuery.not('status_at_sprint_close', 'is', null);
+        }
+        
+        const { data: issueSprintRows, error: issueSprintError } = await issueSprintQuery;
+
+        if (!issueSprintError && issueSprintRows && issueSprintRows.length > 0) {
+          // Commitment SP = suma de story_points_at_start SOLO de tickets que estaban en el sprint al momento del cierre
+          // IMPORTANTE: Si status_at_sprint_close es null, el ticket fue removido antes del cierre, excluirlo
+          sprintCommitmentSP = issueSprintRows.reduce((sum, row) => {
+            // Si status_at_sprint_close es null y el sprint está cerrado, el ticket fue removido antes del cierre, excluirlo
+            if (!row.status_at_sprint_close && sprint && (sprint.state === 'closed' || (sprint.end_date && new Date(sprint.end_date) < new Date()))) {
+              return sum;
+            }
+            return sum + (Number(row.story_points_at_start) || 0);
+          }, 0);
+
+          // Completed SP = suma de story_points_at_close solo de los completados
+          // Ya filtrado por status_at_sprint_close IS NOT NULL en la query para sprints cerrados
+          sprintCompletedSP = issueSprintRows.reduce((sum, row) => {
+            // Si status_at_sprint_close es null y el sprint está cerrado, el ticket fue removido antes del cierre, excluirlo
+            if (!row.status_at_sprint_close && sprint && (sprint.state === 'closed' || (sprint.end_date && new Date(sprint.end_date) < new Date()))) {
+              return sum;
+            }
+            const isCompleted = isCompletedStatusForBatch(row.status_at_sprint_close);
+            if (!isCompleted) return sum;
+            return sum + (Number(row.story_points_at_close) || 0);
+          }, 0);
+          
+          sprintDataSource = 'issue_sprints';
+        } else {
+          console.warn(`[TEAM_HEALTH_KPI] No issue_sprints data for sprint ${sprintName}, skipping`);
+          continue;
+        }
       }
 
-      // Total SP al final = suma de story_points_at_close de todos los tickets
-      const sprintTotalSPAtClose = issueSprintRows.reduce((sum, row) => {
-        return sum + (Number(row.story_points_at_close) || 0);
-      }, 0);
-
-      // Completed SP = suma de story_points_at_close solo de los completados
-      const sprintCompletedSP = issueSprintRows.reduce((sum, row) => {
-        const isCompleted = isCompletedStatusForBatch(row.status_at_sprint_close);
-        if (!isCompleted) return sum;
-        return sum + (Number(row.story_points_at_close) || 0);
-      }, 0);
-
-      // Planning Accuracy = (SP Cerrados / SP Totales al Final) * 100
-      const sprintPercentage = sprintTotalSPAtClose > 0 
-        ? (sprintCompletedSP / sprintTotalSPAtClose) * 100 
+      // Planning Accuracy = (SP Completados / SP Commitment al Inicio) * 100
+      const sprintPercentage = sprintCommitmentSP > 0 
+        ? (sprintCompletedSP / sprintCommitmentSP) * 100 
         : (sprintCompletedSP > 0 ? 100 : 0);
       
-      if (sprintTotalSPAtClose > 0) {
+      if (sprintCommitmentSP > 0) {
         totalCompletedSP += sprintCompletedSP;
-        totalSPAtClose += sprintTotalSPAtClose;
+        totalCommitmentSP += sprintCommitmentSP;
         percentages.push(sprintPercentage);
+        dataSources.push(sprintDataSource);
         
-        console.log(`[TEAM_HEALTH_KPI] Sprint ${sprintName}: Total SP at Close=${sprintTotalSPAtClose}, Completed SP=${sprintCompletedSP}, Percentage=${sprintPercentage.toFixed(2)}%`);
+        console.log(`[TEAM_HEALTH_KPI] Sprint ${sprintName} (source: ${sprintDataSource}): Commitment SP=${sprintCommitmentSP}, Completed SP=${sprintCompletedSP}, Percentage=${sprintPercentage.toFixed(2)}%`);
       }
     }
 
-    if (percentages.length === 0 || totalSPAtClose === 0) {
+    if (percentages.length === 0 || totalCommitmentSP === 0) {
       if (totalCompletedSP === 0) {
         return null;
       }
-      // If we have completed SP but no total SP, return 100%
+      // If we have completed SP but no commitment SP, return 100%
       return {
         percentage: 100,
         score: calculatePlanningAccuracyScore(100),
         plannedSP: 0,
         completedSP: totalCompletedSP,
         carryOverSP: 0,
-        addedSP: 0
+        addedSP: 0,
+        dataSource: 'fallback'
       };
     }
 
-    // Calculate overall percentage using total completed SP / total SP at close
-    const totalPercentage = (totalCompletedSP / totalSPAtClose) * 100;
+    // Calculate overall percentage using total completed SP / total commitment SP
+    const totalPercentage = (totalCompletedSP / totalCommitmentSP) * 100;
     const score = calculatePlanningAccuracyScore(totalPercentage);
 
+    const uniqueSources = [...new Set(dataSources)];
     console.log(`[TEAM_HEALTH_KPI] Planning Accuracy calculated from last ${validMetrics.length} sprints (average: ${totalPercentage.toFixed(2)}%)`);
     console.log(`  Total Completed SP: ${totalCompletedSP}`);
-    console.log(`  Total SP at Close: ${totalSPAtClose}`);
+    console.log(`  Total Commitment SP: ${totalCommitmentSP}`);
+    console.log(`  Data sources used: ${uniqueSources.join(', ')}`);
     console.log(`  Individual sprint percentages:`, percentages.map(p => p.toFixed(2)).join(', '));
 
     return {
       percentage: Math.round(totalPercentage * 10) / 10,
       score,
-      plannedSP: totalSPAtClose, // SP totales al final del sprint (planificado)
+      plannedSP: totalCommitmentSP, // Commitment SP (SP comprometidos al inicio)
       completedSP: totalCompletedSP,
       carryOverSP: 0, // Carry over no se usa en el cálculo, solo para información
-      addedSP: 0 // Not used in Planning Accuracy
+      addedSP: 0, // Not used in Planning Accuracy
+      dataSource: uniqueSources.join(',') // Indica las fuentes de datos usadas
     };
   } catch (error) {
     console.error('[TEAM_HEALTH_KPI] Error calculating Planning Accuracy:', error);
@@ -961,11 +1055,20 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null, squadId = n
         sprint = { ...sprintRow }; // keep existing shape used below
       }
 
-      const { data: issueSprintRows, error: issueSprintError } = await supabase
+      // IMPORTANTE: Para sprints cerrados, solo contar tickets que estaban en el sprint al momento del cierre
+      // Si status_at_sprint_close es NULL, el ticket fue removido antes del cierre y NO debe contarse
+      let issueSprintQuery = supabase
         .from('issue_sprints')
         .select('issue_id, sprint_id, status_at_sprint_close, story_points_at_start, story_points_at_close')
         .eq('sprint_id', sprintId)
         .limit(10000);
+      
+      // Filtrar por status_at_sprint_close IS NOT NULL si el sprint está cerrado
+      if (sprint && (sprint.state === 'closed' || sprintCloseDate)) {
+        issueSprintQuery = issueSprintQuery.not('status_at_sprint_close', 'is', null);
+      }
+      
+      const { data: issueSprintRows, error: issueSprintError } = await issueSprintQuery;
 
       if (!issueSprintError && issueSprintRows && issueSprintRows.length > 0) {
         const issueIds = issueSprintRows.map(r => r.issue_id).filter(Boolean);
@@ -985,18 +1088,8 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null, squadId = n
             return {};
           };
 
-          const isDoneLike = (status) => {
-            if (!status) return false;
-            const s = String(status).trim().toUpperCase();
-            return s === 'DONE' ||
-              s === 'DEVELOPMENT DONE' ||
-              s.includes('DEVELOPMENT DONE') ||
-              s.includes('DEV DONE') ||
-              (s.includes('DONE') && !s.includes('TO DO') && !s.includes('TODO')) ||
-              s === 'CLOSED' ||
-              s === 'RESOLVED' ||
-              s === 'COMPLETED';
-          };
+          // Usar helper centralizado para consistencia
+          const isDoneLike = (status) => isCompletedStatusSync(status, true);
 
           // Get sprint close date to filter out tickets removed before closure
           let sprintCloseDate = null;
@@ -1472,7 +1565,7 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null, squadId = n
             const statusAtEnd = statusHistory[sprintName];
             if (statusAtEnd) {
               const statusUpper = statusAtEnd.toUpperCase().trim();
-              const isCompletedAtEnd = ['DONE', 'DEVELOPMENT DONE', 'RESOLVED', 'CLOSED', 'COMPLETED'].includes(statusUpper);
+              const isCompletedAtEnd = isCompletedStatusSync(statusAtEnd, true);
 
               if (isCompletedAtEnd) {
                 actualCapacity += convertSPToHours(storyPoints);
@@ -1487,7 +1580,7 @@ const calculateCapacityAccuracyFromMetrics = async (sprintId = null, squadId = n
         } else {
           // Fallback: use current status if no historical data
           const currentStatus = (issue.current_status || '').toUpperCase().trim();
-          const isCompleted = ['DONE', 'DEVELOPMENT DONE', 'RESOLVED', 'CLOSED', 'COMPLETED'].includes(currentStatus);
+          const isCompleted = isCompletedStatusSync(currentStatus, true);
 
           if (isCompleted) {
             actualCapacity += convertSPToHours(storyPoints);

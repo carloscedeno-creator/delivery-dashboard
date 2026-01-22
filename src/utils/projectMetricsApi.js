@@ -4,6 +4,8 @@
  */
 
 import { supabase } from './supabaseApi';
+import { isDevDoneStatusSync } from './statusHelper.js';
+import { filterRecentSprints } from './sprintFilterHelper.js';
 
 /**
  * Normaliza el nombre del estado para agrupar correctamente
@@ -103,16 +105,19 @@ export const getSprintsForSquad = async (squadId) => {
   try {
     const { data, error } = await supabase
       .from('sprints')
-      .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state, squad_id')
+      .select('id, sprint_key, sprint_name, start_date, end_date, complete_date, state, squad_id, created_at')
       .eq('squad_id', squadId)
       .ilike('sprint_name', '%Sprint%')
       .order('start_date', { ascending: false });
 
     if (error) throw error;
     
+    // Filtrar para mantener solo últimos 10 cerrados + activos (NO futuros)
+    const filteredSprints = filterRecentSprints(data || [], squadId);
+    
     // Determinar sprint actual (active state o el más reciente que no ha terminado)
     const now = new Date();
-    const sprintsWithCurrent = (data || []).map(sprint => {
+    const sprintsWithCurrent = filteredSprints.map(sprint => {
       // Un sprint está activo si:
       // 1. Tiene state === 'active', O
       // 2. No tiene end_date o end_date es en el futuro (y no está cerrado)
@@ -230,7 +235,7 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
     if (sprintId && sprintName) {
       // Estrategia 1: Usar issue_sprints para obtener tickets que pertenecían al sprint
       // Esto es la fuente de verdad para sprints cerrados (la "foto" al cierre)
-      const { data: issueSprints, error: issueSprintsError } = await supabase
+      let issueSprintsQuery = supabase
         .from('issue_sprints')
         .select(`
           issue_id,
@@ -260,6 +265,14 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
           )
         `)
         .eq('sprint_id', sprintId);
+      
+      // IMPORTANTE: Para sprints cerrados, solo contar tickets que estaban en el sprint al momento del cierre
+      // Si status_at_sprint_close es NULL, el ticket fue removido antes del cierre y NO debe contarse
+      if (isSprintClosed && sprintCloseDate) {
+        issueSprintsQuery = issueSprintsQuery.not('status_at_sprint_close', 'is', null);
+      }
+      
+      const { data: issueSprints, error: issueSprintsError } = await issueSprintsQuery;
 
       if (!issueSprintsError && issueSprints && issueSprints.length > 0) {
         // Extraer issues y mapear status_at_sprint_close y story_points_at_start
@@ -326,24 +339,34 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       }
 
       // Estrategia 2: Si no hay resultados en issue_sprints, usar status_by_sprint como fallback
+      // IMPORTANTE: Para sprints cerrados, NO usar fallback si no hay datos en issue_sprints
+      // porque no podemos verificar si los tickets fueron removidos antes del cierre
       if (issues.length === 0) {
-        console.log(`[PROJECT_METRICS] No issues found via issue_sprints, trying status_by_sprint fallback`);
-        
-        // Filtrar por current_sprint O por status_by_sprint que contenga el sprint
-        query = query.or(`current_sprint.eq.${sprintName},status_by_sprint->>${sprintName}.not.is.null`);
-        
-        const { data: fallbackIssues, error: fallbackError } = await query;
-        
-        if (!fallbackError && fallbackIssues) {
-          // Filtrar solo los que realmente tienen el sprint en status_by_sprint o current_sprint
-          issues = fallbackIssues.filter(issue => {
-            const hasInCurrentSprint = issue.current_sprint === sprintName;
-            const hasInStatusBySprint = issue.status_by_sprint && 
-                                       typeof issue.status_by_sprint === 'object' &&
-                                       Object.prototype.hasOwnProperty.call(issue.status_by_sprint, sprintName);
-            return hasInCurrentSprint || hasInStatusBySprint;
-          });
-          console.log(`[PROJECT_METRICS] Issues encontrados via status_by_sprint fallback: ${issues.length}`);
+        if (isSprintClosed && sprintCloseDate) {
+          // Para sprints cerrados, SIEMPRE necesitamos issue_sprints para tener la "foto del cierre"
+          // Si no hay datos en issue_sprints, no podemos determinar qué tickets estaban al cierre
+          console.warn(`[PROJECT_METRICS] ⚠️ Sprint cerrado sin datos en issue_sprints. No se puede usar fallback porque no podemos verificar tickets removidos.`);
+          issues = []; // No usar fallback para sprints cerrados
+        } else {
+          // Para sprints activos, podemos usar fallback
+          console.log(`[PROJECT_METRICS] No issues found via issue_sprints, trying status_by_sprint fallback`);
+          
+          // Filtrar por current_sprint O por status_by_sprint que contenga el sprint
+          query = query.or(`current_sprint.eq.${sprintName},status_by_sprint->>${sprintName}.not.is.null`);
+          
+          const { data: fallbackIssues, error: fallbackError } = await query;
+          
+          if (!fallbackError && fallbackIssues) {
+            // Filtrar solo los que realmente tienen el sprint en status_by_sprint o current_sprint
+            issues = fallbackIssues.filter(issue => {
+              const hasInCurrentSprint = issue.current_sprint === sprintName;
+              const hasInStatusBySprint = issue.status_by_sprint && 
+                                         typeof issue.status_by_sprint === 'object' &&
+                                         Object.prototype.hasOwnProperty.call(issue.status_by_sprint, sprintName);
+              return hasInCurrentSprint || hasInStatusBySprint;
+            });
+            console.log(`[PROJECT_METRICS] Issues encontrados via status_by_sprint fallback: ${issues.length}`);
+          }
         }
       }
     } else {
@@ -354,19 +377,8 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       console.log(`[PROJECT_METRICS] Issues encontrados: ${issues.length}`);
     }
 
-    // Función para determinar si un estado es "Dev Done"
-    const isDevDone = (status) => {
-      if (!status) return false;
-      const statusUpper = status.trim().toUpperCase();
-      return statusUpper === 'DONE' || 
-             statusUpper === 'DEVELOPMENT DONE' ||
-             statusUpper.includes('DEVELOPMENT DONE') ||
-             statusUpper.includes('DEV DONE') ||
-             (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
-             statusUpper === 'CLOSED' ||
-             statusUpper === 'RESOLVED' ||
-             statusUpper === 'COMPLETED';
-    };
+    // Usar helper centralizado para consistencia en todos los módulos
+    // Reemplazado función isDevDone local con statusHelper.js
 
     // Construir mapa de status_at_sprint_close desde los issues que ya lo tienen
     const issueStatusMap = new Map();
@@ -437,8 +449,8 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
       statusBreakdown[status].sp += sp;
       totalSP += sp;
       
-      // Calcular SP completados
-      if (isDevDone(status)) {
+      // Calcular SP completados usando helper centralizado
+      if (isDevDoneStatusSync(status)) {
         completedSP += sp;
       }
     });
@@ -485,19 +497,8 @@ export const getProjectMetricsData = async (squadId, sprintId) => {
 async function calculateEpicMetrics(issues, sprintName, squadId) {
   if (!issues || issues.length === 0) return [];
 
-  // Función para determinar si un estado es "Dev Done"
-  const isDevDone = (status) => {
-    if (!status) return false;
-    const statusUpper = status.trim().toUpperCase();
-    return statusUpper === 'DONE' || 
-           statusUpper === 'DEVELOPMENT DONE' ||
-           statusUpper.includes('DEVELOPMENT DONE') ||
-           statusUpper.includes('DEV DONE') ||
-           (statusUpper.includes('DONE') && !statusUpper.includes('TO DO') && !statusUpper.includes('TODO')) ||
-           statusUpper === 'CLOSED' ||
-           statusUpper === 'RESOLVED' ||
-           statusUpper === 'COMPLETED';
-  };
+  // Usar helper centralizado para consistencia en todos los módulos
+  // Reemplazado función isDevDone local con statusHelper.js
 
   // Obtener todas las iniciativas del squad para calcular lifetime
   let allEpicIssues = [];
@@ -570,7 +571,7 @@ async function calculateEpicMetrics(issues, sprintName, squadId) {
     const epic = epicMap.get(epicId);
     const sp = issue.current_story_points || 0;
     const currentStatus = issue.current_status || 'Unknown';
-    const isCompleted = isDevDone(currentStatus);
+    const isCompleted = isDevDoneStatusSync(currentStatus);
     
     // Métricas lifetime (todos los tickets de la épica)
     epic.totalTickets++;
@@ -607,14 +608,14 @@ async function calculateEpicMetrics(issues, sprintName, squadId) {
     
     const sp = issue.current_story_points || 0;
     const currentStatus = issue.current_status || 'Unknown';
-    const isCompleted = isDevDone(currentStatus);
+    const isCompleted = isDevDoneStatusSync(currentStatus);
 
     // Sprint metrics (only if sprint is selected and ticket is in sprint)
     if (sprintName && issue.current_sprint === sprintName) {
       // Verificar si se completó durante este sprint usando status_by_sprint
       const statusBySprint = issue.status_by_sprint || {};
       const sprintStatus = statusBySprint[sprintName];
-      const wasCompletedInSprint = sprintStatus && isDevDone(sprintStatus);
+      const wasCompletedInSprint = sprintStatus && isDevDoneStatusSync(sprintStatus);
       
       // Si el ticket está en el sprint y se completó durante el sprint
       if (isCompleted && wasCompletedInSprint) {
@@ -705,3 +706,59 @@ export const getSprintById = async (sprintId) => {
   }
 };
 
+/**
+ * Obtiene cambios de scope para un sprint
+ * Tarea 4: Tracking Básico de Scope Changes
+ */
+export const getSprintScopeChanges = async (sprintId) => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  try {
+    // Obtener resumen de cambios de scope usando la vista
+    const { data: summary, error: summaryError } = await supabase
+      .from('sprint_scope_changes_summary')
+      .select('*')
+      .eq('sprint_id', sprintId)
+      .maybeSingle();
+    
+    if (summaryError && summaryError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      throw summaryError;
+    }
+
+    // Obtener detalles de cambios
+    const { data: changes, error: changesError } = await supabase
+      .from('sprint_scope_changes')
+      .select(`
+        id,
+        change_type,
+        change_date,
+        story_points_before,
+        story_points_after,
+        issues!inner(
+          issue_key,
+          summary
+        )
+      `)
+      .eq('sprint_id', sprintId)
+      .order('change_date', { ascending: false });
+
+    if (changesError) throw changesError;
+
+    return {
+      summary: summary || {
+        issues_added: 0,
+        issues_removed: 0,
+        issues_sp_changed: 0,
+        sp_added: 0,
+        sp_removed: 0,
+        sp_net_change: 0,
+      },
+      changes: changes || [],
+    };
+  } catch (error) {
+    console.error('[PROJECT_METRICS] Error getting scope changes:', error);
+    throw error;
+  }
+};

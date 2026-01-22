@@ -1,0 +1,134 @@
+# Delivery Dashboard - Constitución Global
+
+**Framework:** Ralph-Compounding / Agentic Engineering  
+**Límite:** 200 líneas máximo (reglas pesadas en `/reference/`)
+
+---
+
+## 🎯 Tech Stack
+
+- **Frontend:** React 18.2 + Vite 5.1
+- **UI:** TailwindCSS + Lucide React Icons
+- **Charts:** Recharts 2.12
+- **Backend:** Supabase (PostgreSQL + Auth + Edge Functions)
+- **Sync:** Node.js (jira-supabase-sync)
+- **Testing:** Vitest 4.0 + React Testing Library
+- **Deployment:** GitHub Pages
+
+---
+
+## 📚 Referencias On-Demand
+
+**Cargar solo cuando sea relevante:**
+
+- `/reference/api_guidelines.md` - Patrones de API y Supabase
+- `/reference/ui_components.md` - Componentes React y patrones UI
+- `/reference/database_schema.md` - Esquema Supabase y funciones RPC
+- `/reference/deployment.md` - GitHub Pages y Edge Functions
+- `/reference/configuration.md` - Variables de entorno y setup
+- `/reference/troubleshooting.md` - Errores comunes y soluciones
+- `/reference/metrics_calculations.md` - Fórmulas de KPIs
+- `/reference/jira_integration.md` - Sync process y Jira API
+
+---
+
+## 🏗️ Arquitectura
+
+- **Componentes:** `src/components/` - React components
+- **Servicios:** `src/services/` - Business logic
+- **Utils:** `src/utils/` - Helpers y APIs
+- **Sync:** `jira-supabase-sync/` - Servicio de sincronización Jira→Supabase
+
+---
+
+## ✅ Estándares Globales
+
+### Logging
+- Usar `console.log` con prefijos: `[MODULE_NAME] Mensaje`
+- En desarrollo: logging detallado
+- En producción: solo errores críticos
+
+### Testing
+- Mínimo 5 tests por feature nueva
+- Mínimo 2 tests por bug fix
+- Tests corren automáticamente antes de commit (Husky)
+
+### Imports
+- Usar alias `@/` para imports absolutos: `@/components/Login`
+- No usar imports relativos profundos: `../../../components`
+
+### Iconos (Lucide React)
+- **OBLIGATORIO:** Verificar que el icono existe en https://lucide.dev/icons/ antes de importar
+- **NUNCA** asumir que un icono existe sin verificar
+- Si no existe, buscar alternativa similar en la documentación
+- Iconos comunes válidos: `Calendar`, `Clock`, `AlertCircle`, `TrendingUp`, `BarChart3`, `Activity`, `Truck`, `Shield`, `Heart`, `SquareChartGantt`
+- Ver `src/components/agents.md` para lista completa y proceso de verificación
+
+### Verificación de Tipos de Retorno
+- **OBLIGATORIO:** Verificar el tipo de retorno de funciones utilitarias antes de usar métodos específicos de tipo
+- Revisar cómo otros componentes usan la misma función utilitaria
+- Usar optional chaining (`?.`) para acceder a propiedades de objetos que pueden ser null/undefined
+- **NUNCA** asumir que una función retorna un tipo primitivo sin verificar
+
+### Queries Supabase
+- **OBLIGATORIO:** Usar `.maybeSingle()` cuando el resultado puede no existir (no `.single()`)
+- **OBLIGATORIO:** Manejar errores de queries opcionales sin fallar la aplicación
+- Usar `.ilike()` para búsquedas de texto case-insensitive (no `.eq()` para texto)
+- Usar `.or()` con múltiples condiciones cuando hay variaciones posibles
+- Incluir manejo de errores con logging apropiado (`console.warn` para errores no críticos)
+- Validar datos antes de usar (usar optional chaining `?.`)
+- **OBLIGATORIO:** Verificar qué columnas existen en una tabla antes de hacer SELECT
+- **OBLIGATORIO:** Usar funciones RPC para datos calculados (no leer directamente de tabla si no existe)
+- Manejar casos donde funciones RPC pueden no existir (try-catch con defaults)
+- Ver `src/services/agents.md` para patrones completos y diferencias `.single()` vs `.maybeSingle()`
+
+### Funciones RPC Supabase
+- **OBLIGATORIO:** Verificar firma exacta de función RPC antes de llamarla (consultar documentación SQL)
+- **OBLIGATORIO:** Consultar hint del error si la función no se encuentra (incluye firma sugerida)
+- **OBLIGATORIO:** No pasar parámetros que no existen en la función (remover completamente, no solo pasarlos como `null`)
+- Manejar errores con fallback apropiado (try-catch o función manual alternativa)
+- Ver `docs/ERROR_CALCULATE_REWORK_RATE_PARAMS_FIX.md` para ejemplo completo
+
+### Variables const vs let
+- **OBLIGATORIO:** No reasignar variables declaradas con `const`
+- **OBLIGATORIO:** Usar operador ternario para crear objetos condicionales con `const`
+- **OBLIGATORIO:** Usar nombres diferentes para datos de API vs objetos finales (ej: `capacityData` vs `capacity`)
+- Usar spread operator `{...data}` para crear nuevos objetos en lugar de mutar
+- Ver `docs/ERROR_ASSIGNMENT_CONSTANT_VARIABLE_FIX.md` para ejemplo completo
+
+### Filtros y Parámetros por Defecto
+- **OBLIGATORIO:** Verificar valores por defecto que pueden causar filtros no deseados
+- **OBLIGATORIO:** Pasar `null` explícitamente cuando se quieren datos sin filtros (ej: `projectKey: null`)
+- **OBLIGATORIO:** Validar que parámetros existen antes de usarlos (ej: `if (projectKey)`)
+- Documentar comportamiento cuando parámetros son `null` vs cuando tienen valor
+- Ver `docs/ERROR_PROJECTKEY_FILTER_FIX.md` para ejemplo completo
+
+### Git
+- Commits: `feat:`, `fix:`, `docs:`, `refactor:`
+- Branch: `V1.08` (versionado)
+- Pre-push: tests automáticos
+
+---
+
+## 🔄 Workflows
+
+### PRD-First Development
+- Siempre crear PRD en `/specs/prd.md` antes de codificar
+- Ver `/specs/stories.json` para user stories atomizadas
+
+### Context Reset
+- Planificar en una conversación
+- **RESET** (limpiar chat)
+- Ejecutar en conversación nueva
+
+### System Evolution
+- Cada bug → actualizar `/src/**/agents.md` o `/reference/`
+- Nunca solo "fix" - siempre mejorar el sistema
+
+---
+
+## 📖 Ver También
+
+- `/specs/prd.md` - PRD principal del proyecto
+- `AGENTS.md` - Constitución expandida y referencias
+- `.cursor/rules/` - Reglas específicas (testing, docs, best-practices)
