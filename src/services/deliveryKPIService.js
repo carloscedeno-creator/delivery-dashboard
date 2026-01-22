@@ -1,9 +1,12 @@
 /**
  * Servicio para calcular Delivery KPIs desde datos reales de Supabase
  * Calcula Cycle Time, Deploy Frequency y PR Size basado en métricas disponibles
+ *
+ * ENH-001: Add Data Caching Layer - Integración con cache inteligente
  */
 
 import { supabase } from '../utils/supabaseApi.js';
+import { get, set, CACHE_TTL } from './cacheService.js';
 import {
   calculateCycleTimeScore,
   calculateDeployFrequencyScore,
@@ -12,6 +15,50 @@ import {
 } from '../utils/kpiCalculations';
 import { mockDeliveryKPIData } from '../data/kpiMockData';
 import { filterRecentSprints } from '../utils/sprintFilterHelper.js';
+
+/**
+ * Obtiene Delivery KPI Data con cache inteligente (ENH-001)
+ * @param {string} projectKey - Key del proyecto (opcional)
+ * @param {boolean} useCache - Si usar cache (default: true)
+ * @returns {Promise<Object>} KPI Data
+ */
+export const getDeliveryKPIDataWithCache = async (projectKey = null, useCache = true) => {
+  const cacheKey = `kpi-delivery-${projectKey || 'all'}`;
+
+  if (useCache) {
+    // Try cache first
+    const cachedData = cacheService.get(cacheKey);
+    if (cachedData) {
+      console.log('[DeliveryKPIService] Cache hit for:', cacheKey);
+      return cachedData;
+    }
+  }
+
+  try {
+    // Cache miss - fetch fresh data
+    console.log('[DeliveryKPIService] Cache miss, fetching fresh data for:', cacheKey);
+    const freshData = await getDeliveryKPIData(projectKey);
+
+    // Cache the result
+    if (freshData) {
+      cacheService.set(cacheKey, freshData, CACHE_TTL.KPIs);
+      console.log('[DeliveryKPIService] Cached fresh data for:', cacheKey);
+    }
+
+    return freshData;
+  } catch (error) {
+    console.warn('[DeliveryKPIService] Error fetching data, trying cache fallback:', error);
+
+    // Fallback to cache even if expired
+    const cachedData = cacheService.get(cacheKey);
+    if (cachedData) {
+      console.log('[DeliveryKPIService] Using expired cache as fallback for:', cacheKey);
+      return cachedData;
+    }
+
+    throw error;
+  }
+};
 
 /**
  * Calcula el Cycle Time promedio desde métricas de sprint
@@ -116,9 +163,7 @@ const calculateDeployFrequencyFromMetrics = (sprintMetrics) => {
   };
 };
 
-// Simple in-memory cache to avoid repeated queries (5 minute TTL)
-const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Using the new intelligent cache service
 
 /**
  * Obtiene datos de Delivery KPIs desde Supabase con filtros opcionales
@@ -140,8 +185,8 @@ export const getDeliveryKPIData = async (options = {}) => {
   // Check cache first (if enabled and no filters that would change results)
   if (useCache && !filters.sprintId && !filters.developerId && !filters.startDate && !filters.endDate && !filters.squadId) {
     const cacheKey = 'deliveryKPIData';
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    const cached = get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL.KPIs) {
       console.log('[DELIVERY_KPI] ✅ Using cached data');
       return cached.data;
     }
@@ -438,15 +483,10 @@ export const getDeliveryKPIData = async (options = {}) => {
     // Cache result if applicable
     if (useCache && !filters.sprintId && !filters.developerId && !filters.startDate && !filters.endDate && !filters.squadId) {
       const cacheKey = 'deliveryKPIData';
-      cache.set(cacheKey, {
+      set(cacheKey, {
         data: result,
         timestamp: Date.now()
-      });
-      // Clean old cache entries (keep only last 10)
-      if (cache.size > 10) {
-        const firstKey = cache.keys().next().value;
-        cache.delete(firstKey);
-      }
+      }, CACHE_TTL.KPIs);
     }
     
     return result;

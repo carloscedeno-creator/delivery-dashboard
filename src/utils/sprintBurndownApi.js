@@ -5,8 +5,6 @@
  */
 
 import { supabase } from './supabaseApi';
-
-import { supabase } from './supabaseApi';
 import { isCompletedStatusSync } from './statusHelper.js';
 
 /**

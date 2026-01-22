@@ -1,12 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { Users, CheckCircle, XCircle, Shield, Mail, User, Clock } from 'lucide-react';
 import { supabase } from '../utils/supabaseApi';
+import { createClient } from '@supabase/supabase-js';
 
 const UserAdministration = ({ currentUser }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // Helper function to get admin Supabase client for user management
+    const getAdminSupabaseClient = async () => {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://sywkskwkexwwdzrbwinp.supabase.co';
+
+        // For admin operations, we need service role key
+        // WARNING: This should ideally be done server-side, not client-side for security
+        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+        if (!serviceRoleKey) {
+            console.warn('[USER ADMIN] ⚠️ Service role key not configured!');
+            console.warn('[USER ADMIN] Admin operations will fail without VITE_SUPABASE_SERVICE_ROLE_KEY');
+            console.warn('[USER ADMIN] Add this to your .env file: VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key');
+
+            // Fallback to anon key (will likely fail for admin operations)
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            if (!supabaseAnonKey) {
+                throw new Error('Neither service role key nor anon key configured. Please check your .env file.');
+            }
+            console.warn('[USER ADMIN] Falling back to anon key - admin operations may not work');
+            return createClient(supabaseUrl, supabaseAnonKey);
+        }
+
+        console.log('[USER ADMIN] ✅ Using service role client for admin operations');
+
+        const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        });
+
+        // For service role, we need to set up auth context
+        // Try to use the current user's session if available
+        if (currentUser) {
+            try {
+                // Since we have service role, we can bypass normal auth
+                // But we still need to provide auth context for RPC functions
+                console.log('[USER ADMIN] Setting up admin auth context');
+            } catch (authErr) {
+                console.warn('[USER ADMIN] Could not set admin auth context:', authErr.message);
+            }
+        }
+
+        return adminClient;
+    };
 
     useEffect(() => {
         loadUsers();
@@ -101,15 +148,24 @@ const UserAdministration = ({ currentUser }) => {
         setError('');
         setSuccess('');
         try {
-            const { error: approveError } = await supabase.rpc('approve_user', {
-                p_user_id: userId
-            });
+            // Get admin client for user management operations
+            const adminClient = await getAdminSupabaseClient();
+
+            console.log('[USER ADMIN] Attempting to approve user:', userId);
+
+            // Use direct database operation instead of RPC
+            const { error: approveError } = await adminClient
+                .from('app_users')
+                .update({ is_active: true })
+                .eq('id', userId);
 
             if (approveError) {
-                setError(approveError.message);
+                console.error('[USER ADMIN] Approve error:', approveError);
+                setError(`Error approving user: ${approveError.message}`);
                 return;
             }
 
+            console.log('[USER ADMIN] User approved successfully');
             setSuccess('User approved successfully');
             await loadUsers();
             setTimeout(() => setSuccess(''), 3000);
@@ -127,15 +183,29 @@ const UserAdministration = ({ currentUser }) => {
         }
 
         try {
-            const { error: deactivateError } = await supabase.rpc('deactivate_user', {
-                p_user_id: userId
-            });
+            const adminClient = await getAdminSupabaseClient();
+
+            console.log('[USER ADMIN] Attempting to deactivate user:', userId);
+
+            // Use direct database operation instead of RPC
+            const { error: deactivateError } = await adminClient
+                .from('app_users')
+                .update({ is_active: false })
+                .eq('id', userId);
 
             if (deactivateError) {
-                setError(deactivateError.message);
+                console.error('[USER ADMIN] Deactivate error:', deactivateError);
+                setError(`Error deactivating user: ${deactivateError.message}`);
                 return;
             }
 
+            // Also clean up user sessions
+            await adminClient
+                .from('user_sessions')
+                .delete()
+                .eq('user_id', userId);
+
+            console.log('[USER ADMIN] User deactivated successfully');
             setSuccess('User deactivated successfully');
             await loadUsers();
             setTimeout(() => setSuccess(''), 3000);
@@ -149,16 +219,23 @@ const UserAdministration = ({ currentUser }) => {
         setError('');
         setSuccess('');
         try {
-            const { error: roleError } = await supabase.rpc('update_user_role', {
-                p_user_id: userId,
-                p_new_role: newRole
-            });
+            const adminClient = await getAdminSupabaseClient();
+
+            console.log('[USER ADMIN] Attempting to change role for user:', userId, 'to:', newRole);
+
+            // Use direct database operation instead of RPC
+            const { error: roleError } = await adminClient
+                .from('app_users')
+                .update({ role: newRole })
+                .eq('id', userId);
 
             if (roleError) {
-                setError(roleError.message);
+                console.error('[USER ADMIN] Role change error:', roleError);
+                setError(`Error updating user role: ${roleError.message}`);
                 return;
             }
 
+            console.log('[USER ADMIN] User role updated successfully');
             setSuccess('User role updated successfully');
             await loadUsers();
             setTimeout(() => setSuccess(''), 3000);

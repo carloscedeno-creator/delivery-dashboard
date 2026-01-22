@@ -3,6 +3,10 @@ import { AlertCircle, Menu, TrendingUp } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DataSourceSelector from './components/DataSourceSelector';
 import Login from './components/Login';
+import Signup from './components/Signup';
+
+// Import cache service to make it globally available for testing
+import './services/cacheService.js';
 
 // Lazy load de componentes para mejor HMR y rendimiento
 const OverallView = lazy(() => import('./components/OverallView.jsx'));
@@ -24,7 +28,7 @@ import { parseCSV } from './utils/csvParser';
 import { DELIVERY_ROADMAP, PRODUCT_ROADMAP, buildProxiedUrl } from './config/dataSources';
 import { getDeliveryRoadmapData, getDeveloperAllocationData } from './utils/supabaseApi';
 import { canAccessModule, getModulesForRoleSync, MODULES } from './config/permissions';
-import { getCurrentUser } from './utils/authService';
+import { getCurrentUser, logout } from './utils/authService';
 
 // URLs de las hojas usando la configuración centralizada
 const SHEET_URLS = {
@@ -57,6 +61,7 @@ function App() {
     const [devAllocationData, setDevAllocationData] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [showSignup, setShowSignup] = useState(false);
     
     // Listen for navigation to survey from login page
     useEffect(() => {
@@ -73,16 +78,16 @@ function App() {
     useEffect(() => {
         const user = getCurrentUser();
         setCurrentUser(user);
-        
+
         // Si no hay usuario, redirigir a login o usar rol por defecto
         if (!user) {
             console.warn('[APP] No hay usuario autenticado, usando rol por defecto: regular');
         }
-        
+
         // Verificar que el activeView sea accesible para el rol del usuario
         const userRole = user?.role || 'regular';
         const allowedModules = getModulesForRoleSync(userRole);
-        
+
         if (Array.isArray(allowedModules) && !allowedModules.includes(activeView)) {
             // Si el módulo actual no está permitido, redirigir al primer módulo permitido
             console.warn(`[APP] Module ${activeView} not allowed for role ${userRole}, redirecting to ${allowedModules[0]}`);
@@ -382,15 +387,45 @@ function App() {
         }
     }, [dataSource, loadData]);
 
-    // Si no hay usuario autenticado, mostrar Login o encuesta pública
+    // Función para manejar logout
+    const handleLogout = async () => {
+        try {
+            console.log('[APP] 🔄 Logging out user...');
+            await logout();
+            setCurrentUser(null);
+            setActiveView('overall');
+            // Recargar la página para limpiar todo el estado
+            window.location.reload();
+        } catch (error) {
+            console.error('[APP] Error during logout:', error);
+            // Forzar logout incluso si hay error
+            localStorage.removeItem('auth_session');
+            setCurrentUser(null);
+            window.location.reload();
+        }
+    };
+
+    // Si no hay usuario autenticado, mostrar Login/Signup o encuesta pública
     if (!currentUser && activeView !== 'enps-survey') {
-        return (
-            <Login 
+        return showSignup ? (
+            <Signup
+                onSignupSuccess={(user) => {
+                    // El usuario se registra pero necesita aprobación
+                    console.log('[APP] ✅ Signup successful for user:', user);
+                    // No setear currentUser aquí porque el usuario necesita aprobación
+                    // Solo mostrar mensaje de éxito
+                }}
+                onSwitchToLogin={() => setShowSignup(false)}
+            />
+        ) : (
+            <Login
                 onLoginSuccess={(user) => {
                     setCurrentUser(user);
+                    setShowSignup(false);
                     // Reload page to initialize everything with authenticated user
                     window.location.reload();
-                }} 
+                }}
+                onSwitchToSignup={() => setShowSignup(true)}
             />
         );
     }
@@ -408,9 +443,10 @@ function App() {
 
     return (
         <div className="min-h-screen font-sans bg-[#0a0e17] flex">
-            <Sidebar 
-                activeView={activeView} 
+            <Sidebar
+                activeView={activeView}
                 setActiveView={setActiveView}
+                onLogout={handleLogout}
                 isOpen={sidebarOpen}
                 setIsOpen={setSidebarOpen}
             />

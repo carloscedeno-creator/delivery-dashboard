@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LogIn, Mail, Lock, AlertCircle, MessageSquare } from 'lucide-react';
 
-const Login = ({ onLoginSuccess }) => {
+const Login = ({ onLoginSuccess, onSwitchToSignup }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -112,6 +112,21 @@ const Login = ({ onLoginSuccess }) => {
                             )}
                         </button>
                     </form>
+
+                    {/* Switch to Signup */}
+                    {onSwitchToSignup && (
+                        <div className="mt-6 text-center">
+                            <p className="text-slate-400 text-sm">
+                                Don't have an account?{' '}
+                                <button
+                                    onClick={onSwitchToSignup}
+                                    className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                                >
+                                    Sign up here
+                                </button>
+                            </p>
+                        </div>
+                    )}
 
                     {/* Link to Survey */}
                     <div className="mt-6 pt-6 border-t border-white/10">
