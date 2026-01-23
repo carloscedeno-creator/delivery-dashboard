@@ -35,3 +35,6 @@ playwright/.cache
 .env.local
 .env.*.local
 temp_benchmark.txt
+
+# Local Jira config (contains secrets)
+jira-supabase-sync/PROJECTS_CONFIG_LOCAL.json

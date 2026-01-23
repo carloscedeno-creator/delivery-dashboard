@@ -26,7 +26,7 @@ export const getSprintBurndownData = async (sprintId) => {
       .from('sprint_burndown_summary')
       .select('*')
       .eq('sprint_id', sprintId)
-      .single();
+      .maybeSingle();
 
     if (!summaryError && summary) {
       // Si tenemos el resumen, obtener los datos día a día
@@ -44,7 +44,7 @@ export const getSprintBurndownData = async (sprintId) => {
           .from('sprints')
           .select('id, sprint_name, start_date, end_date, complete_date, state')
           .eq('id', sprintId)
-          .single();
+          .maybeSingle();
 
         return {
           sprint: sprint || { id: sprintId, sprint_name: summary.sprint_name },
@@ -72,7 +72,7 @@ export const getSprintBurndownData = async (sprintId) => {
       .from('sprints')
       .select('id, sprint_name, start_date, end_date, complete_date, state')
       .eq('id', sprintId)
-      .single();
+      .maybeSingle();
 
     if (sprintError || !sprint) {
       throw new Error(`Sprint not found: ${sprintId}`);

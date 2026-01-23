@@ -14,6 +14,7 @@ const ProductRoadmapView = lazy(() => import('./components/ProductRoadmapView.js
 const DeliveryRoadmapView = lazy(() => import('./components/DeliveryRoadmapView.jsx'));
 const ProjectsMetrics = lazy(() => import('./components/ProjectsMetrics.jsx'));
 const DeveloperMetrics = lazy(() => import('./components/DeveloperMetrics.jsx'));
+const DeveloperBurndown = lazy(() => import('@/components/DeveloperBurndown.jsx'));
 const TeamCapacity = lazy(() => import('./components/TeamCapacity.jsx'));
 const TeamAllocation = lazy(() => import('./components/TeamAllocation.jsx'));
 const ProductDepartmentKPIs = lazy(() => import('./components/ProductDepartmentKPIs.jsx'));
@@ -480,6 +481,7 @@ function App() {
                              activeView === 'delivery' ? 'Delivery Roadmap' :
                              activeView === 'projects-metrics' ? 'Project Metrics' :
                              activeView === 'developer-metrics' ? 'Developer Metrics' :
+                             activeView === 'developer-burndown' ? 'Developer Burndown' :
                              activeView === 'team-capacity' ? 'Team Capacity' :
                             activeView === 'team-allocation' ? 'Team Allocation' :
                             activeView === 'product-department-kpis' ? 'Product Raw Manual Raw Data' :
@@ -499,6 +501,7 @@ function App() {
                              activeView === 'delivery' ? 'Execution & Resource Allocation' :
                              activeView === 'projects-metrics' ? 'Comprehensive project performance analytics' :
                              activeView === 'developer-metrics' ? 'Team performance and allocation analytics' :
+                             activeView === 'developer-burndown' ? 'Burndown progress by developer with sprint filters' :
                              activeView === 'team-capacity' ? 'Configure team capacity for sprints' :
                             activeView === 'team-allocation' ? 'View team allocation report by squad and sprint' :
                             activeView === 'product-department-kpis' ? 'Manage Product Raw Manual Raw Data' :
@@ -586,6 +589,9 @@ function App() {
                         )}
                         {activeView === 'developer-metrics' && canAccessModule(currentUser?.role || 'regular', MODULES.DEVELOPER_METRICS) && (
                             <DeveloperMetrics />
+                        )}
+                        {activeView === 'developer-burndown' && canAccessModule(currentUser?.role || 'regular', MODULES.DEVELOPER_BURNDOWN) && (
+                            <DeveloperBurndown />
                         )}
                         {activeView === 'team-capacity' && canAccessModule(currentUser?.role || 'regular', MODULES.TEAM_CAPACITY) && (
                             <TeamCapacity />

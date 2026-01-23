@@ -11,9 +11,10 @@ export const MODULES = {
   ADMIN: 'admin', // Admin section (groups User Administration, Role Access)
   USER_ADMIN: 'user-admin',
   ROLE_ACCESS: 'role-access',
-  PM: 'pm', // PM section (groups Project Metrics, Developer Metrics, Team Capacity)
+  PM: 'pm', // PM section (groups Project Metrics, Developer Metrics, Team Capacity, Developer Burndown)
   PROJECTS_METRICS: 'projects-metrics',
   DEVELOPER_METRICS: 'developer-metrics',
+  DEVELOPER_BURNDOWN: 'developer-burndown',
   TEAM_CAPACITY: 'team-capacity',
   THREE_AMIGOS: 'three-amigos', // 3 Amigos section (groups Team Allocation, Product Department KPIs, ENPS Survey Management)
   TEAM_ALLOCATION: 'team-allocation',
@@ -41,9 +42,10 @@ export const ROLE_PERMISSIONS = {
     MODULES.ADMIN, // Admin section (includes User Administration, Role Access)
     MODULES.USER_ADMIN,
     MODULES.ROLE_ACCESS,
-    MODULES.PM, // PM section (includes Project Metrics, Developer Metrics, Team Capacity)
+    MODULES.PM, // PM section (includes Project Metrics, Developer Metrics, Team Capacity, Developer Burndown)
     MODULES.PROJECTS_METRICS,
     MODULES.DEVELOPER_METRICS,
+    MODULES.DEVELOPER_BURNDOWN,
     MODULES.TEAM_CAPACITY,
     MODULES.THREE_AMIGOS, // 3 Amigos section (includes Team Allocation, Product Department KPIs, ENPS Survey Management)
     MODULES.TEAM_ALLOCATION,
@@ -87,9 +89,10 @@ export const ROLE_PERMISSIONS = {
     MODULES.PRODUCT,
     MODULES.DELIVERY,
     MODULES.STRATA,
-    MODULES.PM, // PM section (includes Project Metrics, Developer Metrics, Team Capacity)
+    MODULES.PM, // PM section (includes Project Metrics, Developer Metrics, Team Capacity, Developer Burndown)
     MODULES.PROJECTS_METRICS,
     MODULES.DEVELOPER_METRICS,
+    MODULES.DEVELOPER_BURNDOWN,
     MODULES.TEAM_CAPACITY,
     MODULES.THREE_AMIGOS, // 3 Amigos section (includes Team Allocation, Product Department KPIs, ENPS Survey Management)
     MODULES.TEAM_ALLOCATION,
@@ -108,9 +111,10 @@ export const ROLE_PERMISSIONS = {
     MODULES.PRODUCT,
     MODULES.DELIVERY,
     MODULES.STRATA,
-    MODULES.PM, // PM section (includes Project Metrics, Developer Metrics, Team Capacity)
+    MODULES.PM, // PM section (includes Project Metrics, Developer Metrics, Team Capacity, Developer Burndown)
     MODULES.PROJECTS_METRICS,
     MODULES.DEVELOPER_METRICS,
+    MODULES.DEVELOPER_BURNDOWN,
     MODULES.TEAM_CAPACITY,
     MODULES.THREE_AMIGOS, // 3 Amigos section (includes Team Allocation, Product Department KPIs, ENPS Survey Management)
     MODULES.TEAM_ALLOCATION,
@@ -211,6 +215,7 @@ export const getModulesForRole = async (role) => {
     if (modules.includes(MODULES.PM)) {
       if (!modules.includes(MODULES.PROJECTS_METRICS)) modules.push(MODULES.PROJECTS_METRICS);
       if (!modules.includes(MODULES.DEVELOPER_METRICS)) modules.push(MODULES.DEVELOPER_METRICS);
+      if (!modules.includes(MODULES.DEVELOPER_BURNDOWN)) modules.push(MODULES.DEVELOPER_BURNDOWN);
       if (!modules.includes(MODULES.TEAM_CAPACITY)) modules.push(MODULES.TEAM_CAPACITY);
     }
     
@@ -231,6 +236,7 @@ export const getModulesForRole = async (role) => {
   if (modules.includes(MODULES.PM)) {
     if (!modules.includes(MODULES.PROJECTS_METRICS)) modules.push(MODULES.PROJECTS_METRICS);
     if (!modules.includes(MODULES.DEVELOPER_METRICS)) modules.push(MODULES.DEVELOPER_METRICS);
+    if (!modules.includes(MODULES.DEVELOPER_BURNDOWN)) modules.push(MODULES.DEVELOPER_BURNDOWN);
     if (!modules.includes(MODULES.TEAM_CAPACITY)) modules.push(MODULES.TEAM_CAPACITY);
   }
   
@@ -254,6 +260,7 @@ export const getModulesForRoleSync = (role) => {
     if (modules.includes(MODULES.PM)) {
       if (!modules.includes(MODULES.PROJECTS_METRICS)) modules.push(MODULES.PROJECTS_METRICS);
       if (!modules.includes(MODULES.DEVELOPER_METRICS)) modules.push(MODULES.DEVELOPER_METRICS);
+      if (!modules.includes(MODULES.DEVELOPER_BURNDOWN)) modules.push(MODULES.DEVELOPER_BURNDOWN);
       if (!modules.includes(MODULES.TEAM_CAPACITY)) modules.push(MODULES.TEAM_CAPACITY);
     }
     return modules;
@@ -264,6 +271,7 @@ export const getModulesForRoleSync = (role) => {
   if (modules.includes(MODULES.PM)) {
     if (!modules.includes(MODULES.PROJECTS_METRICS)) modules.push(MODULES.PROJECTS_METRICS);
     if (!modules.includes(MODULES.DEVELOPER_METRICS)) modules.push(MODULES.DEVELOPER_METRICS);
+    if (!modules.includes(MODULES.DEVELOPER_BURNDOWN)) modules.push(MODULES.DEVELOPER_BURNDOWN);
     if (!modules.includes(MODULES.TEAM_CAPACITY)) modules.push(MODULES.TEAM_CAPACITY);
   }
   
@@ -314,11 +322,13 @@ export const getNavbarModules = (role) => {
       submodules: [
         { id: 'projects-metrics', label: 'Project Metrics', icon: 'BarChart' },
         { id: 'developer-metrics', label: 'Developer Metrics', icon: 'Activity' },
+        { id: 'developer-burndown', label: 'Developer Burndown', icon: 'BarChart' },
         { id: 'team-capacity', label: 'Team Capacity', icon: 'UserCheck' }
       ]
     },
     [MODULES.PROJECTS_METRICS]: { id: 'projects-metrics', label: 'Projects Metrics', icon: 'BarChart' },
     [MODULES.DEVELOPER_METRICS]: { id: 'developer-metrics', label: 'Developer Metrics', icon: 'Activity' },
+    [MODULES.DEVELOPER_BURNDOWN]: { id: 'developer-burndown', label: 'Developer Burndown', icon: 'BarChart' },
     [MODULES.TEAM_CAPACITY]: { id: 'team-capacity', label: 'Team Capacity', icon: 'UserCheck' },
     [MODULES.THREE_AMIGOS]: { 
       id: 'three-amigos', 
@@ -376,11 +386,12 @@ export const getNavbarModules = (role) => {
     );
   }
   
-  // Si tiene PM, excluir PROJECTS_METRICS, DEVELOPER_METRICS y TEAM_CAPACITY individuales (se agrupan en PM)
+  // Si tiene PM, excluir PROJECTS_METRICS, DEVELOPER_METRICS, DEVELOPER_BURNDOWN y TEAM_CAPACITY individuales (se agrupan en PM)
   if (hasPM) {
     result = result.filter(module => 
       module !== MODULES.PROJECTS_METRICS && 
       module !== MODULES.DEVELOPER_METRICS && 
+      module !== MODULES.DEVELOPER_BURNDOWN &&
       module !== MODULES.TEAM_CAPACITY
     );
   }

@@ -28,6 +28,10 @@
     "validate-retry": "node scripts/validar-retry-sync.js",
     "validate-integrity": "node scripts/validar-integridad-supabase.js",
     "diagnostico-performance": "node scripts/diagnostico-performance.js",
+    "diagnostico-sprint-membership": "node scripts/diagnostico-sprint-membership.js",
+    "auditoria-sprint-membership": "node scripts/auditoria-sprint-membership.js",
+    "limpiar-datos-sprint-incorrectos": "node scripts/limpiar-datos-sprint-incorrectos.js",
+    "test-logica-sprint-membership": "node scripts/test-logica-sprint-membership.js",
     "validar-cierre-sprint": "node scripts/validar-cierre-sprint.js",
     "aplicar-migracion-scope-changes": "node scripts/aplicar-migracion-scope-changes.js"
   },

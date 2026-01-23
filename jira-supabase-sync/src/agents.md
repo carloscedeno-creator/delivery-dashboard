@@ -52,6 +52,12 @@
 **Solución:** Implementar scope-change-detector con detección automática  
 **Regla agregada:** Siempre detectar scope changes durante sync
 
+### Bug: Sprints duplicados por nombre inconsistente
+**Fecha:** 2026-01-23  
+**Problema:** Se crearon sprints manuales con prefijo (ej. `OBD Sprint 14`) mientras Jira usaba `Sprint 14`, causando filtros duplicados y sprints sin tickets.  
+**Solución:** Eliminar sprints prefijados creados manualmente, usar únicamente nombres de sprint exactamente iguales a Jira, y actualizar estados/relaciones vía sync.  
+**Regla agregada:** Nunca crear sprints manuales con nombres inventados o prefijos; la clave es `sprint_name` igual a Jira y `squad_id` correcto.
+
 ---
 
 ## Referencias

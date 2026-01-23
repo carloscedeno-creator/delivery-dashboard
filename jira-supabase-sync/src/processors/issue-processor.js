@@ -125,76 +125,89 @@ function wasTicketInSprintAtStart(changelog, sprintName, sprintStartDate, curren
 
 /**
  * Verifica si un ticket estaba en el sprint al momento del cierre
- * Revisa el changelog del campo Sprint para ver si fue removido antes del cierre
+ * CORREGIDO: Ahora usa lógica correcta basada en changelog, no en estado actual
  * @param {Object} changelog - Changelog del issue de Jira
  * @param {string} sprintName - Nombre del sprint
+ * @param {string} sprintStartDate - Fecha de inicio del sprint (ISO string)
  * @param {string} sprintCloseDate - Fecha de cierre del sprint (ISO string)
- * @param {Array} currentSprintData - Array de sprints actuales del ticket
+ * @param {Array} currentSprintData - Array de sprints actuales del ticket (NO USAR PARA DECISIÓN)
  * @returns {boolean} true si el ticket estaba en el sprint al cierre, false si fue removido antes
  */
-function wasTicketInSprintAtClose(changelog, sprintName, sprintCloseDate, currentSprintData = []) {
-  if (!changelog || !changelog.histories || !sprintCloseDate) {
-    // Si no hay changelog, verificar si el sprint está en la lista actual
-    return currentSprintData.some(s => s.name === sprintName);
+function wasTicketInSprintAtClose(changelog, sprintName, sprintStartDate, sprintCloseDate, currentSprintData = []) {
+  // Validar parámetros requeridos
+  if (!sprintName || !sprintStartDate || !sprintCloseDate) {
+    logger.debug(`⏭️ [wasTicketInSprintAtClose] Parámetros faltantes: sprintName=${!!sprintName}, start=${!!sprintStartDate}, close=${!!sprintCloseDate}`);
+    return false;
+  }
+
+  const startTime = new Date(sprintStartDate).getTime();
+  const closeTime = new Date(sprintCloseDate).getTime();
+
+  if (isNaN(startTime) || isNaN(closeTime)) {
+    logger.debug(`⏭️ [wasTicketInSprintAtClose] Fechas inválidas: start=${sprintStartDate}, close=${sprintCloseDate}`);
+    return false;
+  }
+
+  // Si no hay changelog, NO podemos determinar con certeza si el ticket pertenecía al sprint
+  // En este caso, ser conservadores y NO incluir el ticket (return false)
+  // Esto evita incluir tickets que fueron removidos pero siguen apareciendo en el campo sprint
+  if (!changelog || !changelog.histories || changelog.histories.length === 0) {
+    logger.debug(`⏭️ [wasTicketInSprintAtClose] Sin changelog disponible para ${sprintName} - excluyendo por seguridad`);
+    return false;
   }
 
   const sprintFieldNames = ['Sprint', 'customfield_10020'];
-  const closeTime = new Date(sprintCloseDate).getTime();
-  
-  if (isNaN(closeTime)) {
-    return currentSprintData.some(s => s.name === sprintName);
-  }
 
-  // Obtener todos los cambios del campo Sprint
+  // Obtener TODOS los cambios del campo Sprint durante la vida del sprint
   const sprintChanges = changelog.histories
     .flatMap(history => (history.items || []).map(item => ({
       ...item,
-      created: new Date(history.created).getTime()
+      created: new Date(history.created).getTime(),
+      historyCreated: history.created
     })))
     .filter(item => {
       const fieldLower = (item.field || '').toLowerCase();
       return sprintFieldNames.some(fn => fieldLower === fn.toLowerCase());
     })
+    .filter(item => {
+      // Solo cambios durante la ventana del sprint (desde inicio hasta cierre)
+      return item.created >= startTime && item.created <= closeTime;
+    })
     .sort((a, b) => a.created - b.created);
 
-  if (sprintChanges.length === 0) {
-    // Si no hay cambios en el changelog, verificar si está en la lista actual
-    return currentSprintData.some(s => s.name === sprintName);
-  }
+  // ESTADO INICIAL: El ticket NO estaba en el sprint al inicio
+  // Solo cambiaremos esto basado en cambios explícitos en el changelog
+  let wasInSprint = false;
+  let lastValidState = false;
 
-  // Encontrar el último cambio antes del cierre del sprint
-  // Rastrear el estado del ticket en el sprint a lo largo del tiempo
-  let wasInSprint = currentSprintData.some(s => s.name === sprintName); // Estado inicial
+  logger.debug(`🔍 [wasTicketInSprintAtClose] Analizando ${sprintChanges.length} cambios para sprint ${sprintName}`);
 
   for (const change of sprintChanges) {
-    if (change.created <= closeTime) {
-      // Verificar si el cambio indica que el ticket fue agregado o removido del sprint
-      const toString = change.toString || '';
-      const fromString = change.fromString || '';
-      
-      // Si el toString contiene el nombre del sprint, el ticket fue agregado o estaba en el sprint
-      if (toString.includes(sprintName)) {
-        wasInSprint = true;
-      }
-      // Si el fromString contenía el sprint pero el toString no, fue removido
-      else if (fromString.includes(sprintName) && !toString.includes(sprintName)) {
-        wasInSprint = false;
-      }
-      // Si el fromString no contenía el sprint pero el toString sí, fue agregado
-      else if (!fromString.includes(sprintName) && toString.includes(sprintName)) {
-        wasInSprint = true;
-      }
+    const toString = (change.toString || '').trim();
+    const fromString = (change.fromString || '').trim();
+
+    // Determinar si este cambio agregó o removió el ticket del sprint
+    const wasAdded = !fromString.includes(sprintName) && toString.includes(sprintName);
+    const wasRemoved = fromString.includes(sprintName) && !toString.includes(sprintName);
+
+    if (wasAdded) {
+      wasInSprint = true;
+      lastValidState = true;
+      logger.debug(`   ➕ [${new Date(change.historyCreated).toISOString()}] Ticket AGREGADO al sprint ${sprintName}`);
+    } else if (wasRemoved) {
+      wasInSprint = false;
+      lastValidState = false;
+      logger.debug(`   ➖ [${new Date(change.historyCreated).toISOString()}] Ticket REMOVIDO del sprint ${sprintName}`);
     } else {
-      break;
+      // Cambio que no afecta este sprint específico (ej: movimiento entre otros sprints)
+      logger.debug(`   ⏭️ [${new Date(change.historyCreated).toISOString()}] Cambio irrelevante para sprint ${sprintName}`);
     }
   }
 
-  // Retornar el estado final antes del cierre
-  return wasInSprint;
+  const result = lastValidState; // Usar el último estado válido determinado
+  logger.debug(`✅ [wasTicketInSprintAtClose] Resultado final para ${sprintName}: ${result ? 'INCLUIR' : 'EXCLUIR'} ticket`);
 
-  // Si no hay cambios antes del cierre, verificar si está en la lista actual
-  // Esto puede pasar si el ticket fue agregado al sprint antes de cualquier cambio registrado
-  return currentSprintData.some(s => s.name === sprintName);
+  return result;
 }
 
 /**
@@ -616,10 +629,12 @@ export async function processIssue(squadId, jiraIssue, jiraClient = null) {
         // Verificar si el ticket estaba en el sprint al momento del cierre
         // Si el sprint está activo, siempre incluir (aún no ha cerrado)
         const isActiveSprint = sprint.state === 'active';
-        const wasInSprintAtClose = isActiveSprint || 
+        const sprintStartDate = sprint.startDate;
+        const wasInSprintAtClose = isActiveSprint ||
           wasTicketInSprintAtClose(
             jiraIssue.changelog,
             sprintName,
+            sprintStartDate,
             sprintCloseDate,
             sprintData
           );
@@ -869,10 +884,12 @@ export async function processIssuesWithClientBatch(squadId, jiraIssues, jiraClie
           // Verificar si el ticket estaba en el sprint al momento del cierre
           // Si el sprint está activo, siempre incluir (aún no ha cerrado)
           const isActiveSprint = sprint.state === 'active';
-          const wasInSprintAtClose = isActiveSprint || 
+          const sprintStartDate = sprint.startDate;
+          const wasInSprintAtClose = isActiveSprint ||
             wasTicketInSprintAtClose(
               changelog,
               sprintName,
+              sprintStartDate,
               sprintCloseDate,
               sprintData
             );
@@ -1303,7 +1320,10 @@ export async function processIssuesWithClient(squadId, jiraIssues, jiraClient) {
   logger.success(`   ⏭️  Issues sin cambios (omitidos): ${skippedCount}`);
   logger.success(`   ❌ Errores: ${errorCount}`);
   logger.info(`   💡 Total procesados: ${successCount + skippedCount + errorCount}/${jiraIssues.length}`);
-  
+
   return { successCount, errorCount, skippedCount };
 }
+
+// Exportar funciones que se usan desde otros módulos
+export { wasTicketInSprintAtClose };
 
